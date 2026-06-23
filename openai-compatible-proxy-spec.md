@@ -179,7 +179,34 @@ data: [DONE]
 
 ## 模型映射
 
-客户端只感知对外模型名。配置示例：
+客户端只感知对外模型名。当前实现使用 JSON 配置：
+
+```json
+{
+  "providers": {
+    "openai": {
+      "type": "openai-compatible",
+      "base_url": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "timeout_seconds": 60
+    }
+  },
+  "models": {
+    "gpt-4o-mini": {
+      "provider": "openai",
+      "upstream_model": "gpt-4o-mini"
+    },
+    "qwen-plus": {
+      "provider": "dashscope",
+      "upstream_model": "qwen-plus"
+    }
+  }
+}
+```
+
+早期 ADR 中的 YAML 示例属于目标形态。当前实现使用 JSON 配置，避免在第一版引入额外配置解析依赖。
+
+目标 YAML 形态：
 
 ```yaml
 models:
@@ -203,4 +230,3 @@ models:
 - 上游连接超时：10 秒
 
 所有超时应可配置。
-

@@ -28,7 +28,7 @@
 
 ## 本地运行
 
-第一版默认使用 fake provider，监听 `127.0.0.1:8080`，测试 API key 为 `test-gateway-key`，测试模型为 `test-model`。
+默认无配置启动时使用 fake provider，监听 `127.0.0.1:8080`，测试 API key 为 `test-gateway-key`，测试模型为 `test-model`。
 
 在 WSL `Ubuntu-24.04` 中启动：
 
@@ -53,6 +53,24 @@ curl -N http://127.0.0.1:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"test-model","stream":true,"messages":[{"role":"user","content":"hello"}]}'
 ```
+
+## 接入真实上游
+
+项目支持通过 JSON 配置接入 OpenAI-compatible upstream endpoint。示例见 [config.example.json](config.example.json)。
+
+启动真实 provider：
+
+```powershell
+wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API_KEY=<your-key> GATEWAY_CONFIG=config.example.json go run ./cmd/gateway"
+```
+
+配置结构：
+
+- `providers.<name>.type`: 当前支持 `fake` 和 `openai-compatible`。
+- `providers.<name>.base_url`: OpenAI-compatible base URL，例如 `https://api.openai.com/v1`。
+- `providers.<name>.api_key_env`: 上游 API key 所在环境变量名。
+- `models.<external>.provider`: 对外模型路由到哪个 provider。
+- `models.<external>.upstream_model`: 转发给上游的真实模型名。
 
 ## 第一阶段范围
 

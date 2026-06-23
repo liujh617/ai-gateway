@@ -91,6 +91,11 @@ Compat Mapper 是外部 API 契约的主要守门员。
 
 Provider Adapter 不应直接依赖 HTTP handler。
 
+当前实现：
+
+- `internal/provider/fake`: 开发和测试用 fake provider。
+- `internal/provider/openai`: OpenAI-compatible HTTP provider，转发 `/chat/completions`，支持非流式和 SSE 流式响应。
+
 ### Config
 
 职责：
@@ -99,9 +104,9 @@ Provider Adapter 不应直接依赖 HTTP handler。
 - 加载网关 API key。
 - 加载 provider 配置。
 - 加载模型映射。
-- 加载超时和日志配置。
+- 加载超时配置。
 
-第一阶段可以从环境变量和一个配置文件读取。
+当前实现使用 JSON 配置文件，并通过 `GATEWAY_CONFIG` 指定路径。无配置时使用 fake provider 默认配置。
 
 ## 请求流程
 
@@ -136,15 +141,17 @@ cmd/gateway/
 internal/api/
   server.go
   chat_completions.go
-  models.go
 
 internal/compat/
-  openai_types.go
-  mapper.go
+  types.go
   errors.go
+
+internal/config/
+  config.go
 
 internal/provider/
   provider.go
+  fake/
   openai/
 
 internal/router/
@@ -155,10 +162,6 @@ internal/middleware/
   logging.go
   request_id.go
   recovery.go
-  timeout.go
-
-internal/config/
-  config.go
 ```
 
 ## 关键工程约束
@@ -168,4 +171,3 @@ internal/config/
 - SSE handler 必须检查 `http.Flusher`。
 - 日志不得记录完整 prompt、完整 completion 或任何 API key。
 - OpenAI-compatible 类型变化必须同步更新 spec 和测试。
-
