@@ -83,6 +83,7 @@ X-Content-Type-Options: nosniff
 | 缺少必填字段 | `400` | `invalid_request_error` |
 | Content-Type 不支持 | `415` | `invalid_request_error` |
 | 鉴权失败 | `401` | `authentication_error` |
+| 方法不支持 | `405` | `invalid_request_error` |
 | 未知路由 | `404` | `invalid_request_error` |
 | 模型不存在或无权限 | `404` | `invalid_request_error` |
 | provider 超时 | `504` | `server_error` |
@@ -92,6 +93,8 @@ X-Content-Type-Options: nosniff
 OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`type`、`param` 和 `code`。上游 `5xx` 会映射为网关 `502`，避免把上游内部状态直接暴露为网关自身故障。
 
 未知受保护路由在鉴权通过后返回 JSON 格式的 `404 invalid_request_error`；未鉴权时仍先返回 `401 authentication_error`。
+
+已知路由使用不支持的 HTTP method 时，在鉴权通过后返回 JSON 格式的 `405 invalid_request_error`，并设置 `Allow` header；未鉴权时仍先返回 `401 authentication_error`。
 
 ## `GET /v1/models`
 

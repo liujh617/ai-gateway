@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"open-ai-gateway/internal/compat"
@@ -75,6 +76,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/", s.handleNotFound)
 
 	var handler http.Handler = mux
+	handler = s.methodNotAllowed(handler)
 	if s.rateLimiter != nil {
 		handler = s.rateLimiter.Middleware(s)(handler)
 	}
@@ -152,4 +154,34 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 	s.writeError(w, r, compat.NotFound("route not found"))
+}
+
+func (s *Server) methodNotAllowed(next http.Handler) http.Handler {
+	allowedMethods := map[string][]string{
+		"/healthz":             {http.MethodGet, http.MethodHead},
+		"/readyz":              {http.MethodGet, http.MethodHead},
+		"/version":             {http.MethodGet, http.MethodHead},
+		"/metrics":             {http.MethodGet, http.MethodHead},
+		"/v1/models":           {http.MethodGet, http.MethodHead},
+		"/v1/chat/completions": {http.MethodPost},
+		"/v1/embeddings":       {http.MethodPost},
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		allowed, ok := allowedMethods[r.URL.Path]
+		if !ok || methodAllowed(r.Method, allowed) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Allow", strings.Join(allowed, ", "))
+		s.writeError(w, r, compat.MethodNotAllowed("method not allowed"))
+	})
+}
+
+func methodAllowed(method string, allowed []string) bool {
+	for _, item := range allowed {
+		if method == item {
+			return true
+		}
+	}
+	return false
 }

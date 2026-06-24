@@ -464,6 +464,46 @@ func TestUnknownRouteRequiresAuth(t *testing.T) {
 	assertError(t, rr, http.StatusUnauthorized, "authentication_error")
 }
 
+func TestKnownRouteWrongMethodReturnsJSONError(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodGet, "/v1/chat/completions", nil)
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assertError(t, rr, http.StatusMethodNotAllowed, "invalid_request_error")
+	if got := rr.Header().Get("Allow"); got != "POST" {
+		t.Fatalf("allow = %q", got)
+	}
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("content-type = %q", got)
+	}
+}
+
+func TestKnownRouteWrongMethodRequiresAuth(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodGet, "/v1/chat/completions", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assertError(t, rr, http.StatusUnauthorized, "authentication_error")
+}
+
+func TestPublicRouteWrongMethodReturnsJSONError(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodPost, "/healthz", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assertError(t, rr, http.StatusMethodNotAllowed, "invalid_request_error")
+	if got := rr.Header().Get("Allow"); got != "GET, HEAD" {
+		t.Fatalf("allow = %q", got)
+	}
+}
+
 func TestHealthzDoesNotRequireAuth(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)

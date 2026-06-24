@@ -50,6 +50,10 @@ func NotFound(message string) *Error {
 	return NewError(http.StatusNotFound, "invalid_request_error", message, nil)
 }
 
+func MethodNotAllowed(message string) *Error {
+	return NewError(http.StatusMethodNotAllowed, "invalid_request_error", message, nil)
+}
+
 func ServerError(status int, message string) *Error {
 	return NewError(status, "server_error", message, nil)
 }
