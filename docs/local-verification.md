@@ -81,12 +81,14 @@ make run
 
 ```bash
 curl -sS http://127.0.0.1:8080/healthz
+curl -I http://127.0.0.1:8080/healthz
 ```
 
 Readiness：
 
 ```bash
 curl -sS http://127.0.0.1:8080/readyz
+curl -I http://127.0.0.1:8080/readyz
 ```
 
 Version：

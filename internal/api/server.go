@@ -108,6 +108,9 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodHead {
+		return
+	}
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status": "ok",
 	})
@@ -118,10 +121,16 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	modelCount := s.router.ModelCount()
 	if modelCount == 0 {
 		w.WriteHeader(http.StatusServiceUnavailable)
+		if r.Method == http.MethodHead {
+			return
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"status": "not_ready",
 			"models": modelCount,
 		})
+		return
+	}
+	if r.Method == http.MethodHead {
 		return
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{

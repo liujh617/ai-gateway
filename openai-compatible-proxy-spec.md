@@ -91,6 +91,8 @@ OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`ty
 
 返回网关进程健康状态。该接口不需要 Bearer token。
 
+`HEAD /healthz` 返回相同状态码和响应头，但不返回 body，供负载均衡器和探针使用。
+
 ### Response
 
 ```json
@@ -102,6 +104,8 @@ OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`ty
 ## `GET /readyz`
 
 返回网关是否已准备好接收业务请求。该接口不需要 Bearer token。
+
+`HEAD /readyz` 返回相同状态码和响应头，但不返回 body，供负载均衡器和探针使用。
 
 当前 readiness 只检查网关是否加载了至少一个对外模型，不主动探测上游 provider，避免 readiness probe 引入外部依赖抖动。
 

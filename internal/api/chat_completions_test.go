@@ -415,6 +415,24 @@ func TestHealthzDoesNotRequireAuth(t *testing.T) {
 	}
 }
 
+func TestHealthzHeadDoesNotRequireAuth(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodHead, "/healthz", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if rr.Body.Len() != 0 {
+		t.Fatalf("HEAD response body = %q", rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("content-type = %q", got)
+	}
+}
+
 func TestReadyzDoesNotRequireAuth(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
@@ -433,6 +451,24 @@ func TestReadyzDoesNotRequireAuth(t *testing.T) {
 	}
 }
 
+func TestReadyzHeadDoesNotRequireAuth(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodHead, "/readyz", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if rr.Body.Len() != 0 {
+		t.Fatalf("HEAD response body = %q", rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("content-type = %q", got)
+	}
+}
+
 func TestReadyzReturnsUnavailableWithoutModels(t *testing.T) {
 	modelRouter := router.NewModelRouter(nil)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -447,6 +483,26 @@ func TestReadyzReturnsUnavailableWithoutModels(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), `"status":"not_ready"`) {
 		t.Fatalf("unexpected body: %s", rr.Body.String())
+	}
+}
+
+func TestReadyzHeadReturnsUnavailableWithoutModels(t *testing.T) {
+	modelRouter := router.NewModelRouter(nil)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := api.NewServer(modelRouter, testAPIKey, logger).Handler()
+	req := httptest.NewRequest(http.MethodHead, "/readyz", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if rr.Body.Len() != 0 {
+		t.Fatalf("HEAD response body = %q", rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("content-type = %q", got)
 	}
 }
 

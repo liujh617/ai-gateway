@@ -52,7 +52,9 @@ docker run --rm -p 8080:8080 \
 ## Runtime Endpoints
 
 - `GET /healthz`: health check，不需要鉴权。
+- `HEAD /healthz`: health check，无响应体，不需要鉴权。
 - `GET /readyz`: readiness check，不需要鉴权。
+- `HEAD /readyz`: readiness check，无响应体，不需要鉴权。
 - `GET /version`: build/version metadata，不需要鉴权。
 - `GET /metrics`: Prometheus text metrics，不需要鉴权。
 - `GET /v1/models`: OpenAI-compatible models，需要 Bearer token。
