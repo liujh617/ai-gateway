@@ -86,6 +86,11 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 - `models.<external>.capabilities`: 模型能力，支持 `chat`、`embeddings`；未配置时默认都支持。
 - `request_timeout_seconds`: 非流式请求的 provider 调用超时。
 - `stream_timeout_seconds`: 流式请求的最大持续时间。
+- `read_header_timeout_seconds`: HTTP server 读取请求头超时。
+- `read_timeout_seconds`: HTTP server 读取完整请求超时，`0` 表示关闭。
+- `write_timeout_seconds`: HTTP server 写响应超时，`0` 表示关闭；流式场景建议保持关闭。
+- `idle_timeout_seconds`: keep-alive 空闲连接超时。
+- `shutdown_timeout_seconds`: 收到 SIGINT/SIGTERM 后的 graceful shutdown 等待时间。
 - `rate_limit.requests_per_minute`: 按 Bearer token 的简单内存限流，`0` 表示关闭。
 
 健康检查：

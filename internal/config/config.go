@@ -12,13 +12,18 @@ import (
 )
 
 type Config struct {
-	Addr                  string                    `json:"addr"`
-	APIKey                string                    `json:"api_key"`
-	RequestTimeoutSeconds int                       `json:"request_timeout_seconds"`
-	StreamTimeoutSeconds  int                       `json:"stream_timeout_seconds"`
-	RateLimit             RateLimitConfig           `json:"rate_limit"`
-	Providers             map[string]ProviderConfig `json:"providers"`
-	Models                map[string]ModelConfig    `json:"models"`
+	Addr                     string                    `json:"addr"`
+	APIKey                   string                    `json:"api_key"`
+	RequestTimeoutSeconds    int                       `json:"request_timeout_seconds"`
+	StreamTimeoutSeconds     int                       `json:"stream_timeout_seconds"`
+	ReadHeaderTimeoutSeconds int                       `json:"read_header_timeout_seconds"`
+	ReadTimeoutSeconds       int                       `json:"read_timeout_seconds"`
+	WriteTimeoutSeconds      int                       `json:"write_timeout_seconds"`
+	IdleTimeoutSeconds       int                       `json:"idle_timeout_seconds"`
+	ShutdownTimeoutSeconds   int                       `json:"shutdown_timeout_seconds"`
+	RateLimit                RateLimitConfig           `json:"rate_limit"`
+	Providers                map[string]ProviderConfig `json:"providers"`
+	Models                   map[string]ModelConfig    `json:"models"`
 }
 
 type ProviderConfig struct {
@@ -65,10 +70,15 @@ func Load(path string) (*Config, error) {
 
 func Default() *Config {
 	cfg := &Config{
-		Addr:                  "127.0.0.1:8080",
-		APIKey:                "test-gateway-key",
-		RequestTimeoutSeconds: 60,
-		StreamTimeoutSeconds:  600,
+		Addr:                     "127.0.0.1:8080",
+		APIKey:                   "test-gateway-key",
+		RequestTimeoutSeconds:    60,
+		StreamTimeoutSeconds:     600,
+		ReadHeaderTimeoutSeconds: 10,
+		ReadTimeoutSeconds:       0,
+		WriteTimeoutSeconds:      0,
+		IdleTimeoutSeconds:       120,
+		ShutdownTimeoutSeconds:   10,
 		Providers: map[string]ProviderConfig{
 			"fake": {
 				Type: "fake",
@@ -107,6 +117,21 @@ func (c *Config) Validate() error {
 	}
 	if c.StreamTimeoutSeconds < 0 {
 		return fmt.Errorf("stream_timeout_seconds must be non-negative")
+	}
+	if c.ReadHeaderTimeoutSeconds < 0 {
+		return fmt.Errorf("read_header_timeout_seconds must be non-negative")
+	}
+	if c.ReadTimeoutSeconds < 0 {
+		return fmt.Errorf("read_timeout_seconds must be non-negative")
+	}
+	if c.WriteTimeoutSeconds < 0 {
+		return fmt.Errorf("write_timeout_seconds must be non-negative")
+	}
+	if c.IdleTimeoutSeconds < 0 {
+		return fmt.Errorf("idle_timeout_seconds must be non-negative")
+	}
+	if c.ShutdownTimeoutSeconds < 0 {
+		return fmt.Errorf("shutdown_timeout_seconds must be non-negative")
 	}
 	if c.RateLimit.RequestsPerMinute < 0 {
 		return fmt.Errorf("rate_limit.requests_per_minute must be non-negative")
@@ -194,6 +219,15 @@ func (c *Config) applyDefaults() {
 	if c.StreamTimeoutSeconds == 0 {
 		c.StreamTimeoutSeconds = 600
 	}
+	if c.ReadHeaderTimeoutSeconds == 0 {
+		c.ReadHeaderTimeoutSeconds = 10
+	}
+	if c.IdleTimeoutSeconds == 0 {
+		c.IdleTimeoutSeconds = 120
+	}
+	if c.ShutdownTimeoutSeconds == 0 {
+		c.ShutdownTimeoutSeconds = 10
+	}
 	for name, provider := range c.Providers {
 		if provider.TimeoutSeconds == 0 {
 			provider.TimeoutSeconds = 60
@@ -206,6 +240,36 @@ func (c *Config) applyDefaults() {
 		}
 		c.Models[name] = model
 	}
+}
+
+func (c *Config) ReadHeaderTimeout() time.Duration {
+	return durationFromSeconds(c.ReadHeaderTimeoutSeconds)
+}
+
+func (c *Config) ReadTimeout() time.Duration {
+	return durationFromSeconds(c.ReadTimeoutSeconds)
+}
+
+func (c *Config) WriteTimeout() time.Duration {
+	return durationFromSeconds(c.WriteTimeoutSeconds)
+}
+
+func (c *Config) IdleTimeout() time.Duration {
+	return durationFromSeconds(c.IdleTimeoutSeconds)
+}
+
+func (c *Config) ShutdownTimeout() time.Duration {
+	if c.ShutdownTimeoutSeconds <= 0 {
+		return 10 * time.Second
+	}
+	return time.Duration(c.ShutdownTimeoutSeconds) * time.Second
+}
+
+func durationFromSeconds(seconds int) time.Duration {
+	if seconds <= 0 {
+		return 0
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 func (c *Config) RequestTimeout() time.Duration {

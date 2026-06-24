@@ -303,7 +303,12 @@ models:
 ```json
 {
   "request_timeout_seconds": 60,
-  "stream_timeout_seconds": 600
+  "stream_timeout_seconds": 600,
+  "read_header_timeout_seconds": 10,
+  "read_timeout_seconds": 0,
+  "write_timeout_seconds": 0,
+  "idle_timeout_seconds": 120,
+  "shutdown_timeout_seconds": 10
 }
 ```
 
@@ -312,6 +317,9 @@ models:
 - 普通请求总超时：60 秒
 - 流式请求最大持续时间：10 分钟
 - 上游连接超时：10 秒
+- 请求头读取超时：10 秒
+- keep-alive 空闲超时：120 秒
+- graceful shutdown 超时：10 秒
 
 所有超时应可配置。
 

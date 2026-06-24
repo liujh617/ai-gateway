@@ -23,6 +23,15 @@ func TestLoadDefaultConfig(t *testing.T) {
 	if _, ok := cfg.Models["test-model"]; !ok {
 		t.Fatal("missing test-model")
 	}
+	if cfg.ReadHeaderTimeoutSeconds != 10 {
+		t.Fatalf("read header timeout = %d", cfg.ReadHeaderTimeoutSeconds)
+	}
+	if cfg.IdleTimeoutSeconds != 120 {
+		t.Fatalf("idle timeout = %d", cfg.IdleTimeoutSeconds)
+	}
+	if cfg.ShutdownTimeoutSeconds != 10 {
+		t.Fatalf("shutdown timeout = %d", cfg.ShutdownTimeoutSeconds)
+	}
 }
 
 func TestLoadConfigValidatesUnknownProvider(t *testing.T) {
@@ -145,6 +154,32 @@ func TestEnvironmentOverrides(t *testing.T) {
 	}
 	if cfg.APIKey != "override-key" {
 		t.Fatalf("api key = %q", cfg.APIKey)
+	}
+}
+
+func TestLoadConfigValidatesServerTimeouts(t *testing.T) {
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_key": "gateway-key",
+		"read_header_timeout_seconds": -1,
+		"providers": {
+			"fake": {
+				"type": "fake"
+			}
+		},
+		"models": {
+			"test-model": {
+				"provider": "fake"
+			}
+		}
+	}`)
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "read_header_timeout_seconds") {
+		t.Fatalf("error = %v", err)
 	}
 }
 

@@ -59,6 +59,7 @@ Upstream Model Service
 - HTTP metrics。
 - 按 Bearer token 做简单 in-memory 限流。
 - 超时和 context 管理。
+- SIGINT/SIGTERM graceful shutdown。
 - metrics hook。
 
 结构化 access log 字段：
@@ -193,6 +194,8 @@ internal/middleware/
 - 所有上游请求必须使用 incoming request context。
 - 普通请求必须使用 request timeout。
 - 流式请求必须使用独立 stream timeout，不能被普通 request timeout 截断。
+- HTTP server 必须配置 ReadHeaderTimeout。
+- 关闭进程时必须优先尝试 graceful shutdown。
 - 所有 response body 和 stream 必须关闭。
 - SSE handler 必须检查 `http.Flusher`。
 - 日志不得记录完整 prompt、完整 completion 或任何 API key。

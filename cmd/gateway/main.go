@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"open-ai-gateway/internal/api"
 	"open-ai-gateway/internal/config"
@@ -17,6 +22,8 @@ import (
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	cfg, err := config.Load(os.Getenv("GATEWAY_CONFIG"))
 	if err != nil {
@@ -30,23 +37,63 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := api.NewServer(modelRouter, cfg.APIKey, logger, api.Options{
+	apiServer := api.NewServer(modelRouter, cfg.APIKey, logger, api.Options{
 		RequestTimeout: cfg.RequestTimeout(),
 		StreamTimeout:  cfg.StreamTimeout(),
 		RateLimiter:    middleware.NewRateLimiter(cfg.RateLimit.RequestsPerMinute),
 	})
+	httpServer := &http.Server{
+		Addr:              cfg.Addr,
+		Handler:           apiServer.Handler(),
+		ReadHeaderTimeout: cfg.ReadHeaderTimeout(),
+		ReadTimeout:       cfg.ReadTimeout(),
+		WriteTimeout:      cfg.WriteTimeout(),
+		IdleTimeout:       cfg.IdleTimeout(),
+	}
 
 	logger.Info("open-ai-gateway configured",
 		"providers", cfg.ProviderNames(),
 		"models", cfg.ModelNames(),
 		"request_timeout_seconds", cfg.RequestTimeoutSeconds,
 		"stream_timeout_seconds", cfg.StreamTimeoutSeconds,
+		"read_header_timeout_seconds", cfg.ReadHeaderTimeoutSeconds,
+		"read_timeout_seconds", cfg.ReadTimeoutSeconds,
+		"write_timeout_seconds", cfg.WriteTimeoutSeconds,
+		"idle_timeout_seconds", cfg.IdleTimeoutSeconds,
+		"shutdown_timeout_seconds", cfg.ShutdownTimeoutSeconds,
 		"rate_limit_requests_per_minute", cfg.RateLimit.RequestsPerMinute,
 	)
-	logger.Info("open-ai-gateway listening", "addr", cfg.Addr)
-	if err := http.ListenAndServe(cfg.Addr, server.Handler()); err != nil {
-		logger.Error("server stopped", "error", err)
+
+	if err := serve(ctx, httpServer, cfg.ShutdownTimeout(), logger); err != nil {
 		os.Exit(1)
+	}
+}
+
+func serve(ctx context.Context, server *http.Server, shutdownTimeout time.Duration, logger *slog.Logger) error {
+	errCh := make(chan error, 1)
+	go func() {
+		logger.Info("open-ai-gateway listening", "addr", server.Addr)
+		errCh <- server.ListenAndServe()
+	}()
+
+	select {
+	case <-ctx.Done():
+		logger.Info("shutdown signal received")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			logger.Error("graceful shutdown failed", "error", err)
+			return err
+		}
+		logger.Info("open-ai-gateway stopped")
+		return nil
+	case err := <-errCh:
+		if errors.Is(err, http.ErrServerClosed) {
+			logger.Info("open-ai-gateway stopped")
+			return nil
+		}
+		logger.Error("server stopped", "error", err)
+		return err
 	}
 }
 

@@ -3,6 +3,11 @@
   "api_key": "test-gateway-key",
   "request_timeout_seconds": 60,
   "stream_timeout_seconds": 600,
+  "read_header_timeout_seconds": 10,
+  "read_timeout_seconds": 0,
+  "write_timeout_seconds": 0,
+  "idle_timeout_seconds": 120,
+  "shutdown_timeout_seconds": 10,
   "rate_limit": {
     "requests_per_minute": 120
   },
