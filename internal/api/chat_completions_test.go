@@ -178,6 +178,30 @@ func TestHealthzBypassesRateLimit(t *testing.T) {
 	}
 }
 
+func TestReadyzBypassesRateLimit(t *testing.T) {
+	handler := newTestHandlerWithOptions(fake.New(), api.Options{
+		RateLimiter: middleware.NewRateLimiter(1),
+	})
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	first := doJSON(handler, body, true)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status = %d, body = %s", first.Code, first.Body.String())
+	}
+	second := doJSON(handler, body, true)
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status = %d, want 429", second.Code)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("readyz status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestMetricsDoesNotRequireAuth(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
@@ -329,6 +353,41 @@ func TestHealthzDoesNotRequireAuth(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
 	}
 	if !strings.Contains(rr.Body.String(), `"status":"ok"`) {
+		t.Fatalf("unexpected body: %s", rr.Body.String())
+	}
+}
+
+func TestReadyzDoesNotRequireAuth(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `"status":"ready"`) {
+		t.Fatalf("unexpected body: %s", rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `"models":1`) {
+		t.Fatalf("missing model count: %s", rr.Body.String())
+	}
+}
+
+func TestReadyzReturnsUnavailableWithoutModels(t *testing.T) {
+	modelRouter := router.NewModelRouter(nil)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := api.NewServer(modelRouter, testAPIKey, logger).Handler()
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `"status":"not_ready"`) {
 		t.Fatalf("unexpected body: %s", rr.Body.String())
 	}
 }

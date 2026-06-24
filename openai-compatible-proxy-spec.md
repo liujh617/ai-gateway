@@ -99,6 +99,30 @@ OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`ty
 }
 ```
 
+## `GET /readyz`
+
+返回网关是否已准备好接收业务请求。该接口不需要 Bearer token。
+
+当前 readiness 只检查网关是否加载了至少一个对外模型，不主动探测上游 provider，避免 readiness probe 引入外部依赖抖动。
+
+### Ready Response
+
+```json
+{
+  "status": "ready",
+  "models": 1
+}
+```
+
+### Not Ready Response
+
+```json
+{
+  "status": "not_ready",
+  "models": 0
+}
+```
+
 ## `GET /metrics`
 
 返回 Prometheus text exposition 格式的基础 HTTP 指标。该接口不需要 Bearer token。

@@ -49,6 +49,12 @@ make run
 curl -sS http://127.0.0.1:8080/healthz
 ```
 
+Readiness：
+
+```bash
+curl -sS http://127.0.0.1:8080/readyz
+```
+
 Metrics：
 
 ```bash

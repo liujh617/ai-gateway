@@ -83,6 +83,11 @@ Metrics endpoint:
 - `open_ai_gateway_http_requests_total`
 - `open_ai_gateway_http_request_duration_seconds_total`
 
+Runtime probes:
+
+- `GET /healthz`: process liveness
+- `GET /readyz`: readiness based on loaded model routes
+
 ### Compat Mapper
 
 职责：

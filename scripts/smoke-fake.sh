@@ -23,6 +23,8 @@ done
 
 curl -fsS "http://$addr/healthz" | grep -q '"status":"ok"'
 
+curl -fsS "http://$addr/readyz" | grep -q '"status":"ready"'
+
 curl -fsS "http://$addr/metrics" \
   | grep -q 'open_ai_gateway_http_requests_total'
 

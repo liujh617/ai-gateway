@@ -52,6 +52,7 @@ docker run --rm -p 8080:8080 \
 ## Runtime Endpoints
 
 - `GET /healthz`: health check，不需要鉴权。
+- `GET /readyz`: readiness check，不需要鉴权。
 - `GET /metrics`: Prometheus text metrics，不需要鉴权。
 - `GET /v1/models`: OpenAI-compatible models，需要 Bearer token。
 - `POST /v1/chat/completions`: chat completions，需要 Bearer token。
@@ -64,4 +65,3 @@ docker run --rm -p 8080:8080 \
 - 容器监听地址应设置为 `0.0.0.0:8080`。
 - `write_timeout_seconds` 默认保持 `0`，避免误伤长时间 streaming。
 - 反向代理或负载均衡器也应配置合理的 streaming timeout。
-

@@ -61,3 +61,10 @@ func (r *ModelRouter) Models() []compat.Model {
 	})
 	return models
 }
+
+func (r *ModelRouter) ModelCount() int {
+	if r == nil {
+		return 0
+	}
+	return len(r.routes)
+}
