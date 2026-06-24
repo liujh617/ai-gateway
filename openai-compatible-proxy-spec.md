@@ -85,6 +85,18 @@ Connection: keep-alive
 }
 ```
 
+## `GET /healthz`
+
+返回网关进程健康状态。该接口不需要 Bearer token。
+
+### Response
+
+```json
+{
+  "status": "ok"
+}
+```
+
 ## `POST /v1/chat/completions`
 
 创建 chat completion。第一阶段必须支持非流式和流式两种模式。

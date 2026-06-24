@@ -31,6 +31,10 @@ func main() {
 
 	server := api.NewServer(modelRouter, cfg.APIKey, logger)
 
+	logger.Info("open-ai-gateway configured",
+		"providers", cfg.ProviderNames(),
+		"models", cfg.ModelNames(),
+	)
 	logger.Info("open-ai-gateway listening", "addr", cfg.Addr)
 	if err := http.ListenAndServe(cfg.Addr, server.Handler()); err != nil {
 		logger.Error("server stopped", "error", err)

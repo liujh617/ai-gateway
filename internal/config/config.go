@@ -3,7 +3,11 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -45,6 +49,9 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("decode config: %w", err)
 	}
 	cfg.applyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
 	return &cfg, nil
 }
 
@@ -66,6 +73,79 @@ func Default() *Config {
 	}
 	cfg.applyDefaults()
 	return cfg
+}
+
+func (c *Config) Validate() error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	if strings.TrimSpace(c.Addr) == "" {
+		return fmt.Errorf("addr is required")
+	}
+	if _, _, err := net.SplitHostPort(c.Addr); err != nil {
+		return fmt.Errorf("addr must be host:port: %w", err)
+	}
+	if len(c.Providers) == 0 {
+		return fmt.Errorf("at least one provider is required")
+	}
+	if len(c.Models) == 0 {
+		return fmt.Errorf("at least one model is required")
+	}
+
+	for name, provider := range c.Providers {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("provider name is required")
+		}
+		switch provider.Type {
+		case "fake":
+		case "openai-compatible":
+			if strings.TrimSpace(provider.BaseURL) == "" {
+				return fmt.Errorf("provider %q base_url is required", name)
+			}
+			if _, err := url.ParseRequestURI(provider.BaseURL); err != nil {
+				return fmt.Errorf("provider %q base_url is invalid: %w", name, err)
+			}
+			if provider.APIKey == "" && provider.APIKeyEnv == "" {
+				return fmt.Errorf("provider %q requires api_key or api_key_env", name)
+			}
+		default:
+			return fmt.Errorf("provider %q has unsupported type %q", name, provider.Type)
+		}
+		if provider.TimeoutSeconds < 0 {
+			return fmt.Errorf("provider %q timeout_seconds must be non-negative", name)
+		}
+	}
+
+	for externalModel, model := range c.Models {
+		if strings.TrimSpace(externalModel) == "" {
+			return fmt.Errorf("model name is required")
+		}
+		if strings.TrimSpace(model.Provider) == "" {
+			return fmt.Errorf("model %q provider is required", externalModel)
+		}
+		if _, ok := c.Providers[model.Provider]; !ok {
+			return fmt.Errorf("model %q references unknown provider %q", externalModel, model.Provider)
+		}
+	}
+	return nil
+}
+
+func (c *Config) ProviderNames() []string {
+	names := make([]string, 0, len(c.Providers))
+	for name := range c.Providers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func (c *Config) ModelNames() []string {
+	names := make([]string, 0, len(c.Models))
+	for name := range c.Models {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func (c *Config) applyDefaults() {

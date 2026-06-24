@@ -69,8 +69,15 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 - `providers.<name>.type`: 当前支持 `fake` 和 `openai-compatible`。
 - `providers.<name>.base_url`: OpenAI-compatible base URL，例如 `https://api.openai.com/v1`。
 - `providers.<name>.api_key_env`: 上游 API key 所在环境变量名。
+- `providers.<name>.api_key`: 上游 API key 明文值，仅建议本地开发使用。
 - `models.<external>.provider`: 对外模型路由到哪个 provider。
 - `models.<external>.upstream_model`: 转发给上游的真实模型名。
+
+健康检查：
+
+```bash
+curl -sS http://127.0.0.1:8080/healthz
+```
 
 ## 第一阶段范围
 

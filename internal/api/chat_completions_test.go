@@ -178,6 +178,21 @@ func TestModelsOK(t *testing.T) {
 	}
 }
 
+func TestHealthzDoesNotRequireAuth(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `"status":"ok"`) {
+		t.Fatalf("unexpected body: %s", rr.Body.String())
+	}
+}
+
 func newTestHandler(p provider.Provider) http.Handler {
 	modelRouter := router.NewModelRouter([]router.ModelRoute{{
 		ExternalModel: "test-model",
