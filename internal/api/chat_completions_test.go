@@ -80,6 +80,15 @@ func TestChatCompletionsInvalidJSON(t *testing.T) {
 	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
 }
 
+func TestChatCompletionsRejectsTrailingJSON(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}{}`
+
+	rr := doJSON(handler, body, true)
+
+	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
+}
+
 func TestChatCompletionsBodyTooLarge(t *testing.T) {
 	handler := newTestHandlerWithOptions(fake.New(), api.Options{
 		MaxBodyBytes: 8,
@@ -547,6 +556,15 @@ func TestEmbeddingsOK(t *testing.T) {
 func TestEmbeddingsMissingInput(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	body := `{"model":"test-model"}`
+
+	rr := doEmbeddingsJSON(handler, body, true)
+
+	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
+}
+
+func TestEmbeddingsRejectsTrailingJSON(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	body := `{"model":"test-model","input":"hello"}{}`
 
 	rr := doEmbeddingsJSON(handler, body, true)
 

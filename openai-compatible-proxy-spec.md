@@ -30,6 +30,8 @@ Authorization: Bearer <gateway-api-key>
 Content-Type: application/json
 ```
 
+请求体必须只包含一个 JSON 值。合法 JSON 后继续拼接第二个 JSON 值或其他非空 token 时，网关返回 `400 invalid_request_error`。
+
 流式响应：
 
 ```http

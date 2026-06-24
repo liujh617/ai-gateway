@@ -15,8 +15,7 @@ import (
 
 func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	var req compat.ChatCompletionRequest
-	decoder := json.NewDecoder(s.requestBody(w, r))
-	if err := decoder.Decode(&req); err != nil {
+	if err := decodeJSONBody(s.requestBody(w, r), &req); err != nil {
 		s.writeError(w, r, decodeError(err))
 		return
 	}
