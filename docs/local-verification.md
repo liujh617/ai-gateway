@@ -55,6 +55,12 @@ Readiness：
 curl -sS http://127.0.0.1:8080/readyz
 ```
 
+Version：
+
+```bash
+curl -sS http://127.0.0.1:8080/version
+```
+
 Metrics：
 
 ```bash

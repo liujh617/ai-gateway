@@ -34,7 +34,7 @@ func NewRateLimiter(requestsPerMinute int) *RateLimiter {
 func (l *RateLimiter) Middleware(errors ErrorWriter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/metrics" || l == nil || l.limit <= 0 {
+			if isPublicRuntimePath(r.URL.Path) || l == nil || l.limit <= 0 {
 				next.ServeHTTP(w, r)
 				return
 			}

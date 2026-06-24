@@ -14,7 +14,7 @@ type ErrorWriter interface {
 func Auth(apiKey string, errors ErrorWriter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/metrics" {
+			if isPublicRuntimePath(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -32,4 +32,8 @@ func Auth(apiKey string, errors ErrorWriter) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func isPublicRuntimePath(path string) bool {
+	return path == "/healthz" || path == "/readyz" || path == "/metrics" || path == "/version"
 }

@@ -202,6 +202,30 @@ func TestReadyzBypassesRateLimit(t *testing.T) {
 	}
 }
 
+func TestVersionBypassesRateLimit(t *testing.T) {
+	handler := newTestHandlerWithOptions(fake.New(), api.Options{
+		RateLimiter: middleware.NewRateLimiter(1),
+	})
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	first := doJSON(handler, body, true)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status = %d, body = %s", first.Code, first.Body.String())
+	}
+	second := doJSON(handler, body, true)
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status = %d, want 429", second.Code)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/version", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("version status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestMetricsDoesNotRequireAuth(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
@@ -389,6 +413,23 @@ func TestReadyzReturnsUnavailableWithoutModels(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), `"status":"not_ready"`) {
 		t.Fatalf("unexpected body: %s", rr.Body.String())
+	}
+}
+
+func TestVersionDoesNotRequireAuth(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodGet, "/version", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	for _, want := range []string{`"version":"dev"`, `"commit":"unknown"`, `"build_time":"unknown"`} {
+		if !strings.Contains(rr.Body.String(), want) {
+			t.Fatalf("version response missing %s: %s", want, rr.Body.String())
+		}
 	}
 }
 

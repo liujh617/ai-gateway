@@ -2,6 +2,10 @@ GO ?= go
 GATEWAY_ADDR ?= 127.0.0.1:8080
 GATEWAY_API_KEY ?= test-gateway-key
 IMAGE ?= open-ai-gateway:local
+VERSION ?= dev
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS := -X open-ai-gateway/internal/version.Version=$(VERSION) -X open-ai-gateway/internal/version.Commit=$(COMMIT) -X open-ai-gateway/internal/version.BuildTime=$(BUILD_TIME)
 
 .PHONY: fmt test race vet verify build run smoke docker-build docker-run
 
@@ -20,7 +24,7 @@ vet:
 verify: fmt test race vet
 
 build:
-	CGO_ENABLED=0 $(GO) build -trimpath -o bin/open-ai-gateway ./cmd/gateway
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/open-ai-gateway ./cmd/gateway
 
 run:
 	GATEWAY_ADDR=$(GATEWAY_ADDR) GATEWAY_API_KEY=$(GATEWAY_API_KEY) $(GO) run ./cmd/gateway
@@ -29,7 +33,7 @@ smoke:
 	bash scripts/smoke-fake.sh
 
 docker-build:
-	docker build -t $(IMAGE) .
+	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_TIME=$(BUILD_TIME) -t $(IMAGE) .
 
 docker-run:
 	docker run --rm -p 8080:8080 -e GATEWAY_ADDR=0.0.0.0:8080 $(IMAGE)

@@ -138,6 +138,20 @@ OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`ty
 - `path`
 - `status`
 
+## `GET /version`
+
+返回当前二进制的构建信息。该接口不需要 Bearer token。
+
+### Response
+
+```json
+{
+  "version": "dev",
+  "commit": "unknown",
+  "build_time": "unknown"
+}
+```
+
 ## `POST /v1/chat/completions`
 
 创建 chat completion。第一阶段必须支持非流式和流式两种模式。
