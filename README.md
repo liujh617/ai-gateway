@@ -39,6 +39,8 @@ make run
 
 部署和容器化见 [Deployment](docs/deployment.md)。
 
+CI 自动化验证见 [CI](docs/ci.md)。
+
 ## 本地运行
 
 默认无配置启动时使用 fake provider，监听 `127.0.0.1:8080`，测试 API key 为 `test-gateway-key`，测试模型为 `test-model`。
