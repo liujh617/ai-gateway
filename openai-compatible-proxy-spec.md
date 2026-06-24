@@ -171,6 +171,8 @@ OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`ty
 - `path`
 - `status`
 
+`path` 标签只保留已知路由。未知路由统一归一化为 `/__unknown__`，避免恶意或异常路径造成 Prometheus label cardinality 无界增长。
+
 ## `GET /version`
 
 返回当前二进制的构建信息。该接口不需要 Bearer token。

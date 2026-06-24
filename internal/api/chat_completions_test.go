@@ -347,6 +347,51 @@ func TestMetricsRecordsRequests(t *testing.T) {
 	}
 }
 
+func TestMetricsNormalizesUnknownPaths(t *testing.T) {
+	handler := newTestHandler(fake.New())
+
+	for _, path := range []string{"/v1/unknown-one", "/v1/unknown-two"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer "+testAPIKey)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assertError(t, rr, http.StatusNotFound, "invalid_request_error")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	text := rr.Body.String()
+	want := `open_ai_gateway_http_requests_total{method="GET",path="/__unknown__",status="404"} 2`
+	if !strings.Contains(text, want) {
+		t.Fatalf("metrics missing %s: %s", want, text)
+	}
+	for _, rawPath := range []string{"/v1/unknown-one", "/v1/unknown-two"} {
+		if strings.Contains(text, rawPath) {
+			t.Fatalf("metrics leaked raw unknown path %q: %s", rawPath, text)
+		}
+	}
+}
+
+func TestMetricsKeepsKnownPathForMethodNotAllowed(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodGet, "/v1/chat/completions", nil)
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assertError(t, rr, http.StatusMethodNotAllowed, "invalid_request_error")
+
+	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsRR := httptest.NewRecorder()
+	handler.ServeHTTP(metricsRR, metricsReq)
+
+	want := `open_ai_gateway_http_requests_total{method="GET",path="/v1/chat/completions",status="405"} 1`
+	if !strings.Contains(metricsRR.Body.String(), want) {
+		t.Fatalf("metrics missing %s: %s", want, metricsRR.Body.String())
+	}
+}
+
 func TestMetricsBypassesRateLimit(t *testing.T) {
 	handler := newTestHandlerWithOptions(fake.New(), api.Options{
 		RateLimiter: middleware.NewRateLimiter(1),

@@ -85,6 +85,7 @@ Metrics endpoint:
 - Prometheus text exposition format
 - `open_ai_gateway_http_requests_total`
 - `open_ai_gateway_http_request_duration_seconds_total`
+- Metrics `path` labels keep known routes and collapse unknown routes to `/__unknown__`.
 
 Runtime probes:
 

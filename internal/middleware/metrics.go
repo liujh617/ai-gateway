@@ -25,6 +25,18 @@ type requestMetric struct {
 	DurationSeconds float64
 }
 
+const unknownMetricPath = "/__unknown__"
+
+var knownMetricPaths = map[string]struct{}{
+	"/healthz":             {},
+	"/readyz":              {},
+	"/version":             {},
+	"/metrics":             {},
+	"/v1/models":           {},
+	"/v1/chat/completions": {},
+	"/v1/embeddings":       {},
+}
+
 func NewMetrics() *Metrics {
 	return &Metrics{
 		requests: make(map[metricKey]requestMetric),
@@ -36,7 +48,7 @@ func (m *Metrics) Middleware(next http.Handler) http.Handler {
 		started := time.Now()
 		rec := &metricsRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
-		m.Observe(r.Method, r.URL.Path, rec.status, time.Since(started))
+		m.Observe(r.Method, normalizeMetricPath(r.URL.Path), rec.status, time.Since(started))
 	})
 }
 
@@ -111,6 +123,13 @@ func (m *Metrics) snapshot() []metricSnapshotItem {
 		return left.Status < right.Status
 	})
 	return items
+}
+
+func normalizeMetricPath(path string) string {
+	if _, ok := knownMetricPaths[path]; ok {
+		return path
+	}
+	return unknownMetricPath
 }
 
 type metricsRecorder struct {
