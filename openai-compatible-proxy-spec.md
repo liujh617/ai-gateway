@@ -99,6 +99,21 @@ OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`ty
 }
 ```
 
+## `GET /metrics`
+
+返回 Prometheus text exposition 格式的基础 HTTP 指标。该接口不需要 Bearer token。
+
+当前指标：
+
+- `open_ai_gateway_http_requests_total`
+- `open_ai_gateway_http_request_duration_seconds_total`
+
+标签：
+
+- `method`
+- `path`
+- `status`
+
 ## `POST /v1/chat/completions`
 
 创建 chat completion。第一阶段必须支持非流式和流式两种模式。

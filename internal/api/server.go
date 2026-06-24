@@ -18,12 +18,14 @@ type Server struct {
 	requestTimeout time.Duration
 	streamTimeout  time.Duration
 	rateLimiter    *middleware.RateLimiter
+	metrics        *middleware.Metrics
 }
 
 type Options struct {
 	RequestTimeout time.Duration
 	StreamTimeout  time.Duration
 	RateLimiter    *middleware.RateLimiter
+	Metrics        *middleware.Metrics
 }
 
 func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logger, options ...Options) *Server {
@@ -43,6 +45,9 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 			opts.StreamTimeout = 10 * time.Minute
 		}
 	}
+	if opts.Metrics == nil {
+		opts.Metrics = middleware.NewMetrics()
+	}
 	return &Server{
 		router:         modelRouter,
 		apiKey:         apiKey,
@@ -50,12 +55,14 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 		requestTimeout: opts.RequestTimeout,
 		streamTimeout:  opts.StreamTimeout,
 		rateLimiter:    opts.RateLimiter,
+		metrics:        opts.Metrics,
 	}
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
+	mux.HandleFunc("GET /metrics", s.handleMetrics)
 	mux.HandleFunc("GET /v1/models", s.handleModels)
 	mux.HandleFunc("POST /v1/chat/completions", s.handleChatCompletions)
 	mux.HandleFunc("POST /v1/embeddings", s.handleEmbeddings)
@@ -65,6 +72,9 @@ func (s *Server) Handler() http.Handler {
 		handler = s.rateLimiter.Middleware(s)(handler)
 	}
 	handler = middleware.Auth(s.apiKey, s)(handler)
+	if s.metrics != nil {
+		handler = s.metrics.Middleware(handler)
+	}
 	handler = middleware.Logging(s.logger)(handler)
 	handler = middleware.RequestID(handler)
 	handler = middleware.Recovery(s.logger, s)(handler)
@@ -95,4 +105,8 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status": "ok",
 	})
+}
+
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	s.metrics.WritePrometheus(w)
 }

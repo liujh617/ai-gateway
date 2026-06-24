@@ -49,6 +49,12 @@ make run
 curl -sS http://127.0.0.1:8080/healthz
 ```
 
+Metrics：
+
+```bash
+curl -sS http://127.0.0.1:8080/metrics
+```
+
 模型列表：
 
 ```bash

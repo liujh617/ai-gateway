@@ -56,6 +56,7 @@ Upstream Model Service
 - panic recovery。
 - Bearer token 鉴权。
 - 基础访问日志。
+- HTTP metrics。
 - 按 Bearer token 做简单 in-memory 限流。
 - 超时和 context 管理。
 - metrics hook。
@@ -73,6 +74,13 @@ Upstream Model Service
 - `stream`
 - `error_type`
 - `error_code`
+
+Metrics endpoint:
+
+- `GET /metrics`
+- Prometheus text exposition format
+- `open_ai_gateway_http_requests_total`
+- `open_ai_gateway_http_request_duration_seconds_total`
 
 ### Compat Mapper
 

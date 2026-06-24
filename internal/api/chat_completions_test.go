@@ -178,6 +178,77 @@ func TestHealthzBypassesRateLimit(t *testing.T) {
 	}
 }
 
+func TestMetricsDoesNotRequireAuth(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); !strings.Contains(got, "text/plain") {
+		t.Fatalf("content-type = %q", got)
+	}
+	if !strings.Contains(rr.Body.String(), "open_ai_gateway_http_requests_total") {
+		t.Fatalf("missing metrics: %s", rr.Body.String())
+	}
+}
+
+func TestMetricsRecordsRequests(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	ok := doJSON(handler, body, true)
+	if ok.Code != http.StatusOK {
+		t.Fatalf("ok status = %d, body = %s", ok.Code, ok.Body.String())
+	}
+	bad := doJSON(handler, `{`, true)
+	if bad.Code != http.StatusBadRequest {
+		t.Fatalf("bad status = %d, body = %s", bad.Code, bad.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	text := rr.Body.String()
+	for _, want := range []string{
+		`open_ai_gateway_http_requests_total{method="POST",path="/v1/chat/completions",status="200"} 1`,
+		`open_ai_gateway_http_requests_total{method="POST",path="/v1/chat/completions",status="400"} 1`,
+		`open_ai_gateway_http_request_duration_seconds_total{method="POST",path="/v1/chat/completions",status="200"}`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("metrics missing %s: %s", want, text)
+		}
+	}
+}
+
+func TestMetricsBypassesRateLimit(t *testing.T) {
+	handler := newTestHandlerWithOptions(fake.New(), api.Options{
+		RateLimiter: middleware.NewRateLimiter(1),
+	})
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	first := doJSON(handler, body, true)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status = %d, body = %s", first.Code, first.Body.String())
+	}
+	second := doJSON(handler, body, true)
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status = %d, want 429", second.Code)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("metrics status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestChatCompletionsStreamUsesStreamTimeout(t *testing.T) {
 	handler := newTestHandlerWithOptions(&delayedStreamProvider{}, api.Options{
 		RequestTimeout: time.Nanosecond,

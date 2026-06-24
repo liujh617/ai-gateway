@@ -23,6 +23,9 @@ done
 
 curl -fsS "http://$addr/healthz" | grep -q '"status":"ok"'
 
+curl -fsS "http://$addr/metrics" \
+  | grep -q 'open_ai_gateway_http_requests_total'
+
 curl -fsS "http://$addr/v1/models" \
   -H "Authorization: Bearer $api_key" \
   | grep -q '"id":"test-model"'
