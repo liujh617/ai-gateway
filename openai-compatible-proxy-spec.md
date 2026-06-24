@@ -65,6 +65,8 @@ Connection: keep-alive
 | provider 返回限流 | `429` | `rate_limit_error` |
 | provider 内部错误 | `502` | `server_error` |
 
+OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`type`、`param` 和 `code`。上游 `5xx` 会映射为网关 `502`，避免把上游内部状态直接暴露为网关自身故障。
+
 ## `GET /v1/models`
 
 返回网关对当前调用方可见的模型列表。
@@ -185,6 +187,9 @@ data: [DONE]
 约束：
 
 - 每个事件以空行结束。
+- provider 适配器按 SSE event 解析，而不是按单行解析。
+- 多行 `data:` 会按 SSE 规则合并。
+- comment、`event`、`id`、`retry` 行会被忽略。
 - handler 必须在写入 chunk 后 flush。
 - request context 取消时必须关闭上游流。
 - 上游流异常时，如果响应头尚未发送，返回 JSON 错误；如果已经开始 SSE，则发送兼容的错误 chunk 或直接结束连接，并记录日志。

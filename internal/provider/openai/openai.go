@@ -17,6 +17,8 @@ import (
 	"open-ai-gateway/internal/provider"
 )
 
+const maxResponseBodyBytes = 10 << 20
+
 type Provider struct {
 	baseURL string
 	apiKey  string
@@ -61,7 +63,7 @@ func (p *Provider) ListModels(ctx context.Context) ([]compat.Model, error) {
 	}
 
 	var out compat.ModelListResponse
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	if err := decodeLimited(resp.Body, &out); err != nil {
 		return nil, err
 	}
 	return out.Data, nil
@@ -91,7 +93,7 @@ func (p *Provider) CreateChatCompletion(ctx context.Context, req compat.ChatComp
 	}
 
 	var out compat.ChatCompletionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	if err := decodeLimited(resp.Body, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -148,23 +150,13 @@ func (s *stream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) 
 			return nil, err
 		}
 
-		line, err := s.reader.ReadString('\n')
+		payload, err := s.nextPayload()
 		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil, io.EOF
-			}
 			return nil, err
 		}
-
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, ":") {
+		if payload == "" {
 			continue
 		}
-		if !strings.HasPrefix(line, "data:") {
-			continue
-		}
-
-		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 		if payload == "[DONE]" {
 			return nil, io.EOF
 		}
@@ -177,13 +169,66 @@ func (s *stream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) 
 	}
 }
 
+func (s *stream) nextPayload() (string, error) {
+	var data []string
+	for {
+		line, err := s.reader.ReadString('\n')
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				if len(data) == 0 {
+					return "", io.EOF
+				}
+				return strings.Join(data, "\n"), nil
+			}
+			return "", err
+		}
+
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			if len(data) == 0 {
+				continue
+			}
+			return strings.Join(data, "\n"), nil
+		}
+		if strings.HasPrefix(line, ":") {
+			continue
+		}
+		field, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		if strings.HasPrefix(value, " ") {
+			value = strings.TrimPrefix(value, " ")
+		}
+		switch field {
+		case "data":
+			data = append(data, value)
+		case "event", "id", "retry":
+			continue
+		default:
+			continue
+		}
+	}
+}
+
 func (s *stream) Close() error {
 	return s.body.Close()
 }
 
+func decodeLimited(r io.Reader, out any) error {
+	limited := &io.LimitedReader{R: r, N: maxResponseBodyBytes + 1}
+	if err := json.NewDecoder(limited).Decode(out); err != nil {
+		return err
+	}
+	if limited.N <= 0 {
+		return fmt.Errorf("upstream response body exceeds %d bytes", maxResponseBodyBytes)
+	}
+	return nil
+}
+
 func upstreamError(resp *http.Response) error {
 	var upstream compat.ErrorResponse
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodyBytes))
 	if len(body) > 0 {
 		_ = json.Unmarshal(body, &upstream)
 	}
@@ -193,21 +238,32 @@ func upstreamError(resp *http.Response) error {
 		message = upstream.Error.Message
 	}
 
-	switch resp.StatusCode {
+	errorType := upstream.Error.Type
+	if errorType == "" {
+		errorType = defaultErrorType(resp.StatusCode)
+	}
+	status := resp.StatusCode
+	if resp.StatusCode >= 500 && resp.StatusCode != http.StatusGatewayTimeout {
+		status = http.StatusBadGateway
+	}
+	return &compat.Error{
+		Status:  status,
+		Message: message,
+		Type:    errorType,
+		Param:   upstream.Error.Param,
+		Code:    upstream.Error.Code,
+	}
+}
+
+func defaultErrorType(status int) string {
+	switch status {
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return compat.Authentication(message)
+		return "authentication_error"
 	case http.StatusTooManyRequests:
-		return compat.RateLimit(message)
-	case http.StatusBadRequest:
-		return compat.InvalidRequest(message, "")
-	case http.StatusNotFound:
-		return compat.NewError(http.StatusNotFound, "invalid_request_error", message, nil)
-	case http.StatusGatewayTimeout:
-		return compat.ServerError(http.StatusGatewayTimeout, message)
+		return "rate_limit_error"
+	case http.StatusBadRequest, http.StatusNotFound:
+		return "invalid_request_error"
 	default:
-		if resp.StatusCode >= 500 {
-			return compat.ServerError(http.StatusBadGateway, message)
-		}
-		return compat.NewError(resp.StatusCode, "invalid_request_error", message, nil)
+		return "server_error"
 	}
 }

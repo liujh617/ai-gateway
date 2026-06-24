@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"open-ai-gateway/internal/compat"
@@ -93,6 +94,62 @@ func TestStreamChatCompletionReadsSSE(t *testing.T) {
 	}
 }
 
+func TestStreamChatCompletionReadsMultilineSSEAndIgnoresMetadata(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, ": keepalive\n")
+		io.WriteString(w, "event: completion\n")
+		io.WriteString(w, "id: 1\n")
+		io.WriteString(w, "retry: 1000\n")
+		io.WriteString(w, "data: {\"id\":\"chatcmpl_upstream\",\"object\":\"chat.completion.chunk\",\"created\":1,\n")
+		io.WriteString(w, "data: \"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"},\"finish_reason\":null}]}\n\n")
+		io.WriteString(w, "event: done\n")
+		io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	stream, err := p.StreamChatCompletion(context.Background(), chatRequest())
+	if err != nil {
+		t.Fatalf("StreamChatCompletion: %v", err)
+	}
+	defer stream.Close()
+
+	chunk, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("chunk: %v", err)
+	}
+	if chunk.Choices[0].Delta.Content != "hello" {
+		t.Fatalf("content = %q", chunk.Choices[0].Delta.Content)
+	}
+	if _, err := stream.Next(context.Background()); err != io.EOF {
+		t.Fatalf("end error = %v, want EOF", err)
+	}
+}
+
+func TestStreamChatCompletionMalformedChunk(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {not-json}\n\n")
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	stream, err := p.StreamChatCompletion(context.Background(), chatRequest())
+	if err != nil {
+		t.Fatalf("StreamChatCompletion: %v", err)
+	}
+	defer stream.Close()
+
+	_, err = stream.Next(context.Background())
+	if err == nil {
+		t.Fatal("expected malformed chunk error")
+	}
+	if !strings.Contains(err.Error(), "invalid character") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestUpstreamErrorMapping(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
@@ -120,6 +177,103 @@ func TestUpstreamErrorMapping(t *testing.T) {
 	}
 }
 
+func TestUpstreamErrorMappingPreservesDetails(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		body       string
+		wantStatus int
+		wantType   string
+		wantCode   string
+		wantParam  string
+	}{
+		{
+			name:       "unauthorized",
+			status:     http.StatusUnauthorized,
+			body:       `{"error":{"message":"bad key","type":"authentication_error","param":null,"code":"invalid_api_key"}}`,
+			wantStatus: http.StatusUnauthorized,
+			wantType:   "authentication_error",
+			wantCode:   "invalid_api_key",
+		},
+		{
+			name:       "forbidden",
+			status:     http.StatusForbidden,
+			body:       `{"error":{"message":"forbidden","type":"authentication_error","param":null,"code":"forbidden"}}`,
+			wantStatus: http.StatusForbidden,
+			wantType:   "authentication_error",
+			wantCode:   "forbidden",
+		},
+		{
+			name:       "not found",
+			status:     http.StatusNotFound,
+			body:       `{"error":{"message":"model missing","type":"invalid_request_error","param":"model","code":"model_not_found"}}`,
+			wantStatus: http.StatusNotFound,
+			wantType:   "invalid_request_error",
+			wantCode:   "model_not_found",
+			wantParam:  "model",
+		},
+		{
+			name:       "rate limit",
+			status:     http.StatusTooManyRequests,
+			body:       `{"error":{"message":"slow down","type":"rate_limit_error","param":null,"code":"rate_limit_exceeded"}}`,
+			wantStatus: http.StatusTooManyRequests,
+			wantType:   "rate_limit_error",
+			wantCode:   "rate_limit_exceeded",
+		},
+		{
+			name:       "server error",
+			status:     http.StatusInternalServerError,
+			body:       `{"error":{"message":"upstream exploded","type":"server_error","param":null,"code":"upstream_error"}}`,
+			wantStatus: http.StatusBadGateway,
+			wantType:   "server_error",
+			wantCode:   "upstream_error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.status)
+				io.WriteString(w, tt.body)
+			}))
+			defer server.Close()
+
+			p := newProvider(t, server.URL+"/v1")
+			_, err := p.CreateChatCompletion(context.Background(), chatRequest())
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			compatErr, ok := err.(*compat.Error)
+			if !ok {
+				t.Fatalf("error type = %T", err)
+			}
+			if compatErr.Status != tt.wantStatus || compatErr.Type != tt.wantType {
+				t.Fatalf("mapped error = %+v", compatErr)
+			}
+			if tt.wantCode != "" && (compatErr.Code == nil || *compatErr.Code != tt.wantCode) {
+				t.Fatalf("code = %v, want %q", compatErr.Code, tt.wantCode)
+			}
+			if tt.wantParam != "" && (compatErr.Param == nil || *compatErr.Param != tt.wantParam) {
+				t.Fatalf("param = %v, want %q", compatErr.Param, tt.wantParam)
+			}
+		})
+	}
+}
+
+func TestCreateChatCompletionRejectsOversizedResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, strings.Repeat(" ", 11<<20))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.CreateChatCompletion(context.Background(), chatRequest())
+	if err == nil {
+		t.Fatal("expected oversized or invalid response error")
+	}
+}
+
 func newProvider(t *testing.T, baseURL string) *openai.Provider {
 	t.Helper()
 	p, err := openai.New(baseURL, "upstream-key", 0)
@@ -127,4 +281,14 @@ func newProvider(t *testing.T, baseURL string) *openai.Provider {
 		t.Fatalf("new provider: %v", err)
 	}
 	return p
+}
+
+func chatRequest() compat.ChatCompletionRequest {
+	return compat.ChatCompletionRequest{
+		Model: "upstream-model",
+		Messages: []compat.ChatMessage{{
+			Role:    "user",
+			Content: json.RawMessage(`"hello"`),
+		}},
+	}
 }
