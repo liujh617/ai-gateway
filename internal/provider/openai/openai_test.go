@@ -12,6 +12,7 @@ import (
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/provider/openai"
 	"open-ai-gateway/internal/requestctx"
+	"open-ai-gateway/internal/version"
 )
 
 func TestCreateChatCompletionForwardsRequest(t *testing.T) {
@@ -25,6 +26,9 @@ func TestCreateChatCompletionForwardsRequest(t *testing.T) {
 		}
 		if requestID := r.Header.Get(requestctx.RequestIDHeader); requestID != "gateway-request-1" {
 			t.Fatalf("request id = %q", requestID)
+		}
+		if userAgent := r.Header.Get("User-Agent"); userAgent != version.UserAgent() {
+			t.Fatalf("user-agent = %q", userAgent)
 		}
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatalf("decode request: %v", err)
@@ -82,6 +86,9 @@ func TestCreateEmbeddingForwardsRequest(t *testing.T) {
 		if requestID := r.Header.Get(requestctx.RequestIDHeader); requestID != "gateway-request-2" {
 			t.Fatalf("request id = %q", requestID)
 		}
+		if userAgent := r.Header.Get("User-Agent"); userAgent != version.UserAgent() {
+			t.Fatalf("user-agent = %q", userAgent)
+		}
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
@@ -121,6 +128,9 @@ func TestStreamChatCompletionReadsSSE(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if requestID := r.Header.Get(requestctx.RequestIDHeader); requestID != "gateway-request-3" {
 			t.Fatalf("request id = %q", requestID)
+		}
+		if userAgent := r.Header.Get("User-Agent"); userAgent != version.UserAgent() {
+			t.Fatalf("user-agent = %q", userAgent)
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		io.WriteString(w, "data: {\"id\":\"chatcmpl_upstream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hel\"},\"finish_reason\":null}]}\n\n")

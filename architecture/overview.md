@@ -121,6 +121,7 @@ Compat Mapper 是外部 API 契约的主要守门员。
 - 转换上游请求和响应。
 - 处理上游错误、超时和取消。
 - 转发网关最终使用的 request id，便于上游日志关联。
+- 设置稳定的上游 `User-Agent`，便于上游识别网关调用。
 - 暴露是否支持 streaming 的能力信息。
 
 Provider Adapter 不应直接依赖 HTTP handler。
