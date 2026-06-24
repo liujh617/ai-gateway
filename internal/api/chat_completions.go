@@ -14,6 +14,10 @@ import (
 )
 
 func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
+	if err := requireJSONContentType(r); err != nil {
+		s.writeError(w, r, err)
+		return
+	}
 	var req compat.ChatCompletionRequest
 	if err := decodeJSONBody(s.requestBody(w, r), &req); err != nil {
 		s.writeError(w, r, decodeError(err))

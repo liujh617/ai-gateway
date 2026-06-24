@@ -58,6 +58,10 @@ func RequestTooLarge(message string) *Error {
 	return NewError(http.StatusRequestEntityTooLarge, "invalid_request_error", message, nil)
 }
 
+func UnsupportedMediaType(message string) *Error {
+	return NewError(http.StatusUnsupportedMediaType, "invalid_request_error", message, stringPtr("content_type"))
+}
+
 func ErrorResponseFor(err *Error) ErrorResponse {
 	return ErrorResponse{
 		Error: ErrorBody{

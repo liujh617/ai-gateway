@@ -10,6 +10,10 @@ import (
 )
 
 func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
+	if err := requireJSONContentType(r); err != nil {
+		s.writeError(w, r, err)
+		return
+	}
 	var req compat.EmbeddingRequest
 	if err := decodeJSONBody(s.requestBody(w, r), &req); err != nil {
 		s.writeError(w, r, decodeError(err))

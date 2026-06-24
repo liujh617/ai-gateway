@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
+	"strings"
+
+	"open-ai-gateway/internal/compat"
 )
 
 func (s *Server) requestBody(w http.ResponseWriter, r *http.Request) io.Reader {
@@ -25,6 +29,18 @@ func decodeJSONBody(r io.Reader, out any) error {
 			return fmt.Errorf("request body must contain a single JSON value")
 		}
 		return err
+	}
+	return nil
+}
+
+func requireJSONContentType(r *http.Request) *compat.Error {
+	contentType := strings.TrimSpace(r.Header.Get("Content-Type"))
+	if contentType == "" {
+		return compat.UnsupportedMediaType("missing Content-Type header")
+	}
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil || !strings.EqualFold(mediaType, "application/json") {
+		return compat.UnsupportedMediaType("Content-Type must be application/json")
 	}
 	return nil
 }

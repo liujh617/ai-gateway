@@ -80,6 +80,22 @@ func TestChatCompletionsInvalidJSON(t *testing.T) {
 	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
 }
 
+func TestChatCompletionsRequiresJSONContentType(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	missing := doJSONWithContentType(handler, body, true, "")
+	assertError(t, missing, http.StatusUnsupportedMediaType, "invalid_request_error")
+
+	text := doJSONWithContentType(handler, body, true, "text/plain")
+	assertError(t, text, http.StatusUnsupportedMediaType, "invalid_request_error")
+
+	withCharset := doJSONWithContentType(handler, body, true, "application/json; charset=utf-8")
+	if withCharset.Code != http.StatusOK {
+		t.Fatalf("charset status = %d, body = %s", withCharset.Code, withCharset.Body.String())
+	}
+}
+
 func TestChatCompletionsRejectsTrailingJSON(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}{}`
@@ -562,6 +578,22 @@ func TestEmbeddingsMissingInput(t *testing.T) {
 	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
 }
 
+func TestEmbeddingsRequiresJSONContentType(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	body := `{"model":"test-model","input":"hello"}`
+
+	missing := doEmbeddingsJSONWithContentType(handler, body, true, "")
+	assertError(t, missing, http.StatusUnsupportedMediaType, "invalid_request_error")
+
+	text := doEmbeddingsJSONWithContentType(handler, body, true, "text/plain")
+	assertError(t, text, http.StatusUnsupportedMediaType, "invalid_request_error")
+
+	withCharset := doEmbeddingsJSONWithContentType(handler, body, true, "application/json; charset=utf-8")
+	if withCharset.Code != http.StatusOK {
+		t.Fatalf("charset status = %d, body = %s", withCharset.Code, withCharset.Body.String())
+	}
+}
+
 func TestEmbeddingsRejectsTrailingJSON(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	body := `{"model":"test-model","input":"hello"}{}`
@@ -760,8 +792,14 @@ func newCapabilityTestHandler(p provider.Provider) http.Handler {
 }
 
 func doJSON(handler http.Handler, body string, auth bool) *httptest.ResponseRecorder {
+	return doJSONWithContentType(handler, body, auth, "application/json")
+}
+
+func doJSONWithContentType(handler http.Handler, body string, auth bool, contentType string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
 	if auth {
 		req.Header.Set("Authorization", "Bearer "+testAPIKey)
 	}
@@ -771,8 +809,14 @@ func doJSON(handler http.Handler, body string, auth bool) *httptest.ResponseReco
 }
 
 func doEmbeddingsJSON(handler http.Handler, body string, auth bool) *httptest.ResponseRecorder {
+	return doEmbeddingsJSONWithContentType(handler, body, auth, "application/json")
+}
+
+func doEmbeddingsJSONWithContentType(handler http.Handler, body string, auth bool, contentType string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, "/v1/embeddings", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
 	if auth {
 		req.Header.Set("Authorization", "Bearer "+testAPIKey)
 	}
