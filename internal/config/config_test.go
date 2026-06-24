@@ -80,6 +80,58 @@ func TestLoadConfigRequiresOpenAICompatibleKeyReference(t *testing.T) {
 	}
 }
 
+func TestLoadConfigValidatesCapabilities(t *testing.T) {
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_key": "gateway-key",
+		"providers": {
+			"fake": {
+				"type": "fake"
+			}
+		},
+		"models": {
+			"bad-model": {
+				"provider": "fake",
+				"capabilities": ["images"]
+			}
+		}
+	}`)
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "unsupported capability") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestLoadConfigDefaultsCapabilities(t *testing.T) {
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_key": "gateway-key",
+		"providers": {
+			"fake": {
+				"type": "fake"
+			}
+		},
+		"models": {
+			"test-model": {
+				"provider": "fake"
+			}
+		}
+	}`)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got := cfg.Models["test-model"].Capabilities
+	if len(got) != 2 || got[0] != "chat" || got[1] != "embeddings" {
+		t.Fatalf("capabilities = %#v", got)
+	}
+}
+
 func TestEnvironmentOverrides(t *testing.T) {
 	t.Setenv("GATEWAY_ADDR", "127.0.0.1:9090")
 	t.Setenv("GATEWAY_API_KEY", "override-key")

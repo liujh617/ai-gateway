@@ -246,11 +246,13 @@ data: [DONE]
   "models": {
     "gpt-4o-mini": {
       "provider": "openai",
-      "upstream_model": "gpt-4o-mini"
+      "upstream_model": "gpt-4o-mini",
+      "capabilities": ["chat"]
     },
     "qwen-plus": {
       "provider": "dashscope",
-      "upstream_model": "qwen-plus"
+      "upstream_model": "qwen-plus",
+      "capabilities": ["chat"]
     }
   }
 }
@@ -271,6 +273,13 @@ models:
 ```
 
 网关日志应同时记录 external model 和 upstream model，但不得记录上游 API key。
+
+模型能力通过 `capabilities` 声明：
+
+- `chat`: 可用于 `/v1/chat/completions`
+- `embeddings`: 可用于 `/v1/embeddings`
+
+未声明 `capabilities` 时默认同时支持 `chat` 和 `embeddings`，用于兼容早期配置。请求使用不支持该能力的模型时，返回 `404 invalid_request_error`。
 
 ## 超时
 

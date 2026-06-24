@@ -30,8 +30,9 @@ type ProviderConfig struct {
 }
 
 type ModelConfig struct {
-	Provider      string `json:"provider"`
-	UpstreamModel string `json:"upstream_model"`
+	Provider      string   `json:"provider"`
+	UpstreamModel string   `json:"upstream_model"`
+	Capabilities  []string `json:"capabilities"`
 }
 
 type RateLimitConfig struct {
@@ -77,6 +78,7 @@ func Default() *Config {
 			"test-model": {
 				Provider:      "fake",
 				UpstreamModel: "test-model",
+				Capabilities:  []string{"chat", "embeddings"},
 			},
 		},
 	}
@@ -144,6 +146,13 @@ func (c *Config) Validate() error {
 		if _, ok := c.Providers[model.Provider]; !ok {
 			return fmt.Errorf("model %q references unknown provider %q", externalModel, model.Provider)
 		}
+		for _, capability := range model.Capabilities {
+			switch capability {
+			case "chat", "embeddings":
+			default:
+				return fmt.Errorf("model %q has unsupported capability %q", externalModel, capability)
+			}
+		}
 	}
 	return nil
 }
@@ -190,6 +199,12 @@ func (c *Config) applyDefaults() {
 			provider.TimeoutSeconds = 60
 		}
 		c.Providers[name] = provider
+	}
+	for name, model := range c.Models {
+		if len(model.Capabilities) == 0 {
+			model.Capabilities = []string{"chat", "embeddings"}
+		}
+		c.Models[name] = model
 	}
 }
 

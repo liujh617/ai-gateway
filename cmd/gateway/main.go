@@ -81,6 +81,7 @@ func buildRouter(cfg *config.Config) (*router.ModelRouter, error) {
 			ExternalModel: externalModel,
 			UpstreamModel: upstreamModel,
 			ProviderName:  modelConfig.Provider,
+			Capabilities:  capabilities(modelConfig.Capabilities),
 			Provider:      provider,
 		})
 	}
@@ -88,3 +89,11 @@ func buildRouter(cfg *config.Config) (*router.ModelRouter, error) {
 }
 
 type routerProvider = provider.Provider
+
+func capabilities(values []string) map[string]bool {
+	out := make(map[string]bool, len(values))
+	for _, value := range values {
+		out[value] = true
+	}
+	return out
+}

@@ -11,6 +11,7 @@ type ModelRoute struct {
 	ExternalModel string
 	UpstreamModel string
 	ProviderName  string
+	Capabilities  map[string]bool
 	Provider      provider.Provider
 }
 
@@ -32,6 +33,17 @@ func (r *ModelRouter) Resolve(model string) (ModelRoute, *compat.Error) {
 		return ModelRoute{}, compat.ModelNotFound(model)
 	}
 	return route, nil
+}
+
+func (r *ModelRouter) ResolveFor(model, capability string) (ModelRoute, *compat.Error) {
+	route, err := r.Resolve(model)
+	if err != nil {
+		return ModelRoute{}, err
+	}
+	if len(route.Capabilities) == 0 || route.Capabilities[capability] {
+		return route, nil
+	}
+	return ModelRoute{}, compat.NewError(404, "invalid_request_error", "model does not support "+capability+": "+model, nil)
 }
 
 func (r *ModelRouter) Models() []compat.Model {

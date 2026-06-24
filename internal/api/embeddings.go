@@ -22,7 +22,7 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	route, resolveErr := s.router.Resolve(req.Model)
+	route, resolveErr := s.router.ResolveFor(req.Model, "embeddings")
 	if resolveErr != nil {
 		middleware.SetLogRoute(r.Context(), req.Model, "", "")
 		s.writeError(w, r, resolveErr)

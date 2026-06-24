@@ -26,7 +26,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	route, resolveErr := s.router.Resolve(req.Model)
+	route, resolveErr := s.router.ResolveFor(req.Model, "chat")
 	if resolveErr != nil {
 		middleware.SetLogRoute(r.Context(), req.Model, "", "")
 		s.writeError(w, r, resolveErr)

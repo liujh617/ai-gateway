@@ -29,15 +29,18 @@
   "models": {
     "gpt-4o-mini": {
       "provider": "openai",
-      "upstream_model": "gpt-4o-mini"
+      "upstream_model": "gpt-4o-mini",
+      "capabilities": ["chat"]
     },
     "text-embedding-3-small": {
       "provider": "openai",
-      "upstream_model": "text-embedding-3-small"
+      "upstream_model": "text-embedding-3-small",
+      "capabilities": ["embeddings"]
     },
     "local-qwen": {
       "provider": "vllm-local",
-      "upstream_model": "Qwen/Qwen2.5-7B-Instruct"
+      "upstream_model": "Qwen/Qwen2.5-7B-Instruct",
+      "capabilities": ["chat"]
     }
   }
 }

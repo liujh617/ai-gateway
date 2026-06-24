@@ -90,6 +90,7 @@ Compat Mapper 是外部 API 契约的主要守门员。
 
 - 根据对外模型名查找 provider。
 - 将对外模型名映射为上游模型名。
+- 校验模型是否支持当前 API 能力，例如 `chat` 或 `embeddings`。
 - 返回明确的 model not found 或 unauthorized 错误。
 
 第一阶段只需要静态配置路由。后续可以扩展 weighted routing、fallback 和灰度策略。

@@ -312,6 +312,24 @@ func TestEmbeddingsProviderError(t *testing.T) {
 	assertError(t, rr, http.StatusBadGateway, "server_error")
 }
 
+func TestChatCompletionsRejectsEmbeddingOnlyModel(t *testing.T) {
+	handler := newCapabilityTestHandler(fake.New())
+	body := `{"model":"embedding-model","messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	assertError(t, rr, http.StatusNotFound, "invalid_request_error")
+}
+
+func TestEmbeddingsRejectsChatOnlyModel(t *testing.T) {
+	handler := newCapabilityTestHandler(fake.New())
+	body := `{"model":"chat-model","input":"hello"}`
+
+	rr := doEmbeddingsJSON(handler, body, true)
+
+	assertError(t, rr, http.StatusNotFound, "invalid_request_error")
+}
+
 func TestAccessLogIncludesRouteFields(t *testing.T) {
 	var logs bytes.Buffer
 	handler := newTestHandlerWithLogger(fake.New(), slog.New(slog.NewJSONHandler(&logs, nil)), api.Options{})
@@ -411,6 +429,27 @@ func newTestHandlerWithLogger(p provider.Provider, logger *slog.Logger, opts api
 		Provider:      p,
 	}})
 	return api.NewServer(modelRouter, testAPIKey, logger, opts).Handler()
+}
+
+func newCapabilityTestHandler(p provider.Provider) http.Handler {
+	modelRouter := router.NewModelRouter([]router.ModelRoute{
+		{
+			ExternalModel: "chat-model",
+			UpstreamModel: "upstream-chat-model",
+			ProviderName:  "fake-provider",
+			Capabilities:  map[string]bool{"chat": true},
+			Provider:      p,
+		},
+		{
+			ExternalModel: "embedding-model",
+			UpstreamModel: "upstream-embedding-model",
+			ProviderName:  "fake-provider",
+			Capabilities:  map[string]bool{"embeddings": true},
+			Provider:      p,
+		},
+	})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	return api.NewServer(modelRouter, testAPIKey, logger).Handler()
 }
 
 func doJSON(handler http.Handler, body string, auth bool) *httptest.ResponseRecorder {
