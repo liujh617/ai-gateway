@@ -303,6 +303,21 @@ func TestMetricsDoesNotRequireAuth(t *testing.T) {
 	}
 }
 
+func TestSecurityHeaders(t *testing.T) {
+	handler := newTestHandler(fake.New())
+
+	health := httptest.NewRecorder()
+	handler.ServeHTTP(health, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	assertNoSniff(t, health)
+
+	metrics := httptest.NewRecorder()
+	handler.ServeHTTP(metrics, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	assertNoSniff(t, metrics)
+
+	unauthorized := doJSON(handler, `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`, false)
+	assertNoSniff(t, unauthorized)
+}
+
 func TestMetricsRecordsRequests(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
@@ -836,6 +851,13 @@ func assertError(t *testing.T, rr *httptest.ResponseRecorder, status int, typ st
 	}
 	if got.Error.Type != typ {
 		t.Fatalf("error type = %q, want %q", got.Error.Type, typ)
+	}
+}
+
+func assertNoSniff(t *testing.T, rr *httptest.ResponseRecorder) {
+	t.Helper()
+	if got := rr.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("X-Content-Type-Options = %q", got)
 	}
 }
 

@@ -70,6 +70,7 @@ docker run --rm -p 8080:8080 \
 - 容器环境建议使用 `log.format=json`。
 - 客户端或反向代理可以传入 `X-Request-Id`；网关会校验后回写该 header，写入 access log，并转发给 OpenAI-compatible 上游。
 - OpenAI-compatible 上游请求会带 `User-Agent: open-ai-gateway/<version>`，用于上游日志关联和调用来源识别。
+- 所有响应会带 `X-Content-Type-Options: nosniff`。
 - 根据业务最大 prompt/input 调整 `max_request_body_bytes`。
 - `write_timeout_seconds` 默认保持 `0`，避免误伤长时间 streaming。
 - 反向代理或负载均衡器也应配置合理的 streaming timeout。

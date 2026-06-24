@@ -60,6 +60,7 @@ Upstream Model Service
 - 可配置日志格式和级别。
 - HTTP metrics。
 - 按 Bearer token 做简单 in-memory 限流。
+- 设置基础安全响应头。
 - 超时和 context 管理。
 - SIGINT/SIGTERM graceful shutdown。
 - metrics hook。

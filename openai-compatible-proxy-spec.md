@@ -52,6 +52,14 @@ Connection: keep-alive
 
 OpenAI-compatible provider 调用上游时会发送稳定的 `User-Agent`，格式为 `open-ai-gateway/<version>`。版本值来自构建注入的 `version`，为空或非法字符会被规范化，默认使用 `dev`。
 
+### Security Headers
+
+所有响应都会包含：
+
+```http
+X-Content-Type-Options: nosniff
+```
+
 ## 错误格式
 
 错误响应统一为：

@@ -84,6 +84,7 @@ func (s *Server) Handler() http.Handler {
 	handler = middleware.Logging(s.logger)(handler)
 	handler = middleware.RequestID(handler)
 	handler = middleware.Recovery(s.logger, s)(handler)
+	handler = middleware.SecurityHeaders(handler)
 	return handler
 }
 
