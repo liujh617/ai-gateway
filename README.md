@@ -37,6 +37,8 @@ make run
 
 本地服务级验证见 [Local Verification](docs/local-verification.md)。
 
+部署和容器化见 [Deployment](docs/deployment.md)。
+
 ## 本地运行
 
 默认无配置启动时使用 fake provider，监听 `127.0.0.1:8080`，测试 API key 为 `test-gateway-key`，测试模型为 `test-model`。
