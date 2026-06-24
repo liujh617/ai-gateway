@@ -43,6 +43,8 @@ make check-config-examples
 
 CI 自动化验证见 [CI](docs/ci.md)。
 
+发布流程见 [Release](docs/release.md)。
+
 ## 本地运行
 
 默认无配置启动时使用 fake provider，监听 `127.0.0.1:8080`，测试 API key 为 `test-gateway-key`，测试模型为 `test-model`。

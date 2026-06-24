@@ -29,6 +29,9 @@ jobs:
       - name: Build binary
         run: make build
 
+      - name: Release check
+        run: make release-check
+
   docker:
     runs-on: ubuntu-24.04
     needs: verify
