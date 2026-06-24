@@ -53,6 +53,7 @@ Upstream Model Service
 职责：
 
 - request id。
+- 复用合法的 `X-Request-Id`，并在非法或缺失时生成新的 request id。
 - panic recovery。
 - Bearer token 鉴权。
 - 基础访问日志。
