@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"open-ai-gateway/internal/requestctx"
 )
 
 func TestRequestIDReusesValidHeader(t *testing.T) {
@@ -14,12 +16,12 @@ func TestRequestIDReusesValidHeader(t *testing.T) {
 		}
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-	req.Header.Set(requestIDHeader, "client-request-1")
+	req.Header.Set(requestctx.RequestIDHeader, "client-request-1")
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
 
-	if got := rr.Header().Get(requestIDHeader); got != "client-request-1" {
+	if got := rr.Header().Get(requestctx.RequestIDHeader); got != "client-request-1" {
 		t.Fatalf("response request id = %q", got)
 	}
 }
@@ -31,12 +33,12 @@ func TestRequestIDTrimsHeader(t *testing.T) {
 		}
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-	req.Header.Set(requestIDHeader, "  client-request-2  ")
+	req.Header.Set(requestctx.RequestIDHeader, "  client-request-2  ")
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
 
-	if got := rr.Header().Get(requestIDHeader); got != "client-request-2" {
+	if got := rr.Header().Get(requestctx.RequestIDHeader); got != "client-request-2" {
 		t.Fatalf("response request id = %q", got)
 	}
 }
@@ -59,12 +61,12 @@ func TestRequestIDGeneratesWhenHeaderInvalid(t *testing.T) {
 				contextID = RequestIDFromContext(r.Context())
 			}))
 			req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-			req.Header.Set(requestIDHeader, tt.raw)
+			req.Header.Set(requestctx.RequestIDHeader, tt.raw)
 			rr := httptest.NewRecorder()
 
 			handler.ServeHTTP(rr, req)
 
-			responseID := rr.Header().Get(requestIDHeader)
+			responseID := rr.Header().Get(requestctx.RequestIDHeader)
 			if responseID == "" {
 				t.Fatal("missing response request id")
 			}

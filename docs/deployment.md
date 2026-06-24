@@ -68,7 +68,7 @@ docker run --rm -p 8080:8080 \
 - 部署前执行 `GATEWAY_CONFIG=/config/config.json open-ai-gateway check-config`。
 - 容器监听地址应设置为 `0.0.0.0:8080`。
 - 容器环境建议使用 `log.format=json`。
-- 客户端或反向代理可以传入 `X-Request-Id`；网关会校验后回写该 header 并写入 access log。
+- 客户端或反向代理可以传入 `X-Request-Id`；网关会校验后回写该 header，写入 access log，并转发给 OpenAI-compatible 上游。
 - 根据业务最大 prompt/input 调整 `max_request_body_bytes`。
 - `write_timeout_seconds` 默认保持 `0`，避免误伤长时间 streaming。
 - 反向代理或负载均衡器也应配置合理的 streaming timeout。

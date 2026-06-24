@@ -15,6 +15,7 @@ import (
 
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/provider"
+	"open-ai-gateway/internal/requestctx"
 )
 
 const maxResponseBodyBytes = 10 << 20
@@ -163,6 +164,9 @@ func (p *Provider) endpoint(path string) string {
 
 func (p *Provider) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
+	if requestID := requestctx.RequestID(req.Context()); requestID != "" {
+		req.Header.Set(requestctx.RequestIDHeader, requestID)
+	}
 	if p.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+p.apiKey)
 	}

@@ -40,7 +40,7 @@ Connection: keep-alive
 
 ### Request ID
 
-客户端可以通过 `X-Request-Id` 传入请求标识。网关会在响应中返回最终使用的 `X-Request-Id`，并在 access log 的 `request_id` 字段中记录。
+客户端可以通过 `X-Request-Id` 传入请求标识。网关会在响应中返回最终使用的 `X-Request-Id`，在 access log 的 `request_id` 字段中记录，并转发给 OpenAI-compatible 上游 provider。
 
 传入值会先去掉首尾空白；为空、长度超过 128 字节、包含空白/控制字符或非 ASCII 可见字符时，网关会生成新的 request id。
 

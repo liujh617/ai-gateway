@@ -6,30 +6,28 @@ import (
 	"encoding/hex"
 	"net/http"
 	"strings"
+
+	"open-ai-gateway/internal/requestctx"
 )
 
 const (
-	requestIDHeader    = "X-Request-Id"
 	maxRequestIDLength = 128
 )
 
-type requestIDKey struct{}
-
 func RequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := normalizeRequestID(r.Header.Get(requestIDHeader))
+		id := normalizeRequestID(r.Header.Get(requestctx.RequestIDHeader))
 		if id == "" {
 			id = newRequestID()
 		}
-		w.Header().Set(requestIDHeader, id)
-		ctx := context.WithValue(r.Context(), requestIDKey{}, id)
+		w.Header().Set(requestctx.RequestIDHeader, id)
+		ctx := requestctx.WithRequestID(r.Context(), id)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
 func RequestIDFromContext(ctx context.Context) string {
-	id, _ := ctx.Value(requestIDKey{}).(string)
-	return id
+	return requestctx.RequestID(ctx)
 }
 
 func newRequestID() string {

@@ -11,6 +11,7 @@ import (
 
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/provider/openai"
+	"open-ai-gateway/internal/requestctx"
 )
 
 func TestCreateChatCompletionForwardsRequest(t *testing.T) {
@@ -22,6 +23,9 @@ func TestCreateChatCompletionForwardsRequest(t *testing.T) {
 		if auth := r.Header.Get("Authorization"); auth != "Bearer upstream-key" {
 			t.Fatalf("authorization = %q", auth)
 		}
+		if requestID := r.Header.Get(requestctx.RequestIDHeader); requestID != "gateway-request-1" {
+			t.Fatalf("request id = %q", requestID)
+		}
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
@@ -31,7 +35,8 @@ func TestCreateChatCompletionForwardsRequest(t *testing.T) {
 	defer server.Close()
 
 	p := newProvider(t, server.URL+"/v1")
-	resp, err := p.CreateChatCompletion(context.Background(), compat.ChatCompletionRequest{
+	ctx := requestctx.WithRequestID(context.Background(), "gateway-request-1")
+	resp, err := p.CreateChatCompletion(ctx, compat.ChatCompletionRequest{
 		Model: "upstream-model",
 		Messages: []compat.ChatMessage{{
 			Role:    "user",
@@ -74,6 +79,9 @@ func TestCreateEmbeddingForwardsRequest(t *testing.T) {
 		if auth := r.Header.Get("Authorization"); auth != "Bearer upstream-key" {
 			t.Fatalf("authorization = %q", auth)
 		}
+		if requestID := r.Header.Get(requestctx.RequestIDHeader); requestID != "gateway-request-2" {
+			t.Fatalf("request id = %q", requestID)
+		}
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
@@ -83,7 +91,8 @@ func TestCreateEmbeddingForwardsRequest(t *testing.T) {
 	defer server.Close()
 
 	p := newProvider(t, server.URL+"/v1")
-	resp, err := p.CreateEmbedding(context.Background(), compat.EmbeddingRequest{
+	ctx := requestctx.WithRequestID(context.Background(), "gateway-request-2")
+	resp, err := p.CreateEmbedding(ctx, compat.EmbeddingRequest{
 		Model: "upstream-embedding-model",
 		Input: json.RawMessage(`"hello"`),
 		Extra: map[string]json.RawMessage{
@@ -110,6 +119,9 @@ func TestCreateEmbeddingForwardsRequest(t *testing.T) {
 
 func TestStreamChatCompletionReadsSSE(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requestID := r.Header.Get(requestctx.RequestIDHeader); requestID != "gateway-request-3" {
+			t.Fatalf("request id = %q", requestID)
+		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		io.WriteString(w, "data: {\"id\":\"chatcmpl_upstream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hel\"},\"finish_reason\":null}]}\n\n")
 		io.WriteString(w, "data: {\"id\":\"chatcmpl_upstream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"lo\"},\"finish_reason\":null}]}\n\n")
@@ -118,7 +130,8 @@ func TestStreamChatCompletionReadsSSE(t *testing.T) {
 	defer server.Close()
 
 	p := newProvider(t, server.URL+"/v1")
-	stream, err := p.StreamChatCompletion(context.Background(), compat.ChatCompletionRequest{
+	ctx := requestctx.WithRequestID(context.Background(), "gateway-request-3")
+	stream, err := p.StreamChatCompletion(ctx, compat.ChatCompletionRequest{
 		Model: "upstream-model",
 		Messages: []compat.ChatMessage{{
 			Role:    "user",
