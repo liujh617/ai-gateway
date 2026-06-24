@@ -1,0 +1,27 @@
+# Local config and secrets
+config.local.json
+*.local.json
+.env
+.env.*
+
+# Build outputs
+bin/
+dist/
+*.exe
+*.test
+
+# Go artifacts
+coverage.out
+coverage.html
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+

@@ -1,0 +1,19 @@
+{
+  "addr": "127.0.0.1:8080",
+  "api_key": "test-gateway-key",
+  "providers": {
+    "local": {
+      "type": "openai-compatible",
+      "base_url": "http://127.0.0.1:8000/v1",
+      "api_key": "local-dev-key",
+      "timeout_seconds": 60
+    }
+  },
+  "models": {
+    "local-model": {
+      "provider": "local",
+      "upstream_model": "local-model"
+    }
+  }
+}
+

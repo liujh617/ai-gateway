@@ -26,6 +26,17 @@
 
 详见 [Testing Environment](docs/testing-environment.md)。
 
+## 开发命令
+
+在 WSL `Ubuntu-24.04` 中运行：
+
+```bash
+make verify
+make run
+```
+
+本地服务级验证见 [Local Verification](docs/local-verification.md)。
+
 ## 本地运行
 
 默认无配置启动时使用 fake provider，监听 `127.0.0.1:8080`，测试 API key 为 `test-gateway-key`，测试模型为 `test-model`。

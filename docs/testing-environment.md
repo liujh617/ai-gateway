@@ -35,7 +35,7 @@ go test -race ./...
 go vet ./...
 ```
 
-如果项目后续引入 `Makefile`，标准验证入口应收敛为：
+标准验证入口：
 
 ```bash
 make test

@@ -45,6 +45,8 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "<command>"
 
 详细约定见 [Testing Environment](docs/testing-environment.md)。
 
+优先使用 `make verify` 作为完整验证入口；服务级本地验证流程见 [Local Verification](docs/local-verification.md)。
+
 新增行为至少覆盖：
 
 - 正常 JSON 响应。
