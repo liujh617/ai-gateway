@@ -72,6 +72,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/models", s.handleModels)
 	mux.HandleFunc("POST /v1/chat/completions", s.handleChatCompletions)
 	mux.HandleFunc("POST /v1/embeddings", s.handleEmbeddings)
+	mux.HandleFunc("/", s.handleNotFound)
 
 	var handler http.Handler = mux
 	if s.rateLimiter != nil {
@@ -147,4 +148,8 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(version.Current())
+}
+
+func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
+	s.writeError(w, r, compat.NotFound("route not found"))
 }

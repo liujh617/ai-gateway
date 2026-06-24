@@ -440,6 +440,30 @@ func TestModelsOK(t *testing.T) {
 	}
 }
 
+func TestUnknownRouteReturnsJSONError(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodGet, "/v1/unknown", nil)
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assertError(t, rr, http.StatusNotFound, "invalid_request_error")
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("content-type = %q", got)
+	}
+}
+
+func TestUnknownRouteRequiresAuth(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodGet, "/v1/unknown", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assertError(t, rr, http.StatusUnauthorized, "authentication_error")
+}
+
 func TestHealthzDoesNotRequireAuth(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)

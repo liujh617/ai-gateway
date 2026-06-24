@@ -46,6 +46,10 @@ func ModelNotFound(model string) *Error {
 	return NewError(http.StatusNotFound, "invalid_request_error", "model not found: "+model, stringPtr("model"))
 }
 
+func NotFound(message string) *Error {
+	return NewError(http.StatusNotFound, "invalid_request_error", message, nil)
+}
+
 func ServerError(status int, message string) *Error {
 	return NewError(status, "server_error", message, nil)
 }
