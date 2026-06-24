@@ -50,6 +50,30 @@ type LogConfig struct {
 	Level  string `json:"level"`
 }
 
+type CheckReport struct {
+	ProviderCount int
+	ModelCount    int
+	Providers     []ProviderSummary
+	Models        []ModelSummary
+	Warnings      []string
+}
+
+type ProviderSummary struct {
+	Name         string
+	Type         string
+	BaseURL      string
+	APIKeySet    bool
+	APIKeyEnv    string
+	APIKeyEnvSet bool
+}
+
+type ModelSummary struct {
+	Name          string
+	Provider      string
+	UpstreamModel string
+	Capabilities  []string
+}
+
 func Load(path string) (*Config, error) {
 	if path == "" {
 		return Default(), nil
@@ -72,6 +96,55 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	return &cfg, nil
+}
+
+func Check(path string) (*Config, CheckReport, error) {
+	cfg, err := Load(path)
+	if err != nil {
+		return nil, CheckReport{}, err
+	}
+	report := cfg.CheckReport()
+	return cfg, report, nil
+}
+
+func (c *Config) CheckReport() CheckReport {
+	report := CheckReport{
+		ProviderCount: len(c.Providers),
+		ModelCount:    len(c.Models),
+	}
+
+	for _, name := range c.ProviderNames() {
+		provider := c.Providers[name]
+		summary := ProviderSummary{
+			Name:      name,
+			Type:      provider.Type,
+			BaseURL:   provider.BaseURL,
+			APIKeySet: provider.APIKey != "",
+			APIKeyEnv: provider.APIKeyEnv,
+		}
+		if provider.APIKeyEnv != "" {
+			_, summary.APIKeyEnvSet = os.LookupEnv(provider.APIKeyEnv)
+			if !summary.APIKeyEnvSet {
+				report.Warnings = append(report.Warnings, fmt.Sprintf("provider %q api_key_env %q is not set", name, provider.APIKeyEnv))
+			}
+		}
+		report.Providers = append(report.Providers, summary)
+	}
+
+	for _, name := range c.ModelNames() {
+		model := c.Models[name]
+		upstreamModel := model.UpstreamModel
+		if upstreamModel == "" {
+			upstreamModel = name
+		}
+		report.Models = append(report.Models, ModelSummary{
+			Name:          name,
+			Provider:      model.Provider,
+			UpstreamModel: upstreamModel,
+			Capabilities:  append([]string(nil), model.Capabilities...),
+		})
+	}
+	return report
 }
 
 func Default() *Config {

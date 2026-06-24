@@ -27,6 +27,28 @@ go test -race ./...
 go vet ./...
 ```
 
+## 配置自检
+
+默认 fake provider 配置：
+
+```bash
+make check-config
+```
+
+指定配置文件：
+
+```bash
+GATEWAY_CONFIG=config.local.json make check-config
+```
+
+也可以直接调用子命令：
+
+```bash
+go run ./cmd/gateway check-config
+```
+
+自检输出包含 provider/model 摘要和 warning，不包含 API key 明文。
+
 ## Fake Provider 服务验证
 
 自动 smoke test：

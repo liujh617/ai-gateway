@@ -7,7 +7,7 @@ COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X open-ai-gateway/internal/version.Version=$(VERSION) -X open-ai-gateway/internal/version.Commit=$(COMMIT) -X open-ai-gateway/internal/version.BuildTime=$(BUILD_TIME)
 
-.PHONY: fmt test race vet verify build run smoke docker-build docker-run
+.PHONY: fmt test race vet verify build run check-config smoke docker-build docker-run
 
 fmt:
 	$(GO)fmt -w cmd internal
@@ -28,6 +28,9 @@ build:
 
 run:
 	GATEWAY_ADDR=$(GATEWAY_ADDR) GATEWAY_API_KEY=$(GATEWAY_API_KEY) $(GO) run ./cmd/gateway
+
+check-config:
+	GATEWAY_CHECK_CONFIG=1 $(GO) run ./cmd/gateway
 
 smoke:
 	bash scripts/smoke-fake.sh

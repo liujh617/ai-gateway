@@ -433,3 +433,19 @@ models:
 - `info`
 - `warn`
 - `error`
+
+## 配置自检
+
+网关支持不启动 HTTP server 的配置自检模式：
+
+```bash
+open-ai-gateway check-config
+```
+
+或：
+
+```bash
+GATEWAY_CHECK_CONFIG=1 open-ai-gateway
+```
+
+自检会加载配置、应用默认值、执行配置校验，并输出 provider/model 摘要和 warning。输出不得包含 API key 明文。

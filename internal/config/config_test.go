@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -241,6 +242,71 @@ func TestLoadConfigAcceptsJSONDebugLogConfig(t *testing.T) {
 	}
 	if cfg.Log.Format != "json" || cfg.Log.Level != "debug" {
 		t.Fatalf("log config = %#v", cfg.Log)
+	}
+}
+
+func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
+	t.Setenv("UPSTREAM_KEY", "secret-value")
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_key": "gateway-key",
+		"providers": {
+			"openai": {
+				"type": "openai-compatible",
+				"base_url": "https://api.openai.com/v1",
+				"api_key_env": "UPSTREAM_KEY"
+			}
+		},
+		"models": {
+			"gpt-4o-mini": {
+				"provider": "openai",
+				"capabilities": ["chat"]
+			}
+		}
+	}`)
+
+	_, report, err := config.Check(path)
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	payload, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+	text := string(payload)
+	if strings.Contains(text, "secret-value") || strings.Contains(text, "gateway-key") {
+		t.Fatalf("report leaked secret: %s", text)
+	}
+	if len(report.Providers) != 1 || !report.Providers[0].APIKeyEnvSet {
+		t.Fatalf("provider summary = %#v", report.Providers)
+	}
+}
+
+func TestCheckReportWarnsMissingAPIKeyEnv(t *testing.T) {
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_key": "gateway-key",
+		"providers": {
+			"openai": {
+				"type": "openai-compatible",
+				"base_url": "https://api.openai.com/v1",
+				"api_key_env": "MISSING_UPSTREAM_KEY"
+			}
+		},
+		"models": {
+			"gpt-4o-mini": {
+				"provider": "openai",
+				"capabilities": ["chat"]
+			}
+		}
+	}`)
+
+	_, report, err := config.Check(path)
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	if len(report.Warnings) != 1 || !strings.Contains(report.Warnings[0], "MISSING_UPSTREAM_KEY") {
+		t.Fatalf("warnings = %#v", report.Warnings)
 	}
 }
 

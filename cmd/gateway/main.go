@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,12 +28,21 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cfg, err := config.Load(os.Getenv("GATEWAY_CONFIG"))
+	configPath := os.Getenv("GATEWAY_CONFIG")
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		logger.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
 	logger = newLogger(cfg.Log)
+
+	if shouldCheckConfig(os.Args, os.Getenv("GATEWAY_CHECK_CONFIG")) {
+		if err := runConfigCheck(os.Stdout, configPath); err != nil {
+			logger.Error("config check failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	modelRouter, err := buildRouter(cfg)
 	if err != nil {
@@ -70,6 +82,23 @@ func main() {
 	if err := serve(ctx, httpServer, cfg.ShutdownTimeout(), logger); err != nil {
 		os.Exit(1)
 	}
+}
+
+func shouldCheckConfig(args []string, env string) bool {
+	if env == "1" || strings.EqualFold(env, "true") {
+		return true
+	}
+	return len(args) > 1 && args[1] == "check-config"
+}
+
+func runConfigCheck(w io.Writer, path string) error {
+	_, report, err := config.Check(path)
+	if err != nil {
+		return err
+	}
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(report)
 }
 
 func newLogger(cfg config.LogConfig) *slog.Logger {

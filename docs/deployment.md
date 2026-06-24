@@ -63,6 +63,7 @@ docker run --rm -p 8080:8080 \
 
 - 不要把真实 API key 写入镜像。
 - 优先使用环境变量或 secret manager 注入上游 API key。
+- 部署前执行 `GATEWAY_CONFIG=/config/config.json open-ai-gateway check-config`。
 - 容器监听地址应设置为 `0.0.0.0:8080`。
 - 容器环境建议使用 `log.format=json`。
 - `write_timeout_seconds` 默认保持 `0`，避免误伤长时间 streaming。
@@ -82,3 +83,17 @@ make docker-build VERSION=0.1.0 IMAGE=open-ai-gateway:0.1.0
 ```bash
 curl -sS http://127.0.0.1:8080/version
 ```
+
+## Config Check
+
+容器中执行配置自检：
+
+```bash
+docker run --rm \
+  -e GATEWAY_CONFIG=/config/config.json \
+  -e OPENAI_API_KEY=<your-key> \
+  -v "$PWD/config.example.json:/config/config.json:ro" \
+  open-ai-gateway:local check-config
+```
+
+输出中只展示 API key 是否配置，不展示明文值。

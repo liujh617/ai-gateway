@@ -33,6 +33,7 @@
 ```bash
 make verify
 make run
+make check-config
 ```
 
 本地服务级验证见 [Local Verification](docs/local-verification.md)。
@@ -98,6 +99,14 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 - `log.format`: 日志格式，支持 `text` 或 `json`。
 - `log.level`: 日志级别，支持 `debug`、`info`、`warn`、`error`。
 - `rate_limit.requests_per_minute`: 按 Bearer token 的简单内存限流，`0` 表示关闭。
+
+配置自检：
+
+```bash
+GATEWAY_CONFIG=config.example.json make check-config
+```
+
+自检输出会显示 provider/model 摘要和 warning，不会输出 API key 明文。
 
 健康检查：
 
