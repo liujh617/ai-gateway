@@ -21,6 +21,7 @@ type Config struct {
 	WriteTimeoutSeconds      int                       `json:"write_timeout_seconds"`
 	IdleTimeoutSeconds       int                       `json:"idle_timeout_seconds"`
 	ShutdownTimeoutSeconds   int                       `json:"shutdown_timeout_seconds"`
+	Log                      LogConfig                 `json:"log"`
 	RateLimit                RateLimitConfig           `json:"rate_limit"`
 	Providers                map[string]ProviderConfig `json:"providers"`
 	Models                   map[string]ModelConfig    `json:"models"`
@@ -42,6 +43,11 @@ type ModelConfig struct {
 
 type RateLimitConfig struct {
 	RequestsPerMinute int `json:"requests_per_minute"`
+}
+
+type LogConfig struct {
+	Format string `json:"format"`
+	Level  string `json:"level"`
 }
 
 func Load(path string) (*Config, error) {
@@ -79,6 +85,10 @@ func Default() *Config {
 		WriteTimeoutSeconds:      0,
 		IdleTimeoutSeconds:       120,
 		ShutdownTimeoutSeconds:   10,
+		Log: LogConfig{
+			Format: "text",
+			Level:  "info",
+		},
 		Providers: map[string]ProviderConfig{
 			"fake": {
 				Type: "fake",
@@ -135,6 +145,16 @@ func (c *Config) Validate() error {
 	}
 	if c.RateLimit.RequestsPerMinute < 0 {
 		return fmt.Errorf("rate_limit.requests_per_minute must be non-negative")
+	}
+	switch c.Log.Format {
+	case "text", "json":
+	default:
+		return fmt.Errorf("log.format must be text or json")
+	}
+	switch c.Log.Level {
+	case "debug", "info", "warn", "error":
+	default:
+		return fmt.Errorf("log.level must be debug, info, warn, or error")
 	}
 
 	for name, provider := range c.Providers {
@@ -227,6 +247,12 @@ func (c *Config) applyDefaults() {
 	}
 	if c.ShutdownTimeoutSeconds == 0 {
 		c.ShutdownTimeoutSeconds = 10
+	}
+	if c.Log.Format == "" {
+		c.Log.Format = "text"
+	}
+	if c.Log.Level == "" {
+		c.Log.Level = "info"
 	}
 	for name, provider := range c.Providers {
 		if provider.TimeoutSeconds == 0 {

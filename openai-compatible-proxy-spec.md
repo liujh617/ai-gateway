@@ -410,3 +410,26 @@ models:
 - `error_code`
 
 日志不得记录 `Authorization` header、上游 API key、完整 prompt 或完整 completion。
+
+日志格式和级别可配置：
+
+```json
+{
+  "log": {
+    "format": "json",
+    "level": "info"
+  }
+}
+```
+
+支持的 `format`：
+
+- `text`
+- `json`
+
+支持的 `level`：
+
+- `debug`
+- `info`
+- `warn`
+- `error`

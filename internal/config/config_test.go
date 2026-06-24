@@ -32,6 +32,9 @@ func TestLoadDefaultConfig(t *testing.T) {
 	if cfg.ShutdownTimeoutSeconds != 10 {
 		t.Fatalf("shutdown timeout = %d", cfg.ShutdownTimeoutSeconds)
 	}
+	if cfg.Log.Format != "text" || cfg.Log.Level != "info" {
+		t.Fatalf("log config = %#v", cfg.Log)
+	}
 }
 
 func TestLoadConfigValidatesUnknownProvider(t *testing.T) {
@@ -180,6 +183,64 @@ func TestLoadConfigValidatesServerTimeouts(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "read_header_timeout_seconds") {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestLoadConfigValidatesLogConfig(t *testing.T) {
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_key": "gateway-key",
+		"log": {
+			"format": "xml",
+			"level": "info"
+		},
+		"providers": {
+			"fake": {
+				"type": "fake"
+			}
+		},
+		"models": {
+			"test-model": {
+				"provider": "fake"
+			}
+		}
+	}`)
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "log.format") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestLoadConfigAcceptsJSONDebugLogConfig(t *testing.T) {
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_key": "gateway-key",
+		"log": {
+			"format": "json",
+			"level": "debug"
+		},
+		"providers": {
+			"fake": {
+				"type": "fake"
+			}
+		},
+		"models": {
+			"test-model": {
+				"provider": "fake"
+			}
+		}
+	}`)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Log.Format != "json" || cfg.Log.Level != "debug" {
+		t.Fatalf("log config = %#v", cfg.Log)
 	}
 }
 

@@ -30,6 +30,7 @@ func main() {
 		logger.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
+	logger = newLogger(cfg.Log)
 
 	modelRouter, err := buildRouter(cfg)
 	if err != nil {
@@ -61,11 +62,36 @@ func main() {
 		"write_timeout_seconds", cfg.WriteTimeoutSeconds,
 		"idle_timeout_seconds", cfg.IdleTimeoutSeconds,
 		"shutdown_timeout_seconds", cfg.ShutdownTimeoutSeconds,
+		"log_format", cfg.Log.Format,
+		"log_level", cfg.Log.Level,
 		"rate_limit_requests_per_minute", cfg.RateLimit.RequestsPerMinute,
 	)
 
 	if err := serve(ctx, httpServer, cfg.ShutdownTimeout(), logger); err != nil {
 		os.Exit(1)
+	}
+}
+
+func newLogger(cfg config.LogConfig) *slog.Logger {
+	level := new(slog.LevelVar)
+	level.Set(slogLevel(cfg.Level))
+	options := &slog.HandlerOptions{Level: level}
+	if cfg.Format == "json" {
+		return slog.New(slog.NewJSONHandler(os.Stdout, options))
+	}
+	return slog.New(slog.NewTextHandler(os.Stdout, options))
+}
+
+func slogLevel(level string) slog.Level {
+	switch level {
+	case "debug":
+		return slog.LevelDebug
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
 	}
 }
 

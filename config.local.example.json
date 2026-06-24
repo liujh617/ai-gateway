@@ -8,6 +8,10 @@
   "write_timeout_seconds": 0,
   "idle_timeout_seconds": 120,
   "shutdown_timeout_seconds": 10,
+  "log": {
+    "format": "text",
+    "level": "debug"
+  },
   "rate_limit": {
     "requests_per_minute": 0
   },

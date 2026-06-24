@@ -64,6 +64,7 @@ docker run --rm -p 8080:8080 \
 - 不要把真实 API key 写入镜像。
 - 优先使用环境变量或 secret manager 注入上游 API key。
 - 容器监听地址应设置为 `0.0.0.0:8080`。
+- 容器环境建议使用 `log.format=json`。
 - `write_timeout_seconds` 默认保持 `0`，避免误伤长时间 streaming。
 - 反向代理或负载均衡器也应配置合理的 streaming timeout。
 

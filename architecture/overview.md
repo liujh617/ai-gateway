@@ -56,6 +56,7 @@ Upstream Model Service
 - panic recovery。
 - Bearer token 鉴权。
 - 基础访问日志。
+- 可配置日志格式和级别。
 - HTTP metrics。
 - 按 Bearer token 做简单 in-memory 限流。
 - 超时和 context 管理。
