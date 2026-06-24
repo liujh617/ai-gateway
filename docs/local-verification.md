@@ -74,6 +74,15 @@ curl -N http://127.0.0.1:8080/v1/chat/completions \
   -d '{"model":"test-model","stream":true,"messages":[{"role":"user","content":"hello"}]}'
 ```
 
+Embeddings：
+
+```bash
+curl -sS http://127.0.0.1:8080/v1/embeddings \
+  -H "Authorization: Bearer test-gateway-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"test-model","input":"hello"}'
+```
+
 ## OpenAI-compatible 本地上游
 
 复制示例配置：

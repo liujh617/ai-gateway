@@ -128,6 +128,35 @@ func (p *Provider) StreamChatCompletion(ctx context.Context, req compat.ChatComp
 	}, nil
 }
 
+func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint("/embeddings"), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	p.setHeaders(httpReq)
+
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, upstreamError(resp)
+	}
+
+	var out compat.EmbeddingResponse
+	if err := decodeLimited(resp.Body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (p *Provider) endpoint(path string) string {
 	return p.baseURL + path
 }

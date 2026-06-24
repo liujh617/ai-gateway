@@ -11,6 +11,7 @@ type Provider interface {
 	ListModels(ctx context.Context) ([]compat.Model, error)
 	CreateChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error)
 	StreamChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (ChatCompletionStream, error)
+	CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error)
 }
 
 type ChatCompletionStream interface {

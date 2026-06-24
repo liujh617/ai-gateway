@@ -105,3 +105,49 @@ type ModelListResponse struct {
 	Object string  `json:"object"`
 	Data   []Model `json:"data"`
 }
+
+type EmbeddingRequest struct {
+	Model          string          `json:"model"`
+	Input          json.RawMessage `json:"input"`
+	EncodingFormat string          `json:"encoding_format,omitempty"`
+	User           string          `json:"user,omitempty"`
+}
+
+func (r EmbeddingRequest) Validate() *Error {
+	if strings.TrimSpace(r.Model) == "" {
+		return InvalidRequest("missing required field: model", "model")
+	}
+	if !hasProcessableEmbeddingInput(r.Input) {
+		return InvalidRequest("missing required field: input", "input")
+	}
+	return nil
+}
+
+func hasProcessableEmbeddingInput(raw json.RawMessage) bool {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" {
+		return false
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return strings.TrimSpace(s) != ""
+	}
+	var items []json.RawMessage
+	if err := json.Unmarshal(raw, &items); err == nil {
+		return len(items) > 0
+	}
+	return true
+}
+
+type EmbeddingResponse struct {
+	Object string          `json:"object"`
+	Data   []EmbeddingData `json:"data"`
+	Model  string          `json:"model"`
+	Usage  *Usage          `json:"usage,omitempty"`
+}
+
+type EmbeddingData struct {
+	Object    string    `json:"object"`
+	Index     int       `json:"index"`
+	Embedding []float64 `json:"embedding"`
+}

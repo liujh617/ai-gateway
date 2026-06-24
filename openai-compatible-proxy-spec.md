@@ -194,6 +194,41 @@ data: [DONE]
 - request context 取消时必须关闭上游流。
 - 上游流异常时，如果响应头尚未发送，返回 JSON 错误；如果已经开始 SSE，则发送兼容的错误 chunk 或直接结束连接，并记录日志。
 
+## `POST /v1/embeddings`
+
+创建 embeddings。第一阶段支持 OpenAI-compatible embeddings 基础请求和响应。
+
+### Request
+
+必须支持字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `model` | string | 是 | 对外模型名，由网关映射到上游模型 |
+| `input` | string/array | 是 | 输入文本或 token 数组 |
+| `encoding_format` | string | 否 | 例如 `float` 或 `base64` |
+| `user` | string | 否 | 终端用户标识 |
+
+### Response
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "embedding",
+      "index": 0,
+      "embedding": [0.1, 0.2, 0.3]
+    }
+  ],
+  "model": "text-embedding-3-small",
+  "usage": {
+    "prompt_tokens": 1,
+    "total_tokens": 1
+  }
+}
+```
+
 ## 模型映射
 
 客户端只感知对外模型名。当前实现使用 JSON 配置：

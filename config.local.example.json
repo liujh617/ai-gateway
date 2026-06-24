@@ -18,6 +18,10 @@
     "local-model": {
       "provider": "local",
       "upstream_model": "local-model"
+    },
+    "local-embedding-model": {
+      "provider": "local",
+      "upstream_model": "local-embedding-model"
     }
   }
 }

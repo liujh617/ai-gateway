@@ -53,6 +53,42 @@ func TestCreateChatCompletionForwardsRequest(t *testing.T) {
 	}
 }
 
+func TestCreateEmbeddingForwardsRequest(t *testing.T) {
+	var got compat.EmbeddingRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/embeddings" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if auth := r.Header.Get("Authorization"); auth != "Bearer upstream-key" {
+			t.Fatalf("authorization = %q", auth)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"object":"list","model":"upstream-embedding-model","data":[{"object":"embedding","index":0,"embedding":[0.1,0.2]}],"usage":{"prompt_tokens":1,"total_tokens":1}}`)
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	resp, err := p.CreateEmbedding(context.Background(), compat.EmbeddingRequest{
+		Model: "upstream-embedding-model",
+		Input: json.RawMessage(`"hello"`),
+	})
+	if err != nil {
+		t.Fatalf("CreateEmbedding: %v", err)
+	}
+	if got.Model != "upstream-embedding-model" {
+		t.Fatalf("forwarded model = %q", got.Model)
+	}
+	if string(got.Input) != `"hello"` {
+		t.Fatalf("forwarded input = %s", got.Input)
+	}
+	if resp.Object != "list" || len(resp.Data) != 1 {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+}
+
 func TestStreamChatCompletionReadsSSE(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -271,6 +307,30 @@ func TestCreateChatCompletionRejectsOversizedResponse(t *testing.T) {
 	_, err := p.CreateChatCompletion(context.Background(), chatRequest())
 	if err == nil {
 		t.Fatal("expected oversized or invalid response error")
+	}
+}
+
+func TestCreateEmbeddingMapsUpstreamError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		io.WriteString(w, `{"error":{"message":"model missing","type":"invalid_request_error","param":"model","code":"model_not_found"}}`)
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.CreateEmbedding(context.Background(), compat.EmbeddingRequest{
+		Model: "upstream-embedding-model",
+		Input: json.RawMessage(`"hello"`),
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	compatErr, ok := err.(*compat.Error)
+	if !ok {
+		t.Fatalf("error type = %T", err)
+	}
+	if compatErr.Status != http.StatusNotFound || compatErr.Type != "invalid_request_error" {
+		t.Fatalf("mapped error = %+v", compatErr)
 	}
 }
 

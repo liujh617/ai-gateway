@@ -39,4 +39,10 @@ curl -fsS -N "http://$addr/v1/chat/completions" \
   -d '{"model":"test-model","stream":true,"messages":[{"role":"user","content":"hello"}]}' \
   | grep -q 'data: \[DONE\]'
 
+curl -fsS "http://$addr/v1/embeddings" \
+  -H "Authorization: Bearer $api_key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"test-model","input":"hello"}' \
+  | grep -q '"object":"list"'
+
 echo "smoke-ok"

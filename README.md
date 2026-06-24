@@ -99,6 +99,7 @@ curl -sS http://127.0.0.1:8080/healthz
 
 - `GET /v1/models`
 - `POST /v1/chat/completions`
+- `POST /v1/embeddings`
 - chat completions streaming
 - 单 provider 配置
 - Bearer token 鉴权

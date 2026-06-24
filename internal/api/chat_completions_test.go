@@ -262,6 +262,56 @@ func TestHealthzDoesNotRequireAuth(t *testing.T) {
 	}
 }
 
+func TestEmbeddingsOK(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	body := `{"model":"test-model","input":"hello"}`
+
+	rr := doEmbeddingsJSON(handler, body, true)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	var got compat.EmbeddingResponse
+	if err := json.NewDecoder(rr.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Object != "list" || got.Model != "test-model" {
+		t.Fatalf("unexpected response: %+v", got)
+	}
+	if len(got.Data) != 1 || len(got.Data[0].Embedding) == 0 {
+		t.Fatalf("missing embedding data: %+v", got.Data)
+	}
+}
+
+func TestEmbeddingsMissingInput(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	body := `{"model":"test-model"}`
+
+	rr := doEmbeddingsJSON(handler, body, true)
+
+	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
+}
+
+func TestEmbeddingsModelNotFound(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	body := `{"model":"unknown","input":"hello"}`
+
+	rr := doEmbeddingsJSON(handler, body, true)
+
+	assertError(t, rr, http.StatusNotFound, "invalid_request_error")
+}
+
+func TestEmbeddingsProviderError(t *testing.T) {
+	p := fake.New()
+	p.Err = errors.New("upstream failed")
+	handler := newTestHandler(p)
+	body := `{"model":"test-model","input":"hello"}`
+
+	rr := doEmbeddingsJSON(handler, body, true)
+
+	assertError(t, rr, http.StatusBadGateway, "server_error")
+}
+
 func TestAccessLogIncludesRouteFields(t *testing.T) {
 	var logs bytes.Buffer
 	handler := newTestHandlerWithLogger(fake.New(), slog.New(slog.NewJSONHandler(&logs, nil)), api.Options{})
@@ -374,6 +424,17 @@ func doJSON(handler http.Handler, body string, auth bool) *httptest.ResponseReco
 	return rr
 }
 
+func doEmbeddingsJSON(handler http.Handler, body string, auth bool) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/v1/embeddings", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	if auth {
+		req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	}
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	return rr
+}
+
 func assertError(t *testing.T, rr *httptest.ResponseRecorder, status int, typ string) {
 	t.Helper()
 	if rr.Code != status {
@@ -406,6 +467,10 @@ func (p *blockingProvider) CreateChatCompletion(ctx context.Context, req compat.
 
 func (p *blockingProvider) StreamChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
 	return p.stream, nil
+}
+
+func (p *blockingProvider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("not implemented")
 }
 
 type blockingStream struct {
@@ -447,6 +512,11 @@ func (p *slowProvider) StreamChatCompletion(ctx context.Context, req compat.Chat
 	return nil, errors.New("not implemented")
 }
 
+func (p *slowProvider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
 type delayedStreamProvider struct{}
 
 func (p *delayedStreamProvider) ListModels(ctx context.Context) ([]compat.Model, error) {
@@ -459,6 +529,10 @@ func (p *delayedStreamProvider) CreateChatCompletion(ctx context.Context, req co
 
 func (p *delayedStreamProvider) StreamChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
 	return &delayedStream{}, nil
+}
+
+func (p *delayedStreamProvider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("not implemented")
 }
 
 type delayedStream struct {

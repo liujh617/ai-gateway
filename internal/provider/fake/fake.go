@@ -75,6 +75,28 @@ func (p *Provider) StreamChatCompletion(ctx context.Context, req compat.ChatComp
 	return &stream{provider: p, model: req.Model, parts: parts}, nil
 }
 
+func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.EmbeddingResponse{
+		Object: "list",
+		Model:  req.Model,
+		Data: []compat.EmbeddingData{{
+			Object:    "embedding",
+			Index:     0,
+			Embedding: []float64{0.1, 0.2, 0.3},
+		}},
+		Usage: &compat.Usage{
+			PromptTokens: 1,
+			TotalTokens:  1,
+		},
+	}, nil
+}
+
 type stream struct {
 	provider *Provider
 	model    string
