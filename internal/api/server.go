@@ -76,6 +76,11 @@ func (s *Server) WriteError(w http.ResponseWriter, err *compat.Error) {
 	_ = json.NewEncoder(w).Encode(compat.ErrorResponseFor(err))
 }
 
+func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err *compat.Error) {
+	middleware.SetLogError(r.Context(), err.Type, err.Code)
+	s.WriteError(w, err)
+}
+
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(compat.ModelListResponse{

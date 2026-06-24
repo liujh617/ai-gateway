@@ -39,6 +39,7 @@ func (l *RateLimiter) Middleware(errors ErrorWriter) func(http.Handler) http.Han
 				return
 			}
 			if !l.allow(rateLimitKey(r), time.Now()) {
+				SetLogError(r.Context(), "rate_limit_error", nil)
 				errors.WriteError(w, compat.RateLimit("rate limit exceeded"))
 				return
 			}

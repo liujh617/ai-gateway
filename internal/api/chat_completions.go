@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"open-ai-gateway/internal/compat"
+	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/provider"
 )
 
@@ -16,22 +17,25 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	var req compat.ChatCompletionRequest
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&req); err != nil {
-		s.WriteError(w, compat.InvalidRequest("invalid JSON request body", "body"))
+		s.writeError(w, r, compat.InvalidRequest("invalid JSON request body", "body"))
 		return
 	}
+	middleware.SetLogStream(r.Context(), req.Stream)
 	if err := req.Validate(); err != nil {
-		s.WriteError(w, err)
+		s.writeError(w, r, err)
 		return
 	}
 
 	route, resolveErr := s.router.Resolve(req.Model)
 	if resolveErr != nil {
-		s.WriteError(w, resolveErr)
+		middleware.SetLogRoute(r.Context(), req.Model, "", "")
+		s.writeError(w, r, resolveErr)
 		return
 	}
 
 	externalModel := req.Model
 	req.Model = route.UpstreamModel
+	middleware.SetLogRoute(r.Context(), externalModel, route.ProviderName, route.UpstreamModel)
 
 	if req.Stream {
 		s.streamChatCompletion(w, r, route.Provider, externalModel, req)
@@ -43,7 +47,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := route.Provider.CreateChatCompletion(ctx, req)
 	if err != nil {
-		s.WriteError(w, providerError(err))
+		s.writeError(w, r, providerError(err))
 		return
 	}
 	resp.Model = externalModel
@@ -55,7 +59,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 func (s *Server) streamChatCompletion(w http.ResponseWriter, r *http.Request, p provider.Provider, externalModel string, req compat.ChatCompletionRequest) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		s.WriteError(w, compat.ServerError(http.StatusInternalServerError, "streaming unsupported"))
+		s.writeError(w, r, compat.ServerError(http.StatusInternalServerError, "streaming unsupported"))
 		return
 	}
 
@@ -64,7 +68,7 @@ func (s *Server) streamChatCompletion(w http.ResponseWriter, r *http.Request, p 
 
 	stream, err := p.StreamChatCompletion(ctx, req)
 	if err != nil {
-		s.WriteError(w, providerError(err))
+		s.writeError(w, r, providerError(err))
 		return
 	}
 	defer func() {

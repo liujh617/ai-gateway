@@ -287,3 +287,21 @@ models:
 - 限流 key 优先使用 Bearer token。
 - `/healthz` 不参与限流。
 - 超限返回 `429 rate_limit_error`。
+
+## 观测日志
+
+网关应输出结构化 access log。chat completions 请求至少包含：
+
+- `request_id`
+- `method`
+- `path`
+- `status`
+- `latency_ms`
+- `external_model`
+- `provider`
+- `upstream_model`
+- `stream`
+- `error_type`
+- `error_code`
+
+日志不得记录 `Authorization` header、上游 API key、完整 prompt 或完整 completion。

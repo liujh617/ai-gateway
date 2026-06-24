@@ -80,6 +80,7 @@ func buildRouter(cfg *config.Config) (*router.ModelRouter, error) {
 		routes = append(routes, router.ModelRoute{
 			ExternalModel: externalModel,
 			UpstreamModel: upstreamModel,
+			ProviderName:  modelConfig.Provider,
 			Provider:      provider,
 		})
 	}

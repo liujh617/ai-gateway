@@ -25,6 +25,7 @@ func Auth(apiKey string, errors ErrorWriter) func(http.Handler) http.Handler {
 			got := strings.TrimSpace(r.Header.Get("Authorization"))
 			want := "Bearer " + apiKey
 			if got != want {
+				SetLogError(r.Context(), "authentication_error", nil)
 				errors.WriteError(w, compat.Authentication("invalid authorization token"))
 				return
 			}

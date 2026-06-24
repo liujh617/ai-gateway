@@ -10,6 +10,7 @@ import (
 type ModelRoute struct {
 	ExternalModel string
 	UpstreamModel string
+	ProviderName  string
 	Provider      provider.Provider
 }
 

@@ -262,17 +262,104 @@ func TestHealthzDoesNotRequireAuth(t *testing.T) {
 	}
 }
 
+func TestAccessLogIncludesRouteFields(t *testing.T) {
+	var logs bytes.Buffer
+	handler := newTestHandlerWithLogger(fake.New(), slog.New(slog.NewJSONHandler(&logs, nil)), api.Options{})
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	text := logs.String()
+	for _, want := range []string{
+		`"external_model":"test-model"`,
+		`"provider":"fake-provider"`,
+		`"upstream_model":"upstream-test-model"`,
+		`"stream":false`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("log missing %s: %s", want, text)
+		}
+	}
+	if strings.Contains(text, "Bearer") || strings.Contains(text, testAPIKey) {
+		t.Fatalf("log leaked auth material: %s", text)
+	}
+}
+
+func TestAccessLogIncludesErrorType(t *testing.T) {
+	var logs bytes.Buffer
+	handler := newTestHandlerWithLogger(fake.New(), slog.New(slog.NewJSONHandler(&logs, nil)), api.Options{})
+	body := `{"model":"unknown","messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	text := logs.String()
+	if !strings.Contains(text, `"error_type":"invalid_request_error"`) {
+		t.Fatalf("log missing error type: %s", text)
+	}
+	if !strings.Contains(text, `"external_model":"unknown"`) {
+		t.Fatalf("log missing external model: %s", text)
+	}
+}
+
+func TestAccessLogIncludesAuthErrorWithoutToken(t *testing.T) {
+	var logs bytes.Buffer
+	handler := newTestHandlerWithLogger(fake.New(), slog.New(slog.NewJSONHandler(&logs, nil)), api.Options{})
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, false)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	text := logs.String()
+	if !strings.Contains(text, `"error_type":"authentication_error"`) {
+		t.Fatalf("log missing error type: %s", text)
+	}
+	if strings.Contains(text, "Bearer") || strings.Contains(text, testAPIKey) {
+		t.Fatalf("log leaked auth material: %s", text)
+	}
+}
+
+func TestAccessLogStreamStatus(t *testing.T) {
+	var logs bytes.Buffer
+	handler := newTestHandlerWithLogger(fake.New(), slog.New(slog.NewJSONHandler(&logs, nil)), api.Options{})
+	body := `{"model":"test-model","stream":true,"messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	text := logs.String()
+	if !strings.Contains(text, `"status":200`) {
+		t.Fatalf("log missing status: %s", text)
+	}
+	if !strings.Contains(text, `"stream":true`) {
+		t.Fatalf("log missing stream flag: %s", text)
+	}
+}
+
 func newTestHandler(p provider.Provider) http.Handler {
 	return newTestHandlerWithOptions(p, api.Options{})
 }
 
 func newTestHandlerWithOptions(p provider.Provider, opts api.Options) http.Handler {
+	return newTestHandlerWithLogger(p, slog.New(slog.NewTextHandler(io.Discard, nil)), opts)
+}
+
+func newTestHandlerWithLogger(p provider.Provider, logger *slog.Logger, opts api.Options) http.Handler {
 	modelRouter := router.NewModelRouter([]router.ModelRoute{{
 		ExternalModel: "test-model",
 		UpstreamModel: "upstream-test-model",
+		ProviderName:  "fake-provider",
 		Provider:      p,
 	}})
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return api.NewServer(modelRouter, testAPIKey, logger, opts).Handler()
 }
 

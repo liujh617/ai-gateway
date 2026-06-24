@@ -60,6 +60,20 @@ Upstream Model Service
 - 超时和 context 管理。
 - metrics hook。
 
+结构化 access log 字段：
+
+- `request_id`
+- `method`
+- `path`
+- `status`
+- `latency_ms`
+- `external_model`
+- `provider`
+- `upstream_model`
+- `stream`
+- `error_type`
+- `error_code`
+
 ### Compat Mapper
 
 职责：
@@ -173,4 +187,5 @@ internal/middleware/
 - 所有 response body 和 stream 必须关闭。
 - SSE handler 必须检查 `http.Flusher`。
 - 日志不得记录完整 prompt、完整 completion 或任何 API key。
+- 日志不得记录 `Authorization` header。
 - OpenAI-compatible 类型变化必须同步更新 spec 和测试。
