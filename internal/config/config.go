@@ -21,6 +21,7 @@ type Config struct {
 	WriteTimeoutSeconds      int                       `json:"write_timeout_seconds"`
 	IdleTimeoutSeconds       int                       `json:"idle_timeout_seconds"`
 	ShutdownTimeoutSeconds   int                       `json:"shutdown_timeout_seconds"`
+	MaxRequestBodyBytes      int64                     `json:"max_request_body_bytes"`
 	Log                      LogConfig                 `json:"log"`
 	RateLimit                RateLimitConfig           `json:"rate_limit"`
 	Providers                map[string]ProviderConfig `json:"providers"`
@@ -158,6 +159,7 @@ func Default() *Config {
 		WriteTimeoutSeconds:      0,
 		IdleTimeoutSeconds:       120,
 		ShutdownTimeoutSeconds:   10,
+		MaxRequestBodyBytes:      1 << 20,
 		Log: LogConfig{
 			Format: "text",
 			Level:  "info",
@@ -215,6 +217,9 @@ func (c *Config) Validate() error {
 	}
 	if c.ShutdownTimeoutSeconds < 0 {
 		return fmt.Errorf("shutdown_timeout_seconds must be non-negative")
+	}
+	if c.MaxRequestBodyBytes < 0 {
+		return fmt.Errorf("max_request_body_bytes must be non-negative")
 	}
 	if c.RateLimit.RequestsPerMinute < 0 {
 		return fmt.Errorf("rate_limit.requests_per_minute must be non-negative")
@@ -320,6 +325,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.ShutdownTimeoutSeconds == 0 {
 		c.ShutdownTimeoutSeconds = 10
+	}
+	if c.MaxRequestBodyBytes == 0 {
+		c.MaxRequestBodyBytes = 1 << 20
 	}
 	if c.Log.Format == "" {
 		c.Log.Format = "text"

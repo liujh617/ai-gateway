@@ -20,6 +20,7 @@ type Server struct {
 	streamTimeout  time.Duration
 	rateLimiter    *middleware.RateLimiter
 	metrics        *middleware.Metrics
+	maxBodyBytes   int64
 }
 
 type Options struct {
@@ -27,6 +28,7 @@ type Options struct {
 	StreamTimeout  time.Duration
 	RateLimiter    *middleware.RateLimiter
 	Metrics        *middleware.Metrics
+	MaxBodyBytes   int64
 }
 
 func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logger, options ...Options) *Server {
@@ -57,6 +59,7 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 		streamTimeout:  opts.StreamTimeout,
 		rateLimiter:    opts.RateLimiter,
 		metrics:        opts.Metrics,
+		maxBodyBytes:   opts.MaxBodyBytes,
 	}
 }
 

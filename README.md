@@ -99,6 +99,7 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 - `write_timeout_seconds`: HTTP server 写响应超时，`0` 表示关闭；流式场景建议保持关闭。
 - `idle_timeout_seconds`: keep-alive 空闲连接超时。
 - `shutdown_timeout_seconds`: 收到 SIGINT/SIGTERM 后的 graceful shutdown 等待时间。
+- `max_request_body_bytes`: 请求体大小上限，默认 `1048576`；`0` 表示关闭限制。
 - `log.format`: 日志格式，支持 `text` 或 `json`。
 - `log.level`: 日志级别，支持 `debug`、`info`、`warn`、`error`。
 - `rate_limit.requests_per_minute`: 按 Bearer token 的简单内存限流，`0` 表示关闭。

@@ -33,6 +33,9 @@ func TestLoadDefaultConfig(t *testing.T) {
 	if cfg.ShutdownTimeoutSeconds != 10 {
 		t.Fatalf("shutdown timeout = %d", cfg.ShutdownTimeoutSeconds)
 	}
+	if cfg.MaxRequestBodyBytes != 1<<20 {
+		t.Fatalf("max request body bytes = %d", cfg.MaxRequestBodyBytes)
+	}
 	if cfg.Log.Format != "text" || cfg.Log.Level != "info" {
 		t.Fatalf("log config = %#v", cfg.Log)
 	}
@@ -183,6 +186,32 @@ func TestLoadConfigValidatesServerTimeouts(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 	if !strings.Contains(err.Error(), "read_header_timeout_seconds") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestLoadConfigValidatesMaxRequestBodyBytes(t *testing.T) {
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_key": "gateway-key",
+		"max_request_body_bytes": -1,
+		"providers": {
+			"fake": {
+				"type": "fake"
+			}
+		},
+		"models": {
+			"test-model": {
+				"provider": "fake"
+			}
+		}
+	}`)
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "max_request_body_bytes") {
 		t.Fatalf("error = %v", err)
 	}
 }

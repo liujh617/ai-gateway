@@ -54,6 +54,10 @@ func RateLimit(message string) *Error {
 	return NewError(http.StatusTooManyRequests, "rate_limit_error", message, nil)
 }
 
+func RequestTooLarge(message string) *Error {
+	return NewError(http.StatusRequestEntityTooLarge, "invalid_request_error", message, nil)
+}
+
 func ErrorResponseFor(err *Error) ErrorResponse {
 	return ErrorResponse{
 		Error: ErrorBody{

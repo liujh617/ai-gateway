@@ -54,6 +54,7 @@ func main() {
 		RequestTimeout: cfg.RequestTimeout(),
 		StreamTimeout:  cfg.StreamTimeout(),
 		RateLimiter:    middleware.NewRateLimiter(cfg.RateLimit.RequestsPerMinute),
+		MaxBodyBytes:   cfg.MaxRequestBodyBytes,
 	})
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,
@@ -74,6 +75,7 @@ func main() {
 		"write_timeout_seconds", cfg.WriteTimeoutSeconds,
 		"idle_timeout_seconds", cfg.IdleTimeoutSeconds,
 		"shutdown_timeout_seconds", cfg.ShutdownTimeoutSeconds,
+		"max_request_body_bytes", cfg.MaxRequestBodyBytes,
 		"log_format", cfg.Log.Format,
 		"log_level", cfg.Log.Level,
 		"rate_limit_requests_per_minute", cfg.RateLimit.RequestsPerMinute,

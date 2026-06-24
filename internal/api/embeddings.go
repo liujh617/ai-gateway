@@ -11,9 +11,9 @@ import (
 
 func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	var req compat.EmbeddingRequest
-	decoder := json.NewDecoder(r.Body)
+	decoder := json.NewDecoder(s.requestBody(w, r))
 	if err := decoder.Decode(&req); err != nil {
-		s.writeError(w, r, compat.InvalidRequest("invalid JSON request body", "body"))
+		s.writeError(w, r, decodeError(err))
 		return
 	}
 	middleware.SetLogStream(r.Context(), false)

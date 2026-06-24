@@ -346,7 +346,8 @@ models:
   "read_timeout_seconds": 0,
   "write_timeout_seconds": 0,
   "idle_timeout_seconds": 120,
-  "shutdown_timeout_seconds": 10
+  "shutdown_timeout_seconds": 10,
+  "max_request_body_bytes": 1048576
 }
 ```
 
@@ -358,8 +359,11 @@ models:
 - 请求头读取超时：10 秒
 - keep-alive 空闲超时：120 秒
 - graceful shutdown 超时：10 秒
+- 请求体大小上限：1 MiB
 
 所有超时应可配置。
+
+请求体超过上限返回 `413 invalid_request_error`。
 
 普通请求超时返回：
 

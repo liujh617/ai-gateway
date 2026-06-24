@@ -15,9 +15,9 @@ import (
 
 func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	var req compat.ChatCompletionRequest
-	decoder := json.NewDecoder(r.Body)
+	decoder := json.NewDecoder(s.requestBody(w, r))
 	if err := decoder.Decode(&req); err != nil {
-		s.writeError(w, r, compat.InvalidRequest("invalid JSON request body", "body"))
+		s.writeError(w, r, decodeError(err))
 		return
 	}
 	middleware.SetLogStream(r.Context(), req.Stream)
@@ -122,4 +122,12 @@ func providerError(err error) *compat.Error {
 		return compat.ServerError(http.StatusGatewayTimeout, "provider timeout")
 	}
 	return compat.ServerError(http.StatusBadGateway, "provider error")
+}
+
+func decodeError(err error) *compat.Error {
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		return compat.RequestTooLarge("request body too large")
+	}
+	return compat.InvalidRequest("invalid JSON request body", "body")
 }
