@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://open-ai-gateway.local/schema/config.schema.json",
+  "title": "open-ai-gateway config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "addr": {
+      "type": "string",
+      "description": "HTTP listen address in host:port format."
+    },
+    "api_key": {
+      "type": "string",
+      "description": "Gateway API key for client Bearer auth."
+    },
+    "request_timeout_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "stream_timeout_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "read_header_timeout_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "read_timeout_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "write_timeout_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "idle_timeout_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "shutdown_timeout_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "log": {
+      "$ref": "#/$defs/log"
+    },
+    "rate_limit": {
+      "$ref": "#/$defs/rate_limit"
+    },
+    "providers": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/provider"
+      }
+    },
+    "models": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/model"
+      }
+    }
+  },
+  "required": [
+    "providers",
+    "models"
+  ],
+  "$defs": {
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": ["text", "json"]
+        },
+        "level": {
+          "type": "string",
+          "enum": ["debug", "info", "warn", "error"]
+        }
+      }
+    },
+    "rate_limit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests_per_minute": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["fake", "openai-compatible"]
+        },
+        "base_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "api_key": {
+          "type": "string"
+        },
+        "api_key_env": {
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": ["type"]
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "upstream_model": {
+          "type": "string"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["chat", "embeddings"]
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": ["provider"]
+    }
+  }
+}
+

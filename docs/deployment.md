@@ -97,3 +97,9 @@ docker run --rm \
 ```
 
 输出中只展示 API key 是否配置，不展示明文值。
+
+配置 schema 位于：
+
+```text
+schema/config.schema.json
+```

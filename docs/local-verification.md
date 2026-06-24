@@ -49,6 +49,18 @@ go run ./cmd/gateway check-config
 
 自检输出包含 provider/model 摘要和 warning，不包含 API key 明文。
 
+校验仓库示例配置：
+
+```bash
+make check-config-examples
+```
+
+配置 schema 位于：
+
+```text
+schema/config.schema.json
+```
+
 ## Fake Provider 服务验证
 
 自动 smoke test：

@@ -23,6 +23,9 @@ jobs:
       - name: Verify
         run: make verify
 
+      - name: Check config examples
+        run: make check-config-examples
+
       - name: Build binary
         run: make build
 
@@ -35,4 +38,3 @@ jobs:
 
       - name: Build image
         run: make docker-build
-

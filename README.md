@@ -34,6 +34,7 @@
 make verify
 make run
 make check-config
+make check-config-examples
 ```
 
 本地服务级验证见 [Local Verification](docs/local-verification.md)。
@@ -107,6 +108,8 @@ GATEWAY_CONFIG=config.example.json make check-config
 ```
 
 自检输出会显示 provider/model 摘要和 warning，不会输出 API key 明文。
+
+配置 JSON Schema 见 [schema/config.schema.json](schema/config.schema.json)。
 
 健康检查：
 
