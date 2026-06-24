@@ -6,6 +6,23 @@ import (
 )
 
 type ChatCompletionRequest struct {
+	Model       string                     `json:"model"`
+	Messages    []ChatMessage              `json:"messages"`
+	Stream      bool                       `json:"stream,omitempty"`
+	Temperature *float64                   `json:"temperature,omitempty"`
+	TopP        *float64                   `json:"top_p,omitempty"`
+	MaxTokens   *int                       `json:"max_tokens,omitempty"`
+	Stop        json.RawMessage            `json:"stop,omitempty"`
+	User        string                     `json:"user,omitempty"`
+	Extra       map[string]json.RawMessage `json:"-"`
+}
+
+type ChatMessage struct {
+	Role    string          `json:"role"`
+	Content json.RawMessage `json:"content"`
+}
+
+type chatCompletionRequestJSON struct {
 	Model       string          `json:"model"`
 	Messages    []ChatMessage   `json:"messages"`
 	Stream      bool            `json:"stream,omitempty"`
@@ -16,9 +33,79 @@ type ChatCompletionRequest struct {
 	User        string          `json:"user,omitempty"`
 }
 
-type ChatMessage struct {
-	Role    string          `json:"role"`
-	Content json.RawMessage `json:"content"`
+var chatCompletionRequestKnownFields = []string{
+	"model",
+	"messages",
+	"stream",
+	"temperature",
+	"top_p",
+	"max_tokens",
+	"stop",
+	"user",
+}
+
+func (r *ChatCompletionRequest) UnmarshalJSON(data []byte) error {
+	var known chatCompletionRequestJSON
+	if err := json.Unmarshal(data, &known); err != nil {
+		return err
+	}
+	extra, err := decodeExtraFields(data, chatCompletionRequestKnownFields)
+	if err != nil {
+		return err
+	}
+	*r = ChatCompletionRequest{
+		Model:       known.Model,
+		Messages:    known.Messages,
+		Stream:      known.Stream,
+		Temperature: known.Temperature,
+		TopP:        known.TopP,
+		MaxTokens:   known.MaxTokens,
+		Stop:        known.Stop,
+		User:        known.User,
+		Extra:       extra,
+	}
+	return nil
+}
+
+func (r ChatCompletionRequest) MarshalJSON() ([]byte, error) {
+	fields := copyRawFields(r.Extra, chatCompletionRequestKnownFields)
+	if err := putJSONField(fields, "model", r.Model); err != nil {
+		return nil, err
+	}
+	if r.Messages != nil {
+		if err := putJSONField(fields, "messages", r.Messages); err != nil {
+			return nil, err
+		}
+	}
+	if r.Stream {
+		if err := putJSONField(fields, "stream", r.Stream); err != nil {
+			return nil, err
+		}
+	}
+	if r.Temperature != nil {
+		if err := putJSONField(fields, "temperature", r.Temperature); err != nil {
+			return nil, err
+		}
+	}
+	if r.TopP != nil {
+		if err := putJSONField(fields, "top_p", r.TopP); err != nil {
+			return nil, err
+		}
+	}
+	if r.MaxTokens != nil {
+		if err := putJSONField(fields, "max_tokens", r.MaxTokens); err != nil {
+			return nil, err
+		}
+	}
+	if len(r.Stop) > 0 {
+		fields["stop"] = cloneRawMessage(r.Stop)
+	}
+	if r.User != "" {
+		if err := putJSONField(fields, "user", r.User); err != nil {
+			return nil, err
+		}
+	}
+	return json.Marshal(fields)
 }
 
 func (r ChatCompletionRequest) Validate() *Error {
@@ -107,10 +194,65 @@ type ModelListResponse struct {
 }
 
 type EmbeddingRequest struct {
+	Model          string                     `json:"model"`
+	Input          json.RawMessage            `json:"input"`
+	EncodingFormat string                     `json:"encoding_format,omitempty"`
+	User           string                     `json:"user,omitempty"`
+	Extra          map[string]json.RawMessage `json:"-"`
+}
+
+type embeddingRequestJSON struct {
 	Model          string          `json:"model"`
 	Input          json.RawMessage `json:"input"`
 	EncodingFormat string          `json:"encoding_format,omitempty"`
 	User           string          `json:"user,omitempty"`
+}
+
+var embeddingRequestKnownFields = []string{
+	"model",
+	"input",
+	"encoding_format",
+	"user",
+}
+
+func (r *EmbeddingRequest) UnmarshalJSON(data []byte) error {
+	var known embeddingRequestJSON
+	if err := json.Unmarshal(data, &known); err != nil {
+		return err
+	}
+	extra, err := decodeExtraFields(data, embeddingRequestKnownFields)
+	if err != nil {
+		return err
+	}
+	*r = EmbeddingRequest{
+		Model:          known.Model,
+		Input:          known.Input,
+		EncodingFormat: known.EncodingFormat,
+		User:           known.User,
+		Extra:          extra,
+	}
+	return nil
+}
+
+func (r EmbeddingRequest) MarshalJSON() ([]byte, error) {
+	fields := copyRawFields(r.Extra, embeddingRequestKnownFields)
+	if err := putJSONField(fields, "model", r.Model); err != nil {
+		return nil, err
+	}
+	if len(r.Input) > 0 {
+		fields["input"] = cloneRawMessage(r.Input)
+	}
+	if r.EncodingFormat != "" {
+		if err := putJSONField(fields, "encoding_format", r.EncodingFormat); err != nil {
+			return nil, err
+		}
+	}
+	if r.User != "" {
+		if err := putJSONField(fields, "user", r.User); err != nil {
+			return nil, err
+		}
+	}
+	return json.Marshal(fields)
 }
 
 func (r EmbeddingRequest) Validate() *Error {
@@ -150,4 +292,47 @@ type EmbeddingData struct {
 	Object    string    `json:"object"`
 	Index     int       `json:"index"`
 	Embedding []float64 `json:"embedding"`
+}
+
+func decodeExtraFields(data []byte, knownFields []string) (map[string]json.RawMessage, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil, err
+	}
+	for _, field := range knownFields {
+		delete(fields, field)
+	}
+	if len(fields) == 0 {
+		return nil, nil
+	}
+	return fields, nil
+}
+
+func copyRawFields(src map[string]json.RawMessage, knownFields []string) map[string]json.RawMessage {
+	fields := make(map[string]json.RawMessage, len(src)+len(knownFields))
+	for key, value := range src {
+		fields[key] = cloneRawMessage(value)
+	}
+	for _, field := range knownFields {
+		delete(fields, field)
+	}
+	return fields
+}
+
+func putJSONField(fields map[string]json.RawMessage, key string, value any) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	fields[key] = data
+	return nil
+}
+
+func cloneRawMessage(raw json.RawMessage) json.RawMessage {
+	if raw == nil {
+		return nil
+	}
+	cloned := make(json.RawMessage, len(raw))
+	copy(cloned, raw)
+	return cloned
 }

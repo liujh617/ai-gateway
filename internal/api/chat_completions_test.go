@@ -90,6 +90,30 @@ func TestChatCompletionsBodyTooLarge(t *testing.T) {
 	assertError(t, rr, http.StatusRequestEntityTooLarge, "invalid_request_error")
 }
 
+func TestChatCompletionsPreservesExtraRequestFields(t *testing.T) {
+	p := &captureProvider{}
+	handler := newTestHandler(p)
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}],"tools":[{"type":"function","function":{"name":"lookup"}}],"tool_choice":"auto","response_format":{"type":"json_object"}}`
+
+	rr := doJSON(handler, body, true)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if p.chatReq.Model != "upstream-test-model" {
+		t.Fatalf("model = %q", p.chatReq.Model)
+	}
+	if string(p.chatReq.Extra["tools"]) == "" {
+		t.Fatal("tools field was not preserved")
+	}
+	if string(p.chatReq.Extra["tool_choice"]) != `"auto"` {
+		t.Fatalf("tool_choice = %s", p.chatReq.Extra["tool_choice"])
+	}
+	if string(p.chatReq.Extra["response_format"]) != `{"type":"json_object"}` {
+		t.Fatalf("response_format = %s", p.chatReq.Extra["response_format"])
+	}
+}
+
 func TestChatCompletionsMissingModel(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	body := `{"messages":[{"role":"user","content":"hello"}]}`
@@ -483,6 +507,24 @@ func TestEmbeddingsBodyTooLarge(t *testing.T) {
 	assertError(t, rr, http.StatusRequestEntityTooLarge, "invalid_request_error")
 }
 
+func TestEmbeddingsPreservesExtraRequestFields(t *testing.T) {
+	p := &captureProvider{}
+	handler := newTestHandler(p)
+	body := `{"model":"test-model","input":"hello","dimensions":512}`
+
+	rr := doEmbeddingsJSON(handler, body, true)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if p.embeddingReq.Model != "upstream-test-model" {
+		t.Fatalf("model = %q", p.embeddingReq.Model)
+	}
+	if string(p.embeddingReq.Extra["dimensions"]) != `512` {
+		t.Fatalf("dimensions = %s", p.embeddingReq.Extra["dimensions"])
+	}
+}
+
 func TestEmbeddingsModelNotFound(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	body := `{"model":"unknown","input":"hello"}`
@@ -701,6 +743,50 @@ func (p *blockingProvider) StreamChatCompletion(ctx context.Context, req compat.
 
 func (p *blockingProvider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
 	return nil, errors.New("not implemented")
+}
+
+type captureProvider struct {
+	chatReq      compat.ChatCompletionRequest
+	embeddingReq compat.EmbeddingRequest
+}
+
+func (p *captureProvider) ListModels(ctx context.Context) ([]compat.Model, error) {
+	return nil, nil
+}
+
+func (p *captureProvider) CreateChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	p.chatReq = req
+	return &compat.ChatCompletionResponse{
+		ID:      "chatcmpl_capture",
+		Object:  "chat.completion",
+		Created: 1,
+		Model:   req.Model,
+		Choices: []compat.ChatCompletionChoice{{
+			Index: 0,
+			Message: compat.ChatMessage{
+				Role:    "assistant",
+				Content: json.RawMessage(`"ok"`),
+			},
+			FinishReason: "stop",
+		}},
+	}, nil
+}
+
+func (p *captureProvider) StreamChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *captureProvider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	p.embeddingReq = req
+	return &compat.EmbeddingResponse{
+		Object: "list",
+		Model:  req.Model,
+		Data: []compat.EmbeddingData{{
+			Object:    "embedding",
+			Index:     0,
+			Embedding: []float64{0.1, 0.2},
+		}},
+	}, nil
 }
 
 type blockingStream struct {

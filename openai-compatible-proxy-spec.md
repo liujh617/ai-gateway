@@ -193,7 +193,7 @@ OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`ty
 - `assistant`
 - `tool`
 
-暂不支持的高级字段可以先解析保留，但不得导致服务 panic。
+未在上表列出的请求字段会在兼容层按原始 JSON 保留，并在调用 provider 时透传给上游。常见字段包括 `tools`、`tool_choice`、`response_format`、`parallel_tool_calls`、`seed` 等。网关仍然会覆盖 `model` 为路由后的上游模型名；非流式 provider 调用会清除 `stream=true`，避免误触发上游流式响应。
 
 ### Non-stream Response
 
@@ -261,6 +261,8 @@ data: [DONE]
 | `input` | string/array | 是 | 输入文本或 token 数组 |
 | `encoding_format` | string | 否 | 例如 `float` 或 `base64` |
 | `user` | string | 否 | 终端用户标识 |
+
+未在上表列出的请求字段会在兼容层按原始 JSON 保留，并在调用 provider 时透传给上游。常见字段包括 `dimensions` 等。网关仍然会覆盖 `model` 为路由后的上游模型名。
 
 ### Response
 

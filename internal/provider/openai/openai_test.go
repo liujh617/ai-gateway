@@ -38,6 +38,12 @@ func TestCreateChatCompletionForwardsRequest(t *testing.T) {
 			Content: json.RawMessage(`"hello"`),
 		}},
 		Stream: true,
+		Extra: map[string]json.RawMessage{
+			"model":           json.RawMessage(`"wrong-model"`),
+			"stream":          json.RawMessage(`true`),
+			"tool_choice":     json.RawMessage(`"auto"`),
+			"response_format": json.RawMessage(`{"type":"json_object"}`),
+		},
 	})
 	if err != nil {
 		t.Fatalf("CreateChatCompletion: %v", err)
@@ -47,6 +53,12 @@ func TestCreateChatCompletionForwardsRequest(t *testing.T) {
 	}
 	if got.Stream {
 		t.Fatal("non-stream request forwarded with stream=true")
+	}
+	if string(got.Extra["tool_choice"]) != `"auto"` {
+		t.Fatalf("forwarded tool_choice = %s", got.Extra["tool_choice"])
+	}
+	if string(got.Extra["response_format"]) != `{"type":"json_object"}` {
+		t.Fatalf("forwarded response_format = %s", got.Extra["response_format"])
 	}
 	if resp.ID != "chatcmpl_upstream" {
 		t.Fatalf("response id = %q", resp.ID)
@@ -74,6 +86,10 @@ func TestCreateEmbeddingForwardsRequest(t *testing.T) {
 	resp, err := p.CreateEmbedding(context.Background(), compat.EmbeddingRequest{
 		Model: "upstream-embedding-model",
 		Input: json.RawMessage(`"hello"`),
+		Extra: map[string]json.RawMessage{
+			"model":      json.RawMessage(`"wrong-model"`),
+			"dimensions": json.RawMessage(`512`),
+		},
 	})
 	if err != nil {
 		t.Fatalf("CreateEmbedding: %v", err)
@@ -83,6 +99,9 @@ func TestCreateEmbeddingForwardsRequest(t *testing.T) {
 	}
 	if string(got.Input) != `"hello"` {
 		t.Fatalf("forwarded input = %s", got.Input)
+	}
+	if string(got.Extra["dimensions"]) != `512` {
+		t.Fatalf("forwarded dimensions = %s", got.Extra["dimensions"])
 	}
 	if resp.Object != "list" || len(resp.Data) != 1 {
 		t.Fatalf("unexpected response: %+v", resp)
