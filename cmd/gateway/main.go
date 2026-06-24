@@ -8,6 +8,7 @@ import (
 
 	"open-ai-gateway/internal/api"
 	"open-ai-gateway/internal/config"
+	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/provider"
 	"open-ai-gateway/internal/provider/fake"
 	"open-ai-gateway/internal/provider/openai"
@@ -29,11 +30,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := api.NewServer(modelRouter, cfg.APIKey, logger)
+	server := api.NewServer(modelRouter, cfg.APIKey, logger, api.Options{
+		RequestTimeout: cfg.RequestTimeout(),
+		StreamTimeout:  cfg.StreamTimeout(),
+		RateLimiter:    middleware.NewRateLimiter(cfg.RateLimit.RequestsPerMinute),
+	})
 
 	logger.Info("open-ai-gateway configured",
 		"providers", cfg.ProviderNames(),
 		"models", cfg.ModelNames(),
+		"request_timeout_seconds", cfg.RequestTimeoutSeconds,
+		"stream_timeout_seconds", cfg.StreamTimeoutSeconds,
+		"rate_limit_requests_per_minute", cfg.RateLimit.RequestsPerMinute,
 	)
 	logger.Info("open-ai-gateway listening", "addr", cfg.Addr)
 	if err := http.ListenAndServe(cfg.Addr, server.Handler()); err != nil {

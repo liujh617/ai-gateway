@@ -234,11 +234,51 @@ models:
 
 ## 超时
 
-建议第一阶段默认值：
+当前配置项：
+
+```json
+{
+  "request_timeout_seconds": 60,
+  "stream_timeout_seconds": 600
+}
+```
+
+默认值：
 
 - 普通请求总超时：60 秒
-- 流式请求首 token 超时：60 秒
 - 流式请求最大持续时间：10 分钟
 - 上游连接超时：10 秒
 
 所有超时应可配置。
+
+普通请求超时返回：
+
+```json
+{
+  "error": {
+    "message": "provider timeout",
+    "type": "server_error",
+    "param": null,
+    "code": null
+  }
+}
+```
+
+## 限流
+
+当前支持简单 in-memory rate limiter：
+
+```json
+{
+  "rate_limit": {
+    "requests_per_minute": 120
+  }
+}
+```
+
+约束：
+
+- `0` 表示关闭限流。
+- 限流 key 优先使用 Bearer token。
+- `/healthz` 不参与限流。
+- 超限返回 `429 rate_limit_error`。

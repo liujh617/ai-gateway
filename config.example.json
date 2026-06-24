@@ -1,6 +1,11 @@
 {
   "addr": "127.0.0.1:8080",
   "api_key": "test-gateway-key",
+  "request_timeout_seconds": 60,
+  "stream_timeout_seconds": 600,
+  "rate_limit": {
+    "requests_per_minute": 120
+  },
   "providers": {
     "openai": {
       "type": "openai-compatible",

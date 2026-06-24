@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
@@ -11,16 +12,45 @@ import (
 )
 
 type Server struct {
-	router *router.ModelRouter
-	logger *slog.Logger
-	apiKey string
+	router         *router.ModelRouter
+	logger         *slog.Logger
+	apiKey         string
+	requestTimeout time.Duration
+	streamTimeout  time.Duration
+	rateLimiter    *middleware.RateLimiter
 }
 
-func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logger) *Server {
+type Options struct {
+	RequestTimeout time.Duration
+	StreamTimeout  time.Duration
+	RateLimiter    *middleware.RateLimiter
+}
+
+func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logger, options ...Options) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Server{router: modelRouter, apiKey: apiKey, logger: logger}
+	opts := Options{
+		RequestTimeout: 60 * time.Second,
+		StreamTimeout:  10 * time.Minute,
+	}
+	if len(options) > 0 {
+		opts = options[0]
+		if opts.RequestTimeout == 0 {
+			opts.RequestTimeout = 60 * time.Second
+		}
+		if opts.StreamTimeout == 0 {
+			opts.StreamTimeout = 10 * time.Minute
+		}
+	}
+	return &Server{
+		router:         modelRouter,
+		apiKey:         apiKey,
+		logger:         logger,
+		requestTimeout: opts.RequestTimeout,
+		streamTimeout:  opts.StreamTimeout,
+		rateLimiter:    opts.RateLimiter,
+	}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -30,6 +60,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/chat/completions", s.handleChatCompletions)
 
 	var handler http.Handler = mux
+	if s.rateLimiter != nil {
+		handler = s.rateLimiter.Middleware(s)(handler)
+	}
 	handler = middleware.Auth(s.apiKey, s)(handler)
 	handler = middleware.Logging(s.logger)(handler)
 	handler = middleware.RequestID(handler)

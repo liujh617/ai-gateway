@@ -38,7 +38,10 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := route.Provider.CreateChatCompletion(r.Context(), req)
+	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
+	defer cancel()
+
+	resp, err := route.Provider.CreateChatCompletion(ctx, req)
 	if err != nil {
 		s.WriteError(w, providerError(err))
 		return
@@ -56,7 +59,10 @@ func (s *Server) streamChatCompletion(w http.ResponseWriter, r *http.Request, p 
 		return
 	}
 
-	stream, err := p.StreamChatCompletion(r.Context(), req)
+	ctx, cancel := context.WithTimeout(r.Context(), s.streamTimeout)
+	defer cancel()
+
+	stream, err := p.StreamChatCompletion(ctx, req)
 	if err != nil {
 		s.WriteError(w, providerError(err))
 		return
@@ -72,7 +78,7 @@ func (s *Server) streamChatCompletion(w http.ResponseWriter, r *http.Request, p 
 	w.Header().Set("Connection", "keep-alive")
 
 	for {
-		chunk, err := stream.Next(r.Context())
+		chunk, err := stream.Next(ctx)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				_, _ = io.WriteString(w, "data: [DONE]\n\n")

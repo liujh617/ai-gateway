@@ -12,10 +12,13 @@ import (
 )
 
 type Config struct {
-	Addr      string                    `json:"addr"`
-	APIKey    string                    `json:"api_key"`
-	Providers map[string]ProviderConfig `json:"providers"`
-	Models    map[string]ModelConfig    `json:"models"`
+	Addr                  string                    `json:"addr"`
+	APIKey                string                    `json:"api_key"`
+	RequestTimeoutSeconds int                       `json:"request_timeout_seconds"`
+	StreamTimeoutSeconds  int                       `json:"stream_timeout_seconds"`
+	RateLimit             RateLimitConfig           `json:"rate_limit"`
+	Providers             map[string]ProviderConfig `json:"providers"`
+	Models                map[string]ModelConfig    `json:"models"`
 }
 
 type ProviderConfig struct {
@@ -29,6 +32,10 @@ type ProviderConfig struct {
 type ModelConfig struct {
 	Provider      string `json:"provider"`
 	UpstreamModel string `json:"upstream_model"`
+}
+
+type RateLimitConfig struct {
+	RequestsPerMinute int `json:"requests_per_minute"`
 }
 
 func Load(path string) (*Config, error) {
@@ -57,8 +64,10 @@ func Load(path string) (*Config, error) {
 
 func Default() *Config {
 	cfg := &Config{
-		Addr:   "127.0.0.1:8080",
-		APIKey: "test-gateway-key",
+		Addr:                  "127.0.0.1:8080",
+		APIKey:                "test-gateway-key",
+		RequestTimeoutSeconds: 60,
+		StreamTimeoutSeconds:  600,
 		Providers: map[string]ProviderConfig{
 			"fake": {
 				Type: "fake",
@@ -90,6 +99,15 @@ func (c *Config) Validate() error {
 	}
 	if len(c.Models) == 0 {
 		return fmt.Errorf("at least one model is required")
+	}
+	if c.RequestTimeoutSeconds < 0 {
+		return fmt.Errorf("request_timeout_seconds must be non-negative")
+	}
+	if c.StreamTimeoutSeconds < 0 {
+		return fmt.Errorf("stream_timeout_seconds must be non-negative")
+	}
+	if c.RateLimit.RequestsPerMinute < 0 {
+		return fmt.Errorf("rate_limit.requests_per_minute must be non-negative")
 	}
 
 	for name, provider := range c.Providers {
@@ -161,12 +179,32 @@ func (c *Config) applyDefaults() {
 	if env := os.Getenv("GATEWAY_API_KEY"); env != "" {
 		c.APIKey = env
 	}
+	if c.RequestTimeoutSeconds == 0 {
+		c.RequestTimeoutSeconds = 60
+	}
+	if c.StreamTimeoutSeconds == 0 {
+		c.StreamTimeoutSeconds = 600
+	}
 	for name, provider := range c.Providers {
 		if provider.TimeoutSeconds == 0 {
 			provider.TimeoutSeconds = 60
 		}
 		c.Providers[name] = provider
 	}
+}
+
+func (c *Config) RequestTimeout() time.Duration {
+	if c.RequestTimeoutSeconds <= 0 {
+		return 60 * time.Second
+	}
+	return time.Duration(c.RequestTimeoutSeconds) * time.Second
+}
+
+func (c *Config) StreamTimeout() time.Duration {
+	if c.StreamTimeoutSeconds <= 0 {
+		return 10 * time.Minute
+	}
+	return time.Duration(c.StreamTimeoutSeconds) * time.Second
 }
 
 func (p ProviderConfig) ResolvedAPIKey() string {

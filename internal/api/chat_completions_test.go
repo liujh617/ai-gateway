@@ -16,6 +16,7 @@ import (
 
 	"open-ai-gateway/internal/api"
 	"open-ai-gateway/internal/compat"
+	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/provider"
 	"open-ai-gateway/internal/provider/fake"
 	"open-ai-gateway/internal/router"
@@ -126,6 +127,74 @@ func TestChatCompletionsProviderError(t *testing.T) {
 	assertError(t, rr, http.StatusBadGateway, "server_error")
 }
 
+func TestChatCompletionsProviderTimeout(t *testing.T) {
+	handler := newTestHandlerWithOptions(&slowProvider{}, api.Options{
+		RequestTimeout: 10 * time.Millisecond,
+		StreamTimeout:  time.Second,
+	})
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	assertError(t, rr, http.StatusGatewayTimeout, "server_error")
+}
+
+func TestChatCompletionsRateLimit(t *testing.T) {
+	handler := newTestHandlerWithOptions(fake.New(), api.Options{
+		RateLimiter: middleware.NewRateLimiter(1),
+	})
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	first := doJSON(handler, body, true)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status = %d, body = %s", first.Code, first.Body.String())
+	}
+	second := doJSON(handler, body, true)
+
+	assertError(t, second, http.StatusTooManyRequests, "rate_limit_error")
+}
+
+func TestHealthzBypassesRateLimit(t *testing.T) {
+	handler := newTestHandlerWithOptions(fake.New(), api.Options{
+		RateLimiter: middleware.NewRateLimiter(1),
+	})
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	first := doJSON(handler, body, true)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status = %d, body = %s", first.Code, first.Body.String())
+	}
+	second := doJSON(handler, body, true)
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status = %d, want 429", second.Code)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("healthz status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestChatCompletionsStreamUsesStreamTimeout(t *testing.T) {
+	handler := newTestHandlerWithOptions(&delayedStreamProvider{}, api.Options{
+		RequestTimeout: time.Nanosecond,
+		StreamTimeout:  time.Second,
+	})
+	body := `{"model":"test-model","stream":true,"messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "data: [DONE]\n\n") {
+		t.Fatalf("missing DONE event: %s", rr.Body.String())
+	}
+}
+
 func TestChatCompletionsClientCancelClosesStream(t *testing.T) {
 	p := newBlockingProvider()
 	handler := newTestHandler(p)
@@ -194,13 +263,17 @@ func TestHealthzDoesNotRequireAuth(t *testing.T) {
 }
 
 func newTestHandler(p provider.Provider) http.Handler {
+	return newTestHandlerWithOptions(p, api.Options{})
+}
+
+func newTestHandlerWithOptions(p provider.Provider, opts api.Options) http.Handler {
 	modelRouter := router.NewModelRouter([]router.ModelRoute{{
 		ExternalModel: "test-model",
 		UpstreamModel: "upstream-test-model",
 		Provider:      p,
 	}})
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return api.NewServer(modelRouter, testAPIKey, logger).Handler()
+	return api.NewServer(modelRouter, testAPIKey, logger, opts).Handler()
 }
 
 func doJSON(handler http.Handler, body string, auth bool) *httptest.ResponseRecorder {
@@ -269,5 +342,67 @@ func (s *blockingStream) Next(ctx context.Context) (*compat.ChatCompletionChunk,
 
 func (s *blockingStream) Close() error {
 	close(s.closed)
+	return nil
+}
+
+type slowProvider struct{}
+
+func (p *slowProvider) ListModels(ctx context.Context) ([]compat.Model, error) {
+	return nil, nil
+}
+
+func (p *slowProvider) CreateChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (p *slowProvider) StreamChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
+	return nil, errors.New("not implemented")
+}
+
+type delayedStreamProvider struct{}
+
+func (p *delayedStreamProvider) ListModels(ctx context.Context) ([]compat.Model, error) {
+	return nil, nil
+}
+
+func (p *delayedStreamProvider) CreateChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *delayedStreamProvider) StreamChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
+	return &delayedStream{}, nil
+}
+
+type delayedStream struct {
+	sent bool
+}
+
+func (s *delayedStream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) {
+	if s.sent {
+		return nil, io.EOF
+	}
+	select {
+	case <-time.After(20 * time.Millisecond):
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	s.sent = true
+	return &compat.ChatCompletionChunk{
+		ID:      "chatcmpl_delayed",
+		Object:  "chat.completion.chunk",
+		Created: time.Now().Unix(),
+		Model:   "upstream-test-model",
+		Choices: []compat.ChatCompletionChunkChoice{{
+			Index: 0,
+			Delta: compat.ChatMessageDelta{
+				Content: "hello",
+			},
+			FinishReason: nil,
+		}},
+	}, nil
+}
+
+func (s *delayedStream) Close() error {
 	return nil
 }

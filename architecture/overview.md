@@ -56,6 +56,7 @@ Upstream Model Service
 - panic recovery。
 - Bearer token 鉴权。
 - 基础访问日志。
+- 按 Bearer token 做简单 in-memory 限流。
 - 超时和 context 管理。
 - metrics hook。
 
@@ -167,6 +168,8 @@ internal/middleware/
 ## 关键工程约束
 
 - 所有上游请求必须使用 incoming request context。
+- 普通请求必须使用 request timeout。
+- 流式请求必须使用独立 stream timeout，不能被普通 request timeout 截断。
 - 所有 response body 和 stream 必须关闭。
 - SSE handler 必须检查 `http.Flusher`。
 - 日志不得记录完整 prompt、完整 completion 或任何 API key。

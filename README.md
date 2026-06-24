@@ -83,6 +83,9 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 - `providers.<name>.api_key`: 上游 API key 明文值，仅建议本地开发使用。
 - `models.<external>.provider`: 对外模型路由到哪个 provider。
 - `models.<external>.upstream_model`: 转发给上游的真实模型名。
+- `request_timeout_seconds`: 非流式请求的 provider 调用超时。
+- `stream_timeout_seconds`: 流式请求的最大持续时间。
+- `rate_limit.requests_per_minute`: 按 Bearer token 的简单内存限流，`0` 表示关闭。
 
 健康检查：
 
