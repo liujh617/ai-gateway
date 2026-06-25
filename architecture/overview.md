@@ -79,6 +79,8 @@ Upstream Model Service
 - `error_type`
 - `error_code`
 
+Access log `path` fields keep known routes and collapse unknown routes to `/__unknown__`.
+
 Metrics endpoint:
 
 - `GET /metrics`

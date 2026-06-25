@@ -857,6 +857,25 @@ func TestAccessLogIncludesAuthErrorWithoutToken(t *testing.T) {
 	}
 }
 
+func TestAccessLogNormalizesUnknownPath(t *testing.T) {
+	var logs bytes.Buffer
+	handler := newTestHandlerWithLogger(fake.New(), slog.New(slog.NewJSONHandler(&logs, nil)), api.Options{})
+	req := httptest.NewRequest(http.MethodGet, "/v1/probe/123", nil)
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assertError(t, rr, http.StatusNotFound, "invalid_request_error")
+	text := logs.String()
+	if !strings.Contains(text, `"path":"/__unknown__"`) {
+		t.Fatalf("log missing normalized path: %s", text)
+	}
+	if strings.Contains(text, "/v1/probe/123") {
+		t.Fatalf("log leaked raw unknown path: %s", text)
+	}
+}
+
 func TestAccessLogStreamStatus(t *testing.T) {
 	var logs bytes.Buffer
 	handler := newTestHandlerWithLogger(fake.New(), slog.New(slog.NewJSONHandler(&logs, nil)), api.Options{})

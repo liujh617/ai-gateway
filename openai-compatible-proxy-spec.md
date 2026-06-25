@@ -452,6 +452,8 @@ models:
 
 日志不得记录 `Authorization` header、上游 API key、完整 prompt 或完整 completion。
 
+日志中的 `path` 字段只保留已知路由。未知路由统一归一化为 `/__unknown__`，避免异常路径进入日志索引造成高基数。
+
 日志格式和级别可配置：
 
 ```json

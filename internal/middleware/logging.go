@@ -30,7 +30,7 @@ func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 			attrs := []any{
 				"request_id", RequestIDFromContext(r.Context()),
 				"method", r.Method,
-				"path", r.URL.Path,
+				"path", NormalizeRoutePath(r.URL.Path),
 				"status", rec.status,
 				"latency_ms", time.Since(started).Milliseconds(),
 			}
