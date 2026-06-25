@@ -270,6 +270,33 @@ func TestStreamChatCompletionHandlesFieldWithoutColonAsEmptyValue(t *testing.T) 
 	}
 }
 
+func TestStreamChatCompletionIgnoresLeadingBOM(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "\ufeffdata: {\"id\":\"chatcmpl_upstream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"},\"finish_reason\":null}]}\n\n")
+		io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	stream, err := p.StreamChatCompletion(context.Background(), chatRequest())
+	if err != nil {
+		t.Fatalf("StreamChatCompletion: %v", err)
+	}
+	defer stream.Close()
+
+	chunk, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("chunk: %v", err)
+	}
+	if chunk.Choices[0].Delta.Content != "hello" {
+		t.Fatalf("content = %q", chunk.Choices[0].Delta.Content)
+	}
+	if _, err := stream.Next(context.Background()); err != io.EOF {
+		t.Fatalf("end error = %v, want EOF", err)
+	}
+}
+
 func TestStreamChatCompletionAcceptsEventStreamWithCharset(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")

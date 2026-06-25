@@ -136,6 +136,7 @@ Compat Mapper 是外部 API 契约的主要守门员。
 - 以分片方式读取上游 SSE line，并限制单行大小。
 - 拒绝未以空行结束的上游 SSE event。
 - 按 SSE 规则处理没有冒号的 field line。
+- 忽略上游 SSE stream 第一行开头的 UTF-8 BOM。
 - 暴露是否支持 streaming 的能力信息。
 
 Provider Adapter 不应直接依赖 HTTP handler。

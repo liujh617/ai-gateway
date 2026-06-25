@@ -191,8 +191,9 @@ func (p *Provider) setJSONHeaders(req *http.Request) {
 }
 
 type stream struct {
-	body   io.ReadCloser
-	reader *bufio.Reader
+	body          io.ReadCloser
+	reader        *bufio.Reader
+	seenFirstLine bool
 }
 
 func (s *stream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) {
@@ -239,6 +240,10 @@ func (s *stream) nextPayload() (string, error) {
 		}
 
 		line = strings.TrimRight(line, "\r\n")
+		if !s.seenFirstLine {
+			s.seenFirstLine = true
+			line = strings.TrimPrefix(line, "\ufeff")
+		}
 		if line == "" {
 			eventBytes = 0
 			if len(data) == 0 {
