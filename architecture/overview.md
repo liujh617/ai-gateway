@@ -125,7 +125,7 @@ Compat Mapper 是外部 API 契约的主要守门员。
 - 发起上游 HTTP 请求。
 - 转换上游请求和响应。
 - 处理上游错误、超时和取消。
-- 将上游 transport timeout 规范化为 context deadline exceeded，便于 HTTP API 映射为 `504`。
+- 将 models、chat completions、embeddings 和 stream 建连阶段的上游 transport timeout 规范化为 context deadline exceeded，便于 HTTP API 映射为 `504`。
 - 转发网关最终使用的 request id，便于上游日志关联。
 - 设置稳定的上游 `User-Agent`，便于上游识别网关调用。
 - 设置明确的上游 `Accept` header，区分 JSON 和 SSE 响应协商。

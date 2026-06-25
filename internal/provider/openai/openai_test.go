@@ -129,6 +129,29 @@ func TestCreateChatCompletionTransportTimeoutIsDeadlineExceeded(t *testing.T) {
 	}
 }
 
+func TestCreateEmbeddingTransportTimeoutIsDeadlineExceeded(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+	}))
+	defer server.Close()
+
+	p, err := openai.New(server.URL+"/v1", "upstream-key", 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("new provider: %v", err)
+	}
+
+	_, err = p.CreateEmbedding(context.Background(), compat.EmbeddingRequest{
+		Model: "upstream-embedding-model",
+		Input: json.RawMessage(`"hello"`),
+	})
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want DeadlineExceeded", err)
+	}
+}
+
 func TestCreateEmbeddingForwardsRequest(t *testing.T) {
 	var got compat.EmbeddingRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -824,6 +847,26 @@ func TestListModelsForwardsHeaders(t *testing.T) {
 	}
 	if len(models) != 1 || models[0].ID != "upstream-model" {
 		t.Fatalf("models = %+v", models)
+	}
+}
+
+func TestListModelsTransportTimeoutIsDeadlineExceeded(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+	}))
+	defer server.Close()
+
+	p, err := openai.New(server.URL+"/v1", "upstream-key", 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("new provider: %v", err)
+	}
+
+	_, err = p.ListModels(context.Background())
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want DeadlineExceeded", err)
 	}
 }
 
