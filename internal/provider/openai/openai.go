@@ -253,10 +253,7 @@ func (s *stream) nextPayload() (string, error) {
 		if strings.HasPrefix(line, ":") {
 			continue
 		}
-		field, value, ok := strings.Cut(line, ":")
-		if !ok {
-			continue
-		}
+		field, value, _ := strings.Cut(line, ":")
 		if strings.HasPrefix(value, " ") {
 			value = strings.TrimPrefix(value, " ")
 		}
