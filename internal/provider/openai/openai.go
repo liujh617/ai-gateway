@@ -310,9 +310,9 @@ func responseContentTypeIs(resp *http.Response, want string) bool {
 
 func upstreamError(resp *http.Response) error {
 	var upstream compat.ErrorResponse
-	body, err := readLimited(resp.Body)
-	if err == nil && len(body) > 0 {
-		_ = json.Unmarshal(body, &upstream)
+	var decoded compat.ErrorResponse
+	if err := decodeLimited(resp.Body, &decoded); err == nil {
+		upstream = decoded
 	}
 
 	message := http.StatusText(resp.StatusCode)
@@ -335,17 +335,6 @@ func upstreamError(resp *http.Response) error {
 		Param:   upstream.Error.Param,
 		Code:    upstream.Error.Code,
 	}
-}
-
-func readLimited(r io.Reader) ([]byte, error) {
-	body, err := io.ReadAll(io.LimitReader(r, maxResponseBodyBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(body) > maxResponseBodyBytes {
-		return nil, fmt.Errorf("upstream response body exceeds %d bytes", maxResponseBodyBytes)
-	}
-	return body, nil
 }
 
 func defaultErrorType(status int) string {

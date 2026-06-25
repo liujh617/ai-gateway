@@ -138,7 +138,7 @@ Provider Adapter 不应直接依赖 HTTP handler。
 当前实现：
 
 - `internal/provider/fake`: 开发和测试用 fake provider。
-- `internal/provider/openai`: OpenAI-compatible HTTP provider，转发 `/chat/completions`，支持非流式和 SSE 流式响应，并对上游成功和错误响应体执行大小边界。
+- `internal/provider/openai`: OpenAI-compatible HTTP provider，转发 `/chat/completions`，支持非流式和 SSE 流式响应，并对上游成功和错误响应体执行大小边界及单 JSON 校验。
 
 ### Config
 

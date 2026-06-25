@@ -444,6 +444,33 @@ func TestUpstreamErrorMappingIgnoresOversizedBody(t *testing.T) {
 	}
 }
 
+func TestUpstreamErrorMappingIgnoresTrailingJSONBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		io.WriteString(w, `{"error":{"message":"slow down","type":"server_error","code":"upstream_code"}}{}`)
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.CreateChatCompletion(context.Background(), chatRequest())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	compatErr, ok := err.(*compat.Error)
+	if !ok {
+		t.Fatalf("error type = %T", err)
+	}
+	if compatErr.Status != http.StatusTooManyRequests || compatErr.Type != "rate_limit_error" {
+		t.Fatalf("mapped error = %+v", compatErr)
+	}
+	if compatErr.Message != http.StatusText(http.StatusTooManyRequests) {
+		t.Fatalf("message = %q", compatErr.Message)
+	}
+	if compatErr.Code != nil {
+		t.Fatalf("code = %v", compatErr.Code)
+	}
+}
+
 func TestCreateChatCompletionRejectsOversizedResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
