@@ -311,6 +311,7 @@ func TestStreamChatCompletionMalformedChunk(t *testing.T) {
 
 func TestUpstreamErrorMapping(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusTooManyRequests)
 		io.WriteString(w, `{"error":{"message":"slow down","type":"rate_limit_error","param":null,"code":null}}`)
 	}))
@@ -392,6 +393,7 @@ func TestUpstreamErrorMappingPreservesDetails(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(tt.status)
 				io.WriteString(w, tt.body)
 			}))
@@ -421,6 +423,7 @@ func TestUpstreamErrorMappingPreservesDetails(t *testing.T) {
 
 func TestUpstreamErrorMappingIgnoresOversizedBody(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		io.WriteString(w, `{"error":{"message":"do not trust","type":"rate_limit_error"}}`)
 		io.WriteString(w, strings.Repeat(" ", 11<<20))
@@ -446,6 +449,7 @@ func TestUpstreamErrorMappingIgnoresOversizedBody(t *testing.T) {
 
 func TestUpstreamErrorMappingIgnoresTrailingJSONBody(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusTooManyRequests)
 		io.WriteString(w, `{"error":{"message":"slow down","type":"server_error","code":"upstream_code"}}{}`)
 	}))
@@ -464,6 +468,34 @@ func TestUpstreamErrorMappingIgnoresTrailingJSONBody(t *testing.T) {
 		t.Fatalf("mapped error = %+v", compatErr)
 	}
 	if compatErr.Message != http.StatusText(http.StatusTooManyRequests) {
+		t.Fatalf("message = %q", compatErr.Message)
+	}
+	if compatErr.Code != nil {
+		t.Fatalf("code = %v", compatErr.Code)
+	}
+}
+
+func TestUpstreamErrorMappingIgnoresNonJSONContentType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusInternalServerError)
+		io.WriteString(w, `{"error":{"message":"do not trust","type":"rate_limit_error","code":"upstream_code"}}`)
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.CreateChatCompletion(context.Background(), chatRequest())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	compatErr, ok := err.(*compat.Error)
+	if !ok {
+		t.Fatalf("error type = %T", err)
+	}
+	if compatErr.Status != http.StatusBadGateway || compatErr.Type != "server_error" {
+		t.Fatalf("mapped error = %+v", compatErr)
+	}
+	if compatErr.Message != http.StatusText(http.StatusInternalServerError) {
 		t.Fatalf("message = %q", compatErr.Message)
 	}
 	if compatErr.Code != nil {

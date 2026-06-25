@@ -310,9 +310,11 @@ func responseContentTypeIs(resp *http.Response, want string) bool {
 
 func upstreamError(resp *http.Response) error {
 	var upstream compat.ErrorResponse
-	var decoded compat.ErrorResponse
-	if err := decodeLimited(resp.Body, &decoded); err == nil {
-		upstream = decoded
+	if responseContentTypeIs(resp, "application/json") {
+		var decoded compat.ErrorResponse
+		if err := decodeLimited(resp.Body, &decoded); err == nil {
+			upstream = decoded
+		}
 	}
 
 	message := http.StatusText(resp.StatusCode)

@@ -131,6 +131,7 @@ Compat Mapper 是外部 API 契约的主要守门员。
 - 仅在带 JSON body 的上游请求上设置 `Content-Type: application/json`。
 - 校验非流式 JSON 上游成功响应的 `Content-Type`。
 - 校验流式上游成功响应的 `Content-Type`。
+- 仅解析 `Content-Type: application/json` 的上游错误响应字段。
 - 暴露是否支持 streaming 的能力信息。
 
 Provider Adapter 不应直接依赖 HTTP handler。
@@ -138,7 +139,7 @@ Provider Adapter 不应直接依赖 HTTP handler。
 当前实现：
 
 - `internal/provider/fake`: 开发和测试用 fake provider。
-- `internal/provider/openai`: OpenAI-compatible HTTP provider，转发 `/chat/completions`，支持非流式和 SSE 流式响应，并对上游成功和错误响应体执行大小边界及单 JSON 校验。
+- `internal/provider/openai`: OpenAI-compatible HTTP provider，转发 `/chat/completions`，支持非流式和 SSE 流式响应，并对上游成功响应和 JSON 错误响应执行大小边界及单 JSON 校验。
 
 ### Config
 
