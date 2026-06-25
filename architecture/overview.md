@@ -134,6 +134,7 @@ Compat Mapper 是外部 API 契约的主要守门员。
 - 仅解析 `Content-Type: application/json` 的上游错误响应字段。
 - 限制单个上游 SSE event 大小，避免异常流式事件占用过多内存。
 - 以分片方式读取上游 SSE line，并限制单行大小。
+- 支持 LF、CRLF 和 CR 三种上游 SSE line ending。
 - 拒绝未以空行结束的上游 SSE event。
 - 按 SSE 规则处理没有冒号的 field line。
 - 忽略上游 SSE stream 第一行开头的 UTF-8 BOM。

@@ -276,25 +276,33 @@ func (s *stream) nextPayload() (string, error) {
 func (s *stream) readSSELine() (string, error) {
 	var line strings.Builder
 	for {
-		fragment, err := s.reader.ReadSlice('\n')
-		if len(fragment) > 0 {
-			if line.Len()+len(fragment) > maxResponseBodyBytes+1 {
-				return "", fmt.Errorf("upstream SSE line exceeds %d bytes", maxResponseBodyBytes)
+		b, err := s.reader.ReadByte()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				if line.Len() == 0 {
+					return "", io.EOF
+				}
+				return line.String(), io.EOF
 			}
-			line.Write(fragment)
-		}
-		switch {
-		case err == nil:
-			return line.String(), nil
-		case errors.Is(err, bufio.ErrBufferFull):
-			continue
-		case errors.Is(err, io.EOF):
-			if line.Len() == 0 {
-				return "", io.EOF
-			}
-			return line.String(), io.EOF
-		default:
 			return "", err
+		}
+		if line.Len()+1 > maxResponseBodyBytes+1 {
+			return "", fmt.Errorf("upstream SSE line exceeds %d bytes", maxResponseBodyBytes)
+		}
+		line.WriteByte(b)
+		if b == '\n' {
+			return line.String(), nil
+		}
+		if b == '\r' {
+			next, err := s.reader.Peek(1)
+			if err == nil && len(next) == 1 && next[0] == '\n' {
+				if line.Len()+1 > maxResponseBodyBytes+1 {
+					return "", fmt.Errorf("upstream SSE line exceeds %d bytes", maxResponseBodyBytes)
+				}
+				_, _ = s.reader.ReadByte()
+				line.WriteByte('\n')
+			}
+			return line.String(), nil
 		}
 	}
 }
