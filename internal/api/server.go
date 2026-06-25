@@ -67,13 +67,13 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", s.handleHealthz)
-	mux.HandleFunc("GET /readyz", s.handleReadyz)
-	mux.HandleFunc("GET /version", s.handleVersion)
-	mux.HandleFunc("GET /metrics", s.handleMetrics)
-	mux.HandleFunc("GET /v1/models", s.handleModels)
-	mux.HandleFunc("POST /v1/chat/completions", s.handleChatCompletions)
-	mux.HandleFunc("POST /v1/embeddings", s.handleEmbeddings)
+	mux.HandleFunc(routes.Pattern(http.MethodGet, routes.HealthzPath), s.handleHealthz)
+	mux.HandleFunc(routes.Pattern(http.MethodGet, routes.ReadyzPath), s.handleReadyz)
+	mux.HandleFunc(routes.Pattern(http.MethodGet, routes.VersionPath), s.handleVersion)
+	mux.HandleFunc(routes.Pattern(http.MethodGet, routes.MetricsPath), s.handleMetrics)
+	mux.HandleFunc(routes.Pattern(http.MethodGet, routes.ModelsPath), s.handleModels)
+	mux.HandleFunc(routes.Pattern(http.MethodPost, routes.ChatCompletionsPath), s.handleChatCompletions)
+	mux.HandleFunc(routes.Pattern(http.MethodPost, routes.EmbeddingsPath), s.handleEmbeddings)
 	mux.HandleFunc("/", s.handleNotFound)
 
 	var handler http.Handler = mux

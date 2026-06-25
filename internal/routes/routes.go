@@ -2,7 +2,17 @@ package routes
 
 import "net/http"
 
-const UnknownPathLabel = "/__unknown__"
+const (
+	UnknownPathLabel = "/__unknown__"
+
+	HealthzPath         = "/healthz"
+	ReadyzPath          = "/readyz"
+	VersionPath         = "/version"
+	MetricsPath         = "/metrics"
+	ModelsPath          = "/v1/models"
+	ChatCompletionsPath = "/v1/chat/completions"
+	EmbeddingsPath      = "/v1/embeddings"
+)
 
 type Route struct {
 	Path    string
@@ -10,13 +20,13 @@ type Route struct {
 }
 
 var definitions = []Route{
-	{Path: "/healthz", Methods: []string{http.MethodGet, http.MethodHead}},
-	{Path: "/readyz", Methods: []string{http.MethodGet, http.MethodHead}},
-	{Path: "/version", Methods: []string{http.MethodGet, http.MethodHead}},
-	{Path: "/metrics", Methods: []string{http.MethodGet, http.MethodHead}},
-	{Path: "/v1/models", Methods: []string{http.MethodGet, http.MethodHead}},
-	{Path: "/v1/chat/completions", Methods: []string{http.MethodPost}},
-	{Path: "/v1/embeddings", Methods: []string{http.MethodPost}},
+	{Path: HealthzPath, Methods: []string{http.MethodGet, http.MethodHead}},
+	{Path: ReadyzPath, Methods: []string{http.MethodGet, http.MethodHead}},
+	{Path: VersionPath, Methods: []string{http.MethodGet, http.MethodHead}},
+	{Path: MetricsPath, Methods: []string{http.MethodGet, http.MethodHead}},
+	{Path: ModelsPath, Methods: []string{http.MethodGet, http.MethodHead}},
+	{Path: ChatCompletionsPath, Methods: []string{http.MethodPost}},
+	{Path: EmbeddingsPath, Methods: []string{http.MethodPost}},
 }
 
 var knownPaths = func() map[string]struct{} {
@@ -34,6 +44,10 @@ var methodsByPath = func() map[string][]string {
 	}
 	return methods
 }()
+
+func Pattern(method, path string) string {
+	return method + " " + path
+}
 
 func NormalizePath(path string) string {
 	if _, ok := knownPaths[path]; ok {

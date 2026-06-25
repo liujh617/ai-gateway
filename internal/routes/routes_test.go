@@ -6,7 +6,7 @@ import (
 )
 
 func TestNormalizePath(t *testing.T) {
-	if got := NormalizePath("/v1/chat/completions"); got != "/v1/chat/completions" {
+	if got := NormalizePath(ChatCompletionsPath); got != ChatCompletionsPath {
 		t.Fatalf("known path = %q", got)
 	}
 	if got := NormalizePath("/v1/unknown"); got != UnknownPathLabel {
@@ -14,8 +14,14 @@ func TestNormalizePath(t *testing.T) {
 	}
 }
 
+func TestPattern(t *testing.T) {
+	if got := Pattern(http.MethodPost, ChatCompletionsPath); got != "POST /v1/chat/completions" {
+		t.Fatalf("pattern = %q", got)
+	}
+}
+
 func TestAllowedMethods(t *testing.T) {
-	methods, ok := AllowedMethods("/v1/chat/completions")
+	methods, ok := AllowedMethods(ChatCompletionsPath)
 	if !ok {
 		t.Fatal("known path was not found")
 	}
@@ -29,13 +35,13 @@ func TestAllowedMethods(t *testing.T) {
 }
 
 func TestAllowedMethodsReturnsCopy(t *testing.T) {
-	methods, ok := AllowedMethods("/healthz")
+	methods, ok := AllowedMethods(HealthzPath)
 	if !ok {
 		t.Fatal("known path was not found")
 	}
 	methods[0] = http.MethodPost
 
-	again, ok := AllowedMethods("/healthz")
+	again, ok := AllowedMethods(HealthzPath)
 	if !ok {
 		t.Fatal("known path was not found on second lookup")
 	}
