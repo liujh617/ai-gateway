@@ -419,6 +419,31 @@ func TestUpstreamErrorMappingPreservesDetails(t *testing.T) {
 	}
 }
 
+func TestUpstreamErrorMappingIgnoresOversizedBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		io.WriteString(w, `{"error":{"message":"do not trust","type":"rate_limit_error"}}`)
+		io.WriteString(w, strings.Repeat(" ", 11<<20))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.CreateChatCompletion(context.Background(), chatRequest())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	compatErr, ok := err.(*compat.Error)
+	if !ok {
+		t.Fatalf("error type = %T", err)
+	}
+	if compatErr.Status != http.StatusBadGateway || compatErr.Type != "server_error" {
+		t.Fatalf("mapped error = %+v", compatErr)
+	}
+	if compatErr.Message != http.StatusText(http.StatusInternalServerError) {
+		t.Fatalf("message = %q", compatErr.Message)
+	}
+}
+
 func TestCreateChatCompletionRejectsOversizedResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -98,7 +98,7 @@ X-Content-Type-Options: nosniff
 | provider 返回限流 | `429` | `rate_limit_error` |
 | provider 内部错误 | `502` | `server_error` |
 
-OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`type`、`param` 和 `code`。上游 `5xx` 会映射为网关 `502`，避免把上游内部状态直接暴露为网关自身故障。
+OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`type`、`param` 和 `code`。上游错误响应体超过网关读取上限时，错误体会被视为不可信并回退到默认错误映射。上游 `5xx` 会映射为网关 `502`，避免把上游内部状态直接暴露为网关自身故障。
 
 OpenAI-compatible provider 解析上游 JSON 响应时也要求响应体只包含一个 JSON 值。合法 JSON 后继续拼接第二个 JSON 值或其他非空 token 时，网关将其视为 provider 错误。
 
