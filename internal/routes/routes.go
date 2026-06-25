@@ -1,6 +1,9 @@
 package routes
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
 const (
 	UnknownPathLabel = "/__unknown__"
@@ -62,4 +65,25 @@ func AllowedMethods(path string) ([]string, bool) {
 		return nil, false
 	}
 	return append([]string(nil), methods...), true
+}
+
+func MethodAllowed(path, method string) (bool, bool) {
+	methods, ok := methodsByPath[path]
+	if !ok {
+		return false, false
+	}
+	for _, item := range methods {
+		if method == item {
+			return true, true
+		}
+	}
+	return false, true
+}
+
+func AllowHeader(path string) (string, bool) {
+	methods, ok := methodsByPath[path]
+	if !ok {
+		return "", false
+	}
+	return strings.Join(methods, ", "), true
 }

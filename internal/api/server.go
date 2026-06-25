@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"open-ai-gateway/internal/compat"
@@ -169,21 +168,14 @@ func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) methodNotAllowed(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		allowed, ok := routes.AllowedMethods(r.URL.Path)
-		if !ok || methodAllowed(r.Method, allowed) {
+		allowed, known := routes.MethodAllowed(r.URL.Path, r.Method)
+		if !known || allowed {
 			next.ServeHTTP(w, r)
 			return
 		}
-		w.Header().Set("Allow", strings.Join(allowed, ", "))
+		if allow, ok := routes.AllowHeader(r.URL.Path); ok {
+			w.Header().Set("Allow", allow)
+		}
 		s.writeError(w, r, compat.MethodNotAllowed("method not allowed"))
 	})
-}
-
-func methodAllowed(method string, allowed []string) bool {
-	for _, item := range allowed {
-		if method == item {
-			return true
-		}
-	}
-	return false
 }

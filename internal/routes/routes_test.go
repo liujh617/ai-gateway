@@ -34,6 +34,46 @@ func TestAllowedMethods(t *testing.T) {
 	}
 }
 
+func TestMethodAllowed(t *testing.T) {
+	allowed, known := MethodAllowed(ChatCompletionsPath, http.MethodPost)
+	if !known {
+		t.Fatal("known path was not found")
+	}
+	if !allowed {
+		t.Fatal("POST should be allowed for chat completions")
+	}
+
+	allowed, known = MethodAllowed(ChatCompletionsPath, http.MethodGet)
+	if !known {
+		t.Fatal("known path was not found")
+	}
+	if allowed {
+		t.Fatal("GET should not be allowed for chat completions")
+	}
+
+	allowed, known = MethodAllowed("/v1/unknown", http.MethodGet)
+	if known {
+		t.Fatal("unknown path should not be known")
+	}
+	if allowed {
+		t.Fatal("unknown path should not allow a method")
+	}
+}
+
+func TestAllowHeader(t *testing.T) {
+	allow, ok := AllowHeader(HealthzPath)
+	if !ok {
+		t.Fatal("known path was not found")
+	}
+	if allow != "GET, HEAD" {
+		t.Fatalf("allow = %q", allow)
+	}
+
+	if _, ok := AllowHeader("/v1/unknown"); ok {
+		t.Fatal("unknown path had an Allow header")
+	}
+}
+
 func TestAllowedMethodsReturnsCopy(t *testing.T) {
 	methods, ok := AllowedMethods(HealthzPath)
 	if !ok {
