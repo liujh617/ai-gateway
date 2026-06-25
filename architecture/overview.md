@@ -133,6 +133,7 @@ Compat Mapper 是外部 API 契约的主要守门员。
 - 校验流式上游成功响应的 `Content-Type`。
 - 仅解析 `Content-Type: application/json` 的上游错误响应字段。
 - 限制单个上游 SSE event 大小，避免异常流式事件占用过多内存。
+- 以分片方式读取上游 SSE line，并限制单行大小。
 - 暴露是否支持 streaming 的能力信息。
 
 Provider Adapter 不应直接依赖 HTTP handler。

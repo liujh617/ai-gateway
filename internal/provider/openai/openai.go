@@ -224,15 +224,18 @@ func (s *stream) nextPayload() (string, error) {
 	var data []string
 	eventBytes := 0
 	for {
-		line, err := s.reader.ReadString('\n')
+		line, err := s.readSSELine()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				if len(data) == 0 {
-					return "", io.EOF
+				if line == "" {
+					if len(data) == 0 {
+						return "", io.EOF
+					}
+					return strings.Join(data, "\n"), nil
 				}
-				return strings.Join(data, "\n"), nil
+			} else {
+				return "", err
 			}
-			return "", err
 		}
 
 		line = strings.TrimRight(line, "\r\n")
@@ -264,6 +267,32 @@ func (s *stream) nextPayload() (string, error) {
 			continue
 		default:
 			continue
+		}
+	}
+}
+
+func (s *stream) readSSELine() (string, error) {
+	var line strings.Builder
+	for {
+		fragment, err := s.reader.ReadSlice('\n')
+		if len(fragment) > 0 {
+			if line.Len()+len(fragment) > maxResponseBodyBytes+1 {
+				return "", fmt.Errorf("upstream SSE line exceeds %d bytes", maxResponseBodyBytes)
+			}
+			line.Write(fragment)
+		}
+		switch {
+		case err == nil:
+			return line.String(), nil
+		case errors.Is(err, bufio.ErrBufferFull):
+			continue
+		case errors.Is(err, io.EOF):
+			if line.Len() == 0 {
+				return "", io.EOF
+			}
+			return line.String(), io.EOF
+		default:
+			return "", err
 		}
 	}
 }

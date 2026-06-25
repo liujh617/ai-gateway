@@ -294,6 +294,7 @@ data: [DONE]
 - provider 适配器按 SSE event 解析，而不是按单行解析。
 - 多行 `data:` 会按 SSE 规则合并。
 - 单个上游 SSE event 超过网关响应体读取上限时，网关会将其视为 provider 错误。
+- 单个上游 SSE line 超过网关响应体读取上限时，网关会在行读取阶段拒绝该流。
 - comment、`event`、`id`、`retry` 行会被忽略。
 - handler 必须在写入 chunk 后 flush。
 - request context 取消时必须关闭上游流。

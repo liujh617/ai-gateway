@@ -329,7 +329,31 @@ func TestStreamChatCompletionRejectsOversizedSSEEvent(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected oversized SSE event error")
 	}
-	if !strings.Contains(err.Error(), "SSE event") {
+	if !strings.Contains(err.Error(), "SSE") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestStreamChatCompletionRejectsOversizedSSELineBeforeEventEnd(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, ": ")
+		io.WriteString(w, strings.Repeat("x", 11<<20))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	stream, err := p.StreamChatCompletion(context.Background(), chatRequest())
+	if err != nil {
+		t.Fatalf("StreamChatCompletion: %v", err)
+	}
+	defer stream.Close()
+
+	_, err = stream.Next(context.Background())
+	if err == nil {
+		t.Fatal("expected oversized SSE line error")
+	}
+	if !strings.Contains(err.Error(), "SSE line") {
 		t.Fatalf("error = %v", err)
 	}
 }
