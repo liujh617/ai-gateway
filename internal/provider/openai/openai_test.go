@@ -309,6 +309,31 @@ func TestStreamChatCompletionMalformedChunk(t *testing.T) {
 	}
 }
 
+func TestStreamChatCompletionRejectsOversizedSSEEvent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: ")
+		io.WriteString(w, strings.Repeat("x", 11<<20))
+		io.WriteString(w, "\n\n")
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	stream, err := p.StreamChatCompletion(context.Background(), chatRequest())
+	if err != nil {
+		t.Fatalf("StreamChatCompletion: %v", err)
+	}
+	defer stream.Close()
+
+	_, err = stream.Next(context.Background())
+	if err == nil {
+		t.Fatal("expected oversized SSE event error")
+	}
+	if !strings.Contains(err.Error(), "SSE event") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestUpstreamErrorMapping(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

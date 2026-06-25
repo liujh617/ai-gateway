@@ -222,6 +222,7 @@ func (s *stream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) 
 
 func (s *stream) nextPayload() (string, error) {
 	var data []string
+	eventBytes := 0
 	for {
 		line, err := s.reader.ReadString('\n')
 		if err != nil {
@@ -236,10 +237,15 @@ func (s *stream) nextPayload() (string, error) {
 
 		line = strings.TrimRight(line, "\r\n")
 		if line == "" {
+			eventBytes = 0
 			if len(data) == 0 {
 				continue
 			}
 			return strings.Join(data, "\n"), nil
+		}
+		eventBytes += len(line) + 1
+		if eventBytes > maxResponseBodyBytes {
+			return "", fmt.Errorf("upstream SSE event exceeds %d bytes", maxResponseBodyBytes)
 		}
 		if strings.HasPrefix(line, ":") {
 			continue
