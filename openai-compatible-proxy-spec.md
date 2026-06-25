@@ -92,6 +92,8 @@ X-Content-Type-Options: nosniff
 
 OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`type`、`param` 和 `code`。上游 `5xx` 会映射为网关 `502`，避免把上游内部状态直接暴露为网关自身故障。
 
+OpenAI-compatible provider 解析上游 JSON 响应时也要求响应体只包含一个 JSON 值。合法 JSON 后继续拼接第二个 JSON 值或其他非空 token 时，网关将其视为 provider 错误。
+
 未知受保护路由在鉴权通过后返回 JSON 格式的 `404 invalid_request_error`；未鉴权时仍先返回 `401 authentication_error`。
 
 已知路由使用不支持的 HTTP method 时，在鉴权通过后返回 JSON 格式的 `405 invalid_request_error`，并设置 `Allow` header；未鉴权时仍先返回 `401 authentication_error`。

@@ -252,7 +252,18 @@ func (s *stream) Close() error {
 
 func decodeLimited(r io.Reader, out any) error {
 	limited := &io.LimitedReader{R: r, N: maxResponseBodyBytes + 1}
-	if err := json.NewDecoder(limited).Decode(out); err != nil {
+	decoder := json.NewDecoder(limited)
+	if err := decoder.Decode(out); err != nil {
+		return err
+	}
+	if limited.N <= 0 {
+		return fmt.Errorf("upstream response body exceeds %d bytes", maxResponseBodyBytes)
+	}
+	var extra json.RawMessage
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return errors.New("upstream response body must contain a single JSON value")
+		}
 		return err
 	}
 	if limited.N <= 0 {

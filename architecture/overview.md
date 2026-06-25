@@ -216,6 +216,7 @@ internal/middleware/
 - HTTP server 必须配置 ReadHeaderTimeout。
 - 关闭进程时必须优先尝试 graceful shutdown。
 - 所有 response body 和 stream 必须关闭。
+- 上游 JSON 响应必须按单一 JSON 值严格解析。
 - SSE handler 必须检查 `http.Flusher`。
 - 日志不得记录完整 prompt、完整 completion 或任何 API key。
 - 日志不得记录 `Authorization` header。
