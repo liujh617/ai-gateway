@@ -100,6 +100,8 @@ OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`ty
 
 返回网关对当前调用方可见的模型列表。
 
+`HEAD /v1/models` 需要 Bearer token，返回相同状态码和响应头，但不返回 body。
+
 ### Response
 
 ```json
@@ -160,6 +162,8 @@ OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`ty
 
 返回 Prometheus text exposition 格式的基础 HTTP 指标。该接口不需要 Bearer token。
 
+`HEAD /metrics` 返回相同状态码和响应头，但不返回 body。
+
 当前指标：
 
 - `open_ai_gateway_http_requests_total`
@@ -176,6 +180,8 @@ OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`ty
 ## `GET /version`
 
 返回当前二进制的构建信息。该接口不需要 Bearer token。
+
+`HEAD /version` 返回相同状态码和响应头，但不返回 body。
 
 ### Response
 

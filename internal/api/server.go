@@ -105,6 +105,9 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err *compat.
 
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodHead {
+		return
+	}
 	_ = json.NewEncoder(w).Encode(compat.ModelListResponse{
 		Object: "list",
 		Data:   s.router.Models(),
@@ -145,11 +148,18 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodHead {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+		return
+	}
 	s.metrics.WritePrometheus(w)
 }
 
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodHead {
+		return
+	}
 	_ = json.NewEncoder(w).Encode(version.Current())
 }
 

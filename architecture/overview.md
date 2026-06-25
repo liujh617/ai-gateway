@@ -94,6 +94,7 @@ Runtime probes:
 - `GET /healthz`: process liveness
 - `GET /readyz`: readiness based on loaded model routes
 - `GET /version`: build metadata
+- `HEAD` for GET routes returns the same status and headers without a response body.
 
 ### Compat Mapper
 

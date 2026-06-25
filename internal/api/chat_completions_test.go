@@ -303,6 +303,24 @@ func TestMetricsDoesNotRequireAuth(t *testing.T) {
 	}
 }
 
+func TestMetricsHeadDoesNotRequireAuth(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodHead, "/metrics", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if rr.Body.Len() != 0 {
+		t.Fatalf("HEAD response body = %q", rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); !strings.Contains(got, "text/plain") {
+		t.Fatalf("content-type = %q", got)
+	}
+}
+
 func TestSecurityHeaders(t *testing.T) {
 	handler := newTestHandler(fake.New())
 
@@ -482,6 +500,35 @@ func TestModelsOK(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), `"id":"test-model"`) {
 		t.Fatalf("missing model: %s", rr.Body.String())
+	}
+}
+
+func TestModelsHeadRequiresAuth(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodHead, "/v1/models", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assertError(t, rr, http.StatusUnauthorized, "authentication_error")
+}
+
+func TestModelsHeadOK(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodHead, "/v1/models", nil)
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if rr.Body.Len() != 0 {
+		t.Fatalf("HEAD response body = %q", rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("content-type = %q", got)
 	}
 }
 
@@ -669,6 +716,24 @@ func TestVersionDoesNotRequireAuth(t *testing.T) {
 		if !strings.Contains(rr.Body.String(), want) {
 			t.Fatalf("version response missing %s: %s", want, rr.Body.String())
 		}
+	}
+}
+
+func TestVersionHeadDoesNotRequireAuth(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodHead, "/version", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if rr.Body.Len() != 0 {
+		t.Fatalf("HEAD response body = %q", rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("content-type = %q", got)
 	}
 }
 
