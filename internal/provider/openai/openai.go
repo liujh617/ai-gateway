@@ -231,8 +231,8 @@ func (s *stream) nextPayload() (string, error) {
 					if len(data) == 0 {
 						return "", io.EOF
 					}
-					return strings.Join(data, "\n"), nil
 				}
+				return "", errors.New("upstream SSE event ended without blank line")
 			} else {
 				return "", err
 			}
