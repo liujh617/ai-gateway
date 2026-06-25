@@ -3,6 +3,7 @@ package openai_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -105,6 +106,26 @@ func TestNewRejectsBaseURLWithQueryOrFragment(t *testing.T) {
 				t.Fatalf("error = %v", err)
 			}
 		})
+	}
+}
+
+func TestCreateChatCompletionTransportTimeoutIsDeadlineExceeded(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+	}))
+	defer server.Close()
+
+	p, err := openai.New(server.URL+"/v1", "upstream-key", 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("new provider: %v", err)
+	}
+
+	_, err = p.CreateChatCompletion(context.Background(), chatRequest())
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want DeadlineExceeded", err)
 	}
 }
 

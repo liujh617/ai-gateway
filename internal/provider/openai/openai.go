@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -54,7 +55,7 @@ func (p *Provider) ListModels(ctx context.Context) ([]compat.Model, error) {
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, transportError(err)
 	}
 	defer resp.Body.Close()
 
@@ -87,7 +88,7 @@ func (p *Provider) CreateChatCompletion(ctx context.Context, req compat.ChatComp
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
-		return nil, err
+		return nil, transportError(err)
 	}
 	defer resp.Body.Close()
 
@@ -121,7 +122,7 @@ func (p *Provider) StreamChatCompletion(ctx context.Context, req compat.ChatComp
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
-		return nil, err
+		return nil, transportError(err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
@@ -152,7 +153,7 @@ func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequ
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
-		return nil, err
+		return nil, transportError(err)
 	}
 	defer resp.Body.Close()
 
@@ -351,6 +352,14 @@ func responseContentTypeIs(resp *http.Response, want string) bool {
 	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	return err == nil && strings.EqualFold(mediaType, want)
+}
+
+func transportError(err error) error {
+	var netErr net.Error
+	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) {
+		return fmt.Errorf("upstream request timeout: %w", context.DeadlineExceeded)
+	}
+	return err
 }
 
 func upstreamError(resp *http.Response) error {
