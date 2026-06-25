@@ -209,7 +209,7 @@ internal/middleware/
 
 ## 关键工程约束
 
-- 已知 HTTP 路由和允许 method 的元数据必须集中维护，供 mux 注册、405 判断、`Allow` header、metrics path 归一化和 access log path 归一化复用。
+- 已知 HTTP 路由、公开访问属性和允许 method 的元数据必须集中维护，供鉴权、限流绕过、mux 注册、405 判断、`Allow` header、metrics path 归一化和 access log path 归一化复用。
 - 所有上游请求必须使用 incoming request context。
 - 普通请求必须使用 request timeout。
 - 流式请求必须使用独立 stream timeout，不能被普通 request timeout 截断。

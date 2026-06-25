@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"open-ai-gateway/internal/compat"
+	"open-ai-gateway/internal/routes"
 )
 
 type RateLimiter struct {
@@ -34,7 +35,7 @@ func NewRateLimiter(requestsPerMinute int) *RateLimiter {
 func (l *RateLimiter) Middleware(errors ErrorWriter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if isPublicRuntimePath(r.URL.Path) || l == nil || l.limit <= 0 {
+			if routes.IsPublicPath(r.URL.Path) || l == nil || l.limit <= 0 {
 				next.ServeHTTP(w, r)
 				return
 			}

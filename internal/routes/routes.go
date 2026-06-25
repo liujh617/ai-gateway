@@ -20,13 +20,14 @@ const (
 type Route struct {
 	Path    string
 	Methods []string
+	Public  bool
 }
 
 var definitions = []Route{
-	{Path: HealthzPath, Methods: []string{http.MethodGet, http.MethodHead}},
-	{Path: ReadyzPath, Methods: []string{http.MethodGet, http.MethodHead}},
-	{Path: VersionPath, Methods: []string{http.MethodGet, http.MethodHead}},
-	{Path: MetricsPath, Methods: []string{http.MethodGet, http.MethodHead}},
+	{Path: HealthzPath, Methods: []string{http.MethodGet, http.MethodHead}, Public: true},
+	{Path: ReadyzPath, Methods: []string{http.MethodGet, http.MethodHead}, Public: true},
+	{Path: VersionPath, Methods: []string{http.MethodGet, http.MethodHead}, Public: true},
+	{Path: MetricsPath, Methods: []string{http.MethodGet, http.MethodHead}, Public: true},
 	{Path: ModelsPath, Methods: []string{http.MethodGet, http.MethodHead}},
 	{Path: ChatCompletionsPath, Methods: []string{http.MethodPost}},
 	{Path: EmbeddingsPath, Methods: []string{http.MethodPost}},
@@ -46,6 +47,16 @@ var methodsByPath = func() map[string][]string {
 		methods[route.Path] = append([]string(nil), route.Methods...)
 	}
 	return methods
+}()
+
+var publicPaths = func() map[string]struct{} {
+	paths := make(map[string]struct{})
+	for _, route := range definitions {
+		if route.Public {
+			paths[route.Path] = struct{}{}
+		}
+	}
+	return paths
 }()
 
 func Pattern(method, path string) string {
@@ -86,4 +97,9 @@ func AllowHeader(path string) (string, bool) {
 		return "", false
 	}
 	return strings.Join(methods, ", "), true
+}
+
+func IsPublicPath(path string) bool {
+	_, ok := publicPaths[path]
+	return ok
 }

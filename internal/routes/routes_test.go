@@ -74,6 +74,19 @@ func TestAllowHeader(t *testing.T) {
 	}
 }
 
+func TestIsPublicPath(t *testing.T) {
+	for _, path := range []string{HealthzPath, ReadyzPath, MetricsPath, VersionPath} {
+		if !IsPublicPath(path) {
+			t.Fatalf("%s should be public", path)
+		}
+	}
+	for _, path := range []string{ModelsPath, ChatCompletionsPath, EmbeddingsPath, "/v1/unknown"} {
+		if IsPublicPath(path) {
+			t.Fatalf("%s should not be public", path)
+		}
+	}
+}
+
 func TestAllowedMethodsReturnsCopy(t *testing.T) {
 	methods, ok := AllowedMethods(HealthzPath)
 	if !ok {
