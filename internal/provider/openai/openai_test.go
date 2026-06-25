@@ -80,6 +80,16 @@ func TestCreateChatCompletionForwardsRequest(t *testing.T) {
 	}
 }
 
+func TestNewRejectsNonHTTPBaseURL(t *testing.T) {
+	_, err := openai.New("ftp://api.example.com/v1", "upstream-key", 0)
+	if err == nil {
+		t.Fatal("expected base_url scheme error")
+	}
+	if !strings.Contains(err.Error(), "http or https") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestCreateEmbeddingForwardsRequest(t *testing.T) {
 	var got compat.EmbeddingRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

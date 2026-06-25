@@ -387,6 +387,8 @@ models:
 
 未声明 `capabilities` 时默认同时支持 `chat` 和 `embeddings`，用于兼容早期配置。请求使用不支持该能力的模型时，返回 `404 invalid_request_error`。
 
+OpenAI-compatible provider 的 `base_url` 必须是 `http` 或 `https` URL。
+
 ## 超时
 
 当前配置项：

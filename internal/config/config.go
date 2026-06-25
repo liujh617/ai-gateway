@@ -245,8 +245,12 @@ func (c *Config) Validate() error {
 			if strings.TrimSpace(provider.BaseURL) == "" {
 				return fmt.Errorf("provider %q base_url is required", name)
 			}
-			if _, err := url.ParseRequestURI(provider.BaseURL); err != nil {
+			parsed, err := url.ParseRequestURI(provider.BaseURL)
+			if err != nil {
 				return fmt.Errorf("provider %q base_url is invalid: %w", name, err)
+			}
+			if !isHTTPBaseURL(parsed) {
+				return fmt.Errorf("provider %q base_url must use http or https scheme", name)
 			}
 			if provider.APIKey == "" && provider.APIKeyEnv == "" {
 				return fmt.Errorf("provider %q requires api_key or api_key_env", name)
@@ -278,6 +282,13 @@ func (c *Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+func isHTTPBaseURL(u *url.URL) bool {
+	if u == nil || u.Host == "" {
+		return false
+	}
+	return u.Scheme == "http" || u.Scheme == "https"
 }
 
 func (c *Config) ProviderNames() []string {

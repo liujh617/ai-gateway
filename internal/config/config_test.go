@@ -96,6 +96,34 @@ func TestLoadConfigRequiresOpenAICompatibleKeyReference(t *testing.T) {
 	}
 }
 
+func TestLoadConfigRejectsNonHTTPProviderBaseURL(t *testing.T) {
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_key": "gateway-key",
+		"providers": {
+			"openai": {
+				"type": "openai-compatible",
+				"base_url": "ftp://api.example.com/v1",
+				"api_key": "upstream-key"
+			}
+		},
+		"models": {
+			"gpt-4o-mini": {
+				"provider": "openai",
+				"upstream_model": "gpt-4o-mini"
+			}
+		}
+	}`)
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "http or https") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestLoadConfigValidatesCapabilities(t *testing.T) {
 	path := writeConfig(t, `{
 		"addr": "127.0.0.1:8080",
