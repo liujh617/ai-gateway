@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"net/url"
 	"os"
 	"sort"
 	"strings"
 	"time"
+
+	"open-ai-gateway/internal/upstreamurl"
 )
 
 type Config struct {
@@ -242,18 +243,8 @@ func (c *Config) Validate() error {
 		switch provider.Type {
 		case "fake":
 		case "openai-compatible":
-			if strings.TrimSpace(provider.BaseURL) == "" {
-				return fmt.Errorf("provider %q base_url is required", name)
-			}
-			parsed, err := url.Parse(provider.BaseURL)
-			if err != nil {
-				return fmt.Errorf("provider %q base_url is invalid: %w", name, err)
-			}
-			if !isHTTPBaseURL(parsed) {
-				return fmt.Errorf("provider %q base_url must use http or https scheme", name)
-			}
-			if hasQueryOrFragment(parsed) {
-				return fmt.Errorf("provider %q base_url must not include query or fragment", name)
+			if _, err := upstreamurl.NormalizeHTTPBaseURL(provider.BaseURL); err != nil {
+				return fmt.Errorf("provider %q %w", name, err)
 			}
 			if provider.APIKey == "" && provider.APIKeyEnv == "" {
 				return fmt.Errorf("provider %q requires api_key or api_key_env", name)
@@ -285,17 +276,6 @@ func (c *Config) Validate() error {
 		}
 	}
 	return nil
-}
-
-func isHTTPBaseURL(u *url.URL) bool {
-	if u == nil || u.Host == "" {
-		return false
-	}
-	return u.Scheme == "http" || u.Scheme == "https"
-}
-
-func hasQueryOrFragment(u *url.URL) bool {
-	return u != nil && (u.RawQuery != "" || u.Fragment != "")
 }
 
 func (c *Config) ProviderNames() []string {
