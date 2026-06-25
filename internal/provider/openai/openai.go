@@ -130,6 +130,10 @@ func (p *Provider) StreamChatCompletion(ctx context.Context, req compat.ChatComp
 		defer resp.Body.Close()
 		return nil, upstreamError(resp)
 	}
+	if err := requireEventStreamResponse(resp); err != nil {
+		resp.Body.Close()
+		return nil, err
+	}
 
 	return &stream{
 		body:   resp.Body,
@@ -288,12 +292,23 @@ func decodeLimited(r io.Reader, out any) error {
 }
 
 func requireJSONResponse(resp *http.Response) error {
-	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
-	mediaType, _, err := mime.ParseMediaType(contentType)
-	if err != nil || !strings.EqualFold(mediaType, "application/json") {
+	if !responseContentTypeIs(resp, "application/json") {
 		return fmt.Errorf("upstream response Content-Type must be application/json")
 	}
 	return nil
+}
+
+func requireEventStreamResponse(resp *http.Response) error {
+	if !responseContentTypeIs(resp, "text/event-stream") {
+		return fmt.Errorf("upstream response Content-Type must be text/event-stream")
+	}
+	return nil
+}
+
+func responseContentTypeIs(resp *http.Response, want string) bool {
+	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	return err == nil && strings.EqualFold(mediaType, want)
 }
 
 func upstreamError(resp *http.Response) error {

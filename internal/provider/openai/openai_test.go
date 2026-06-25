@@ -223,6 +223,42 @@ func TestStreamChatCompletionReadsMultilineSSEAndIgnoresMetadata(t *testing.T) {
 	}
 }
 
+func TestStreamChatCompletionAcceptsEventStreamWithCharset(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+		io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	stream, err := p.StreamChatCompletion(context.Background(), chatRequest())
+	if err != nil {
+		t.Fatalf("StreamChatCompletion: %v", err)
+	}
+	defer stream.Close()
+
+	if _, err := stream.Next(context.Background()); err != io.EOF {
+		t.Fatalf("end error = %v, want EOF", err)
+	}
+}
+
+func TestStreamChatCompletionRejectsNonEventStreamContentType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"error":"not a stream"}`)
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.StreamChatCompletion(context.Background(), chatRequest())
+	if err == nil {
+		t.Fatal("expected Content-Type error")
+	}
+	if !strings.Contains(err.Error(), "text/event-stream") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestStreamChatCompletionMalformedChunk(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")

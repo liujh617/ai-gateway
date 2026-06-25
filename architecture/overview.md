@@ -130,6 +130,7 @@ Compat Mapper 是外部 API 契约的主要守门员。
 - 设置明确的上游 `Accept` header，区分 JSON 和 SSE 响应协商。
 - 仅在带 JSON body 的上游请求上设置 `Content-Type: application/json`。
 - 校验非流式 JSON 上游成功响应的 `Content-Type`。
+- 校验流式上游成功响应的 `Content-Type`。
 - 暴露是否支持 streaming 的能力信息。
 
 Provider Adapter 不应直接依赖 HTTP handler。
