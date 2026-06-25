@@ -149,7 +149,7 @@ Provider Adapter 不应直接依赖 HTTP handler。
 - 加载 provider 配置。
 - 加载模型映射。
 - 加载超时配置。
-- 校验 OpenAI-compatible provider `base_url` 只使用 `http` 或 `https`。
+- 校验 OpenAI-compatible provider `base_url` 只使用 `http` 或 `https`，且不包含 query 或 fragment。
 
 当前实现使用 JSON 配置文件，并通过 `GATEWAY_CONFIG` 指定路径。无配置时使用 fake provider 默认配置。
 

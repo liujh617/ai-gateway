@@ -124,6 +124,41 @@ func TestLoadConfigRejectsNonHTTPProviderBaseURL(t *testing.T) {
 	}
 }
 
+func TestLoadConfigRejectsProviderBaseURLWithQueryOrFragment(t *testing.T) {
+	for _, baseURL := range []string{
+		"https://api.example.com/v1?tenant=one",
+		"https://api.example.com/v1#models",
+	} {
+		t.Run(baseURL, func(t *testing.T) {
+			path := writeConfig(t, `{
+				"addr": "127.0.0.1:8080",
+				"api_key": "gateway-key",
+				"providers": {
+					"openai": {
+						"type": "openai-compatible",
+						"base_url": `+quoteJSON(t, baseURL)+`,
+						"api_key": "upstream-key"
+					}
+				},
+				"models": {
+					"gpt-4o-mini": {
+						"provider": "openai",
+						"upstream_model": "gpt-4o-mini"
+					}
+				}
+			}`)
+
+			_, err := config.Load(path)
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if !strings.Contains(err.Error(), "query or fragment") {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
 func TestLoadConfigValidatesCapabilities(t *testing.T) {
 	path := writeConfig(t, `{
 		"addr": "127.0.0.1:8080",
@@ -374,4 +409,13 @@ func writeConfig(t *testing.T, content string) string {
 		t.Fatalf("write config: %v", err)
 	}
 	return path
+}
+
+func quoteJSON(t *testing.T, value string) string {
+	t.Helper()
+	payload, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal string: %v", err)
+	}
+	return string(payload)
 }

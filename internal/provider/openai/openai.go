@@ -33,12 +33,15 @@ func New(baseURL, apiKey string, timeout time.Duration) (*Provider, error) {
 	if baseURL == "" {
 		return nil, errors.New("base_url is required")
 	}
-	parsed, err := url.ParseRequestURI(baseURL)
+	parsed, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid base_url: %w", err)
 	}
 	if !isHTTPBaseURL(parsed) {
 		return nil, errors.New("base_url must use http or https scheme")
+	}
+	if hasQueryOrFragment(parsed) {
+		return nil, errors.New("base_url must not include query or fragment")
 	}
 	if timeout <= 0 {
 		timeout = 60 * time.Second
@@ -57,6 +60,10 @@ func isHTTPBaseURL(u *url.URL) bool {
 		return false
 	}
 	return u.Scheme == "http" || u.Scheme == "https"
+}
+
+func hasQueryOrFragment(u *url.URL) bool {
+	return u != nil && (u.RawQuery != "" || u.Fragment != "")
 }
 
 func (p *Provider) ListModels(ctx context.Context) ([]compat.Model, error) {

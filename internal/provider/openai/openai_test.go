@@ -90,6 +90,23 @@ func TestNewRejectsNonHTTPBaseURL(t *testing.T) {
 	}
 }
 
+func TestNewRejectsBaseURLWithQueryOrFragment(t *testing.T) {
+	for _, baseURL := range []string{
+		"https://api.example.com/v1?tenant=one",
+		"https://api.example.com/v1#models",
+	} {
+		t.Run(baseURL, func(t *testing.T) {
+			_, err := openai.New(baseURL, "upstream-key", 0)
+			if err == nil {
+				t.Fatal("expected base_url query or fragment error")
+			}
+			if !strings.Contains(err.Error(), "query or fragment") {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
 func TestCreateEmbeddingForwardsRequest(t *testing.T) {
 	var got compat.EmbeddingRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
