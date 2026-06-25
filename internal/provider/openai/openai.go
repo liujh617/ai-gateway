@@ -286,7 +286,7 @@ func (s *stream) readSSELine() (string, error) {
 				}
 				return line.String(), io.EOF
 			}
-			return "", err
+			return "", transportError(err)
 		}
 		if s.skipNextLF {
 			s.skipNextLF = false
