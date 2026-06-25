@@ -152,6 +152,26 @@ func TestCreateEmbeddingTransportTimeoutIsDeadlineExceeded(t *testing.T) {
 	}
 }
 
+func TestStreamChatCompletionConnectTimeoutIsDeadlineExceeded(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+	}))
+	defer server.Close()
+
+	p, err := openai.New(server.URL+"/v1", "upstream-key", 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("new provider: %v", err)
+	}
+
+	_, err = p.StreamChatCompletion(context.Background(), chatRequest())
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want DeadlineExceeded", err)
+	}
+}
+
 func TestCreateEmbeddingForwardsRequest(t *testing.T) {
 	var got compat.EmbeddingRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -98,7 +98,7 @@ X-Content-Type-Options: nosniff
 | provider 返回限流 | `429` | `rate_limit_error` |
 | provider 内部错误 | `502` | `server_error` |
 
-OpenAI-compatible provider 的上游 transport timeout 会统一视为 `context deadline exceeded`，覆盖 models、chat completions、embeddings 和 stream 建连阶段，由 HTTP API 映射为 `504 server_error`。
+OpenAI-compatible provider 的上游 transport timeout 会统一视为 `context deadline exceeded`，覆盖 models、非流式 chat completions、embeddings 和流式 chat completions 建连阶段，由 HTTP API 映射为 `504 server_error`。
 
 OpenAI-compatible provider 会尽量保留 upstream error 中的 `message`、`type`、`param` 和 `code`。仅当上游错误响应 `Content-Type` 是 `application/json`，且响应体未超过网关读取上限并且是单个 JSON 值时，错误字段才会被采用；否则错误体会被视为不可信并回退到默认错误映射。上游 `5xx` 会映射为网关 `502`，避免把上游内部状态直接暴露为网关自身故障。
 
