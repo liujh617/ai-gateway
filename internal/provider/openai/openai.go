@@ -194,6 +194,7 @@ type stream struct {
 	body          io.ReadCloser
 	reader        *bufio.Reader
 	seenFirstLine bool
+	skipNextLF    bool
 }
 
 func (s *stream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) {
@@ -286,6 +287,12 @@ func (s *stream) readSSELine() (string, error) {
 			}
 			return "", err
 		}
+		if s.skipNextLF {
+			s.skipNextLF = false
+			if b == '\n' {
+				continue
+			}
+		}
 		if line.Len()+1 > maxResponseBodyBytes+1 {
 			return "", fmt.Errorf("upstream SSE line exceeds %d bytes", maxResponseBodyBytes)
 		}
@@ -294,14 +301,7 @@ func (s *stream) readSSELine() (string, error) {
 			return line.String(), nil
 		}
 		if b == '\r' {
-			next, err := s.reader.Peek(1)
-			if err == nil && len(next) == 1 && next[0] == '\n' {
-				if line.Len()+1 > maxResponseBodyBytes+1 {
-					return "", fmt.Errorf("upstream SSE line exceeds %d bytes", maxResponseBodyBytes)
-				}
-				_, _ = s.reader.ReadByte()
-				line.WriteByte('\n')
-			}
+			s.skipNextLF = true
 			return line.String(), nil
 		}
 	}

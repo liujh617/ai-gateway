@@ -291,7 +291,7 @@ data: [DONE]
 约束：
 
 - 每个事件必须以空行结束；上游在事件中途 EOF 时，网关会将其视为 provider 错误。
-- SSE line ending 支持 LF、CRLF 和 CR。
+- SSE line ending 支持 LF、CRLF 和 CR；CR 结束的行会在 CR 到达后立即完成，不等待后续字节。
 - provider 适配器按 SSE event 解析，而不是按单行解析。
 - 多行 `data:` 会按 SSE 规则合并。
 - 没有冒号的 SSE field line 会按空值处理。

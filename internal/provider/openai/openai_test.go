@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/provider/openai"
@@ -321,6 +322,58 @@ func TestStreamChatCompletionAcceptsCRLineEndings(t *testing.T) {
 	}
 	if _, err := stream.Next(context.Background()); err != io.EOF {
 		t.Fatalf("end error = %v, want EOF", err)
+	}
+}
+
+func TestStreamChatCompletionDoesNotWaitAfterCRLineEnding(t *testing.T) {
+	firstEventWritten := make(chan struct{})
+	releaseDone := make(chan struct{})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatal("expected flusher")
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"id\":\"chatcmpl_upstream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"},\"finish_reason\":null}]}\r\r")
+		flusher.Flush()
+		close(firstEventWritten)
+		<-releaseDone
+		io.WriteString(w, "data: [DONE]\r\r")
+	}))
+	defer server.Close()
+	defer close(releaseDone)
+
+	p := newProvider(t, server.URL+"/v1")
+	stream, err := p.StreamChatCompletion(context.Background(), chatRequest())
+	if err != nil {
+		t.Fatalf("StreamChatCompletion: %v", err)
+	}
+	defer stream.Close()
+
+	<-firstEventWritten
+	result := make(chan struct {
+		chunk *compat.ChatCompletionChunk
+		err   error
+	}, 1)
+	go func() {
+		chunk, err := stream.Next(context.Background())
+		result <- struct {
+			chunk *compat.ChatCompletionChunk
+			err   error
+		}{chunk: chunk, err: err}
+	}()
+
+	select {
+	case got := <-result:
+		if got.err != nil {
+			t.Fatalf("chunk: %v", got.err)
+		}
+		if got.chunk.Choices[0].Delta.Content != "hello" {
+			t.Fatalf("content = %q", got.chunk.Choices[0].Delta.Content)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timed out waiting for CR-terminated event")
 	}
 }
 
