@@ -10,6 +10,7 @@ import (
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/router"
+	"open-ai-gateway/internal/routes"
 	"open-ai-gateway/internal/version"
 )
 
@@ -157,17 +158,8 @@ func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) methodNotAllowed(next http.Handler) http.Handler {
-	allowedMethods := map[string][]string{
-		"/healthz":             {http.MethodGet, http.MethodHead},
-		"/readyz":              {http.MethodGet, http.MethodHead},
-		"/version":             {http.MethodGet, http.MethodHead},
-		"/metrics":             {http.MethodGet, http.MethodHead},
-		"/v1/models":           {http.MethodGet, http.MethodHead},
-		"/v1/chat/completions": {http.MethodPost},
-		"/v1/embeddings":       {http.MethodPost},
-	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		allowed, ok := allowedMethods[r.URL.Path]
+		allowed, ok := routes.AllowedMethods(r.URL.Path)
 		if !ok || methodAllowed(r.Method, allowed) {
 			next.ServeHTTP(w, r)
 			return

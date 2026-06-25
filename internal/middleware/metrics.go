@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"open-ai-gateway/internal/routes"
 )
 
 type Metrics struct {
@@ -36,7 +38,7 @@ func (m *Metrics) Middleware(next http.Handler) http.Handler {
 		started := time.Now()
 		rec := &metricsRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
-		m.Observe(r.Method, NormalizeRoutePath(r.URL.Path), rec.status, time.Since(started))
+		m.Observe(r.Method, routes.NormalizePath(r.URL.Path), rec.status, time.Since(started))
 	})
 }
 

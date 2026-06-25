@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"open-ai-gateway/internal/routes"
 )
 
 type logFieldsKey struct{}
@@ -30,7 +32,7 @@ func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 			attrs := []any{
 				"request_id", RequestIDFromContext(r.Context()),
 				"method", r.Method,
-				"path", NormalizeRoutePath(r.URL.Path),
+				"path", routes.NormalizePath(r.URL.Path),
 				"status", rec.status,
 				"latency_ms", time.Since(started).Milliseconds(),
 			}
