@@ -66,13 +66,14 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc(routes.Pattern(http.MethodGet, routes.HealthzPath), s.handleHealthz)
-	mux.HandleFunc(routes.Pattern(http.MethodGet, routes.ReadyzPath), s.handleReadyz)
-	mux.HandleFunc(routes.Pattern(http.MethodGet, routes.VersionPath), s.handleVersion)
-	mux.HandleFunc(routes.Pattern(http.MethodGet, routes.MetricsPath), s.handleMetrics)
-	mux.HandleFunc(routes.Pattern(http.MethodGet, routes.ModelsPath), s.handleModels)
-	mux.HandleFunc(routes.Pattern(http.MethodPost, routes.ChatCompletionsPath), s.handleChatCompletions)
-	mux.HandleFunc(routes.Pattern(http.MethodPost, routes.EmbeddingsPath), s.handleEmbeddings)
+	handlers := s.routeHandlers()
+	for _, route := range routes.All() {
+		handler, ok := handlers[route.Path]
+		if !ok {
+			panic("missing handler for route " + route.Path)
+		}
+		mux.HandleFunc(route.RegistrationPattern(), handler)
+	}
 	mux.HandleFunc("/", s.handleNotFound)
 
 	var handler http.Handler = mux
@@ -89,6 +90,18 @@ func (s *Server) Handler() http.Handler {
 	handler = middleware.Recovery(s.logger, s)(handler)
 	handler = middleware.SecurityHeaders(handler)
 	return handler
+}
+
+func (s *Server) routeHandlers() map[string]func(http.ResponseWriter, *http.Request) {
+	return map[string]func(http.ResponseWriter, *http.Request){
+		routes.HealthzPath:         s.handleHealthz,
+		routes.ReadyzPath:          s.handleReadyz,
+		routes.VersionPath:         s.handleVersion,
+		routes.MetricsPath:         s.handleMetrics,
+		routes.ModelsPath:          s.handleModels,
+		routes.ChatCompletionsPath: s.handleChatCompletions,
+		routes.EmbeddingsPath:      s.handleEmbeddings,
+	}
 }
 
 func (s *Server) WriteError(w http.ResponseWriter, err *compat.Error) {

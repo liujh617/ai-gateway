@@ -63,6 +63,18 @@ func Pattern(method, path string) string {
 	return method + " " + path
 }
 
+func All() []Route {
+	routes := make([]Route, 0, len(definitions))
+	for _, route := range definitions {
+		routes = append(routes, route.copy())
+	}
+	return routes
+}
+
+func (r Route) RegistrationPattern() string {
+	return Pattern(r.registrationMethod(), r.Path)
+}
+
 func NormalizePath(path string) string {
 	if _, ok := knownPaths[path]; ok {
 		return path
@@ -102,4 +114,21 @@ func AllowHeader(path string) (string, bool) {
 func IsPublicPath(path string) bool {
 	_, ok := publicPaths[path]
 	return ok
+}
+
+func (r Route) copy() Route {
+	return Route{
+		Path:    r.Path,
+		Methods: append([]string(nil), r.Methods...),
+		Public:  r.Public,
+	}
+}
+
+func (r Route) registrationMethod() string {
+	for _, method := range r.Methods {
+		if method != http.MethodHead {
+			return method
+		}
+	}
+	return r.Methods[0]
 }

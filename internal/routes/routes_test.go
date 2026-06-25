@@ -20,6 +20,39 @@ func TestPattern(t *testing.T) {
 	}
 }
 
+func TestAllReturnsCopy(t *testing.T) {
+	all := All()
+	if len(all) == 0 {
+		t.Fatal("routes are empty")
+	}
+	all[0].Path = "/mutated"
+	all[0].Methods[0] = http.MethodPost
+	all[0].Public = false
+
+	again := All()
+	if again[0].Path == "/mutated" {
+		t.Fatalf("route path was mutated: %v", again[0])
+	}
+	if again[0].Methods[0] != http.MethodGet {
+		t.Fatalf("route methods were mutated: %v", again[0].Methods)
+	}
+	if !again[0].Public {
+		t.Fatalf("route public flag was mutated: %v", again[0])
+	}
+}
+
+func TestRegistrationPattern(t *testing.T) {
+	health := Route{Path: HealthzPath, Methods: []string{http.MethodGet, http.MethodHead}}
+	if got := health.RegistrationPattern(); got != "GET /healthz" {
+		t.Fatalf("health pattern = %q", got)
+	}
+
+	chat := Route{Path: ChatCompletionsPath, Methods: []string{http.MethodPost}}
+	if got := chat.RegistrationPattern(); got != "POST /v1/chat/completions" {
+		t.Fatalf("chat pattern = %q", got)
+	}
+}
+
 func TestAllowedMethods(t *testing.T) {
 	methods, ok := AllowedMethods(ChatCompletionsPath)
 	if !ok {
