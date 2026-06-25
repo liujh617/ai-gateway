@@ -165,6 +165,7 @@ func (p *Provider) endpoint(path string) string {
 
 func (p *Provider) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", version.UserAgent())
 	if requestID := requestctx.RequestID(req.Context()); requestID != "" {
 		req.Header.Set(requestctx.RequestIDHeader, requestID)

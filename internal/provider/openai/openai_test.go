@@ -21,6 +21,9 @@ func TestCreateChatCompletionForwardsRequest(t *testing.T) {
 		if r.URL.Path != "/v1/chat/completions" {
 			t.Fatalf("path = %s", r.URL.Path)
 		}
+		if accept := r.Header.Get("Accept"); accept != "application/json" {
+			t.Fatalf("accept = %q", accept)
+		}
 		if auth := r.Header.Get("Authorization"); auth != "Bearer upstream-key" {
 			t.Fatalf("authorization = %q", auth)
 		}
@@ -80,6 +83,9 @@ func TestCreateEmbeddingForwardsRequest(t *testing.T) {
 		if r.URL.Path != "/v1/embeddings" {
 			t.Fatalf("path = %s", r.URL.Path)
 		}
+		if accept := r.Header.Get("Accept"); accept != "application/json" {
+			t.Fatalf("accept = %q", accept)
+		}
 		if auth := r.Header.Get("Authorization"); auth != "Bearer upstream-key" {
 			t.Fatalf("authorization = %q", auth)
 		}
@@ -126,6 +132,9 @@ func TestCreateEmbeddingForwardsRequest(t *testing.T) {
 
 func TestStreamChatCompletionReadsSSE(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if accept := r.Header.Get("Accept"); accept != "text/event-stream" {
+			t.Fatalf("accept = %q", accept)
+		}
 		if requestID := r.Header.Get(requestctx.RequestIDHeader); requestID != "gateway-request-3" {
 			t.Fatalf("request id = %q", requestID)
 		}
@@ -349,6 +358,39 @@ func TestCreateChatCompletionRejectsOversizedResponse(t *testing.T) {
 	_, err := p.CreateChatCompletion(context.Background(), chatRequest())
 	if err == nil {
 		t.Fatal("expected oversized or invalid response error")
+	}
+}
+
+func TestListModelsForwardsHeaders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if accept := r.Header.Get("Accept"); accept != "application/json" {
+			t.Fatalf("accept = %q", accept)
+		}
+		if auth := r.Header.Get("Authorization"); auth != "Bearer upstream-key" {
+			t.Fatalf("authorization = %q", auth)
+		}
+		if requestID := r.Header.Get(requestctx.RequestIDHeader); requestID != "gateway-request-models" {
+			t.Fatalf("request id = %q", requestID)
+		}
+		if userAgent := r.Header.Get("User-Agent"); userAgent != version.UserAgent() {
+			t.Fatalf("user-agent = %q", userAgent)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"object":"list","data":[{"id":"upstream-model","object":"model","created":0,"owned_by":"upstream"}]}`)
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	ctx := requestctx.WithRequestID(context.Background(), "gateway-request-models")
+	models, err := p.ListModels(ctx)
+	if err != nil {
+		t.Fatalf("ListModels: %v", err)
+	}
+	if len(models) != 1 || models[0].ID != "upstream-model" {
+		t.Fatalf("models = %+v", models)
 	}
 }
 
