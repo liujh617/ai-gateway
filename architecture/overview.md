@@ -128,6 +128,7 @@ Compat Mapper 是外部 API 契约的主要守门员。
 - 转发网关最终使用的 request id，便于上游日志关联。
 - 设置稳定的上游 `User-Agent`，便于上游识别网关调用。
 - 设置明确的上游 `Accept` header，区分 JSON 和 SSE 响应协商。
+- 仅在带 JSON body 的上游请求上设置 `Content-Type: application/json`。
 - 暴露是否支持 streaming 的能力信息。
 
 Provider Adapter 不应直接依赖 HTTP handler。

@@ -24,6 +24,9 @@ func TestCreateChatCompletionForwardsRequest(t *testing.T) {
 		if accept := r.Header.Get("Accept"); accept != "application/json" {
 			t.Fatalf("accept = %q", accept)
 		}
+		if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
+			t.Fatalf("content-type = %q", contentType)
+		}
 		if auth := r.Header.Get("Authorization"); auth != "Bearer upstream-key" {
 			t.Fatalf("authorization = %q", auth)
 		}
@@ -86,6 +89,9 @@ func TestCreateEmbeddingForwardsRequest(t *testing.T) {
 		if accept := r.Header.Get("Accept"); accept != "application/json" {
 			t.Fatalf("accept = %q", accept)
 		}
+		if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
+			t.Fatalf("content-type = %q", contentType)
+		}
 		if auth := r.Header.Get("Authorization"); auth != "Bearer upstream-key" {
 			t.Fatalf("authorization = %q", auth)
 		}
@@ -134,6 +140,9 @@ func TestStreamChatCompletionReadsSSE(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if accept := r.Header.Get("Accept"); accept != "text/event-stream" {
 			t.Fatalf("accept = %q", accept)
+		}
+		if contentType := r.Header.Get("Content-Type"); contentType != "application/json" {
+			t.Fatalf("content-type = %q", contentType)
 		}
 		if requestID := r.Header.Get(requestctx.RequestIDHeader); requestID != "gateway-request-3" {
 			t.Fatalf("request id = %q", requestID)
@@ -368,6 +377,9 @@ func TestListModelsForwardsHeaders(t *testing.T) {
 		}
 		if accept := r.Header.Get("Accept"); accept != "application/json" {
 			t.Fatalf("accept = %q", accept)
+		}
+		if contentType := r.Header.Get("Content-Type"); contentType != "" {
+			t.Fatalf("content-type = %q", contentType)
 		}
 		if auth := r.Header.Get("Authorization"); auth != "Bearer upstream-key" {
 			t.Fatalf("authorization = %q", auth)

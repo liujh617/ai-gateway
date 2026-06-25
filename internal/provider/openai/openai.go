@@ -82,7 +82,7 @@ func (p *Provider) CreateChatCompletion(ctx context.Context, req compat.ChatComp
 	if err != nil {
 		return nil, err
 	}
-	p.setHeaders(httpReq)
+	p.setJSONHeaders(httpReq)
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
@@ -112,7 +112,7 @@ func (p *Provider) StreamChatCompletion(ctx context.Context, req compat.ChatComp
 	if err != nil {
 		return nil, err
 	}
-	p.setHeaders(httpReq)
+	p.setJSONHeaders(httpReq)
 	httpReq.Header.Set("Accept", "text/event-stream")
 
 	resp, err := p.client.Do(httpReq)
@@ -140,7 +140,7 @@ func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequ
 	if err != nil {
 		return nil, err
 	}
-	p.setHeaders(httpReq)
+	p.setJSONHeaders(httpReq)
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
@@ -164,7 +164,6 @@ func (p *Provider) endpoint(path string) string {
 }
 
 func (p *Provider) setHeaders(req *http.Request) {
-	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", version.UserAgent())
 	if requestID := requestctx.RequestID(req.Context()); requestID != "" {
@@ -173,6 +172,11 @@ func (p *Provider) setHeaders(req *http.Request) {
 	if p.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+p.apiKey)
 	}
+}
+
+func (p *Provider) setJSONHeaders(req *http.Request) {
+	p.setHeaders(req)
+	req.Header.Set("Content-Type", "application/json")
 }
 
 type stream struct {
