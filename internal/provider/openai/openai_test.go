@@ -370,6 +370,60 @@ func TestCreateChatCompletionRejectsOversizedResponse(t *testing.T) {
 	}
 }
 
+func TestCreateChatCompletionAcceptsJSONResponseWithCharset(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		io.WriteString(w, `{"id":"chatcmpl_upstream","object":"chat.completion","created":1,"model":"upstream-model","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop"}]}`)
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	resp, err := p.CreateChatCompletion(context.Background(), chatRequest())
+	if err != nil {
+		t.Fatalf("CreateChatCompletion: %v", err)
+	}
+	if resp.ID != "chatcmpl_upstream" {
+		t.Fatalf("response id = %q", resp.ID)
+	}
+}
+
+func TestCreateChatCompletionRejectsNonJSONContentType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		io.WriteString(w, `{"id":"chatcmpl_upstream","object":"chat.completion","created":1,"model":"upstream-model","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop"}]}`)
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.CreateChatCompletion(context.Background(), chatRequest())
+	if err == nil {
+		t.Fatal("expected Content-Type error")
+	}
+	if !strings.Contains(err.Error(), "Content-Type") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestCreateEmbeddingRejectsNonJSONContentType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		io.WriteString(w, `{"object":"list","model":"upstream-embedding-model","data":[{"object":"embedding","index":0,"embedding":[0.1,0.2]}],"usage":{"prompt_tokens":1,"total_tokens":1}}`)
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.CreateEmbedding(context.Background(), compat.EmbeddingRequest{
+		Model: "upstream-embedding-model",
+		Input: json.RawMessage(`"hello"`),
+	})
+	if err == nil {
+		t.Fatal("expected Content-Type error")
+	}
+	if !strings.Contains(err.Error(), "Content-Type") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestListModelsForwardsHeaders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/models" {
@@ -403,6 +457,23 @@ func TestListModelsForwardsHeaders(t *testing.T) {
 	}
 	if len(models) != 1 || models[0].ID != "upstream-model" {
 		t.Fatalf("models = %+v", models)
+	}
+}
+
+func TestListModelsRejectsNonJSONContentType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		io.WriteString(w, `{"object":"list","data":[{"id":"upstream-model","object":"model","created":0,"owned_by":"upstream"}]}`)
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.ListModels(context.Background())
+	if err == nil {
+		t.Fatal("expected Content-Type error")
+	}
+	if !strings.Contains(err.Error(), "Content-Type") {
+		t.Fatalf("error = %v", err)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -63,6 +64,9 @@ func (p *Provider) ListModels(ctx context.Context) ([]compat.Model, error) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, upstreamError(resp)
 	}
+	if err := requireJSONResponse(resp); err != nil {
+		return nil, err
+	}
 
 	var out compat.ModelListResponse
 	if err := decodeLimited(resp.Body, &out); err != nil {
@@ -92,6 +96,9 @@ func (p *Provider) CreateChatCompletion(ctx context.Context, req compat.ChatComp
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, upstreamError(resp)
+	}
+	if err := requireJSONResponse(resp); err != nil {
+		return nil, err
 	}
 
 	var out compat.ChatCompletionResponse
@@ -150,6 +157,9 @@ func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequ
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, upstreamError(resp)
+	}
+	if err := requireJSONResponse(resp); err != nil {
+		return nil, err
 	}
 
 	var out compat.EmbeddingResponse
@@ -273,6 +283,15 @@ func decodeLimited(r io.Reader, out any) error {
 	}
 	if limited.N <= 0 {
 		return fmt.Errorf("upstream response body exceeds %d bytes", maxResponseBodyBytes)
+	}
+	return nil
+}
+
+func requireJSONResponse(resp *http.Response) error {
+	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil || !strings.EqualFold(mediaType, "application/json") {
+		return fmt.Errorf("upstream response Content-Type must be application/json")
 	}
 	return nil
 }
