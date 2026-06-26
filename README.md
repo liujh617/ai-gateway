@@ -77,6 +77,8 @@ curl -N http://127.0.0.1:8080/v1/chat/completions \
 
 项目支持通过 JSON 配置接入 OpenAI-compatible upstream endpoint。示例见 [config.example.json](config.example.json)。
 
+DeepSeek 和 Trae 本地代理示例见 [config.deepseek.example.json](config.deepseek.example.json) 与 [Trae + DeepSeek Local Proxy](docs/trae-deepseek.md)。
+
 启动真实 provider：
 
 ```powershell

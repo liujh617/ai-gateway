@@ -1,0 +1,39 @@
+{
+  "addr": "127.0.0.1:8080",
+  "api_key": "trae-local-gateway-key",
+  "request_timeout_seconds": 120,
+  "stream_timeout_seconds": 900,
+  "read_header_timeout_seconds": 10,
+  "read_timeout_seconds": 0,
+  "write_timeout_seconds": 0,
+  "idle_timeout_seconds": 120,
+  "shutdown_timeout_seconds": 10,
+  "max_request_body_bytes": 1048576,
+  "log": {
+    "format": "text",
+    "level": "info"
+  },
+  "rate_limit": {
+    "requests_per_minute": 60
+  },
+  "providers": {
+    "deepseek": {
+      "type": "openai-compatible",
+      "base_url": "https://api.deepseek.com",
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "timeout_seconds": 120
+    }
+  },
+  "models": {
+    "deepseek-v4-pro": {
+      "provider": "deepseek",
+      "upstream_model": "deepseek-v4-pro",
+      "capabilities": ["chat"]
+    },
+    "deepseek-v4-flash": {
+      "provider": "deepseek",
+      "upstream_model": "deepseek-v4-flash",
+      "capabilities": ["chat"]
+    }
+  }
+}
