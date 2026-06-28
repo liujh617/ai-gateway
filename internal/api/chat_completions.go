@@ -75,6 +75,8 @@ func (s *Server) createChatCompletionWithFallback(ctx context.Context, r *http.R
 		if index == len(attempts)-1 || !canFallbackProviderError(err) {
 			return nil, err
 		}
+		nextAttempt := attempts[index+1]
+		s.observeProviderFallback(routes.ChatCompletionsPath, externalModel, attempt.ProviderName, nextAttempt.ProviderName)
 		s.logger.Warn("chat completion provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
 	}
 	return nil, lastErr
@@ -143,6 +145,8 @@ func (s *Server) openChatCompletionStreamWithFallback(ctx context.Context, r *ht
 		if index == len(attempts)-1 || !canFallbackProviderError(err) {
 			return nil, err
 		}
+		nextAttempt := attempts[index+1]
+		s.observeProviderFallback(routes.ChatCompletionsPath, externalModel, attempt.ProviderName, nextAttempt.ProviderName)
 		s.logger.Warn("stream chat completion provider failed before response; trying fallback", "provider", attempt.ProviderName, "error", err)
 	}
 	return nil, lastErr

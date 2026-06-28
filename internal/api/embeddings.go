@@ -66,6 +66,8 @@ func (s *Server) createEmbeddingWithFallback(ctx context.Context, r *http.Reques
 		if index == len(attempts)-1 || !canFallbackProviderError(err) {
 			return nil, err
 		}
+		nextAttempt := attempts[index+1]
+		s.observeProviderFallback(routes.EmbeddingsPath, externalModel, attempt.ProviderName, nextAttempt.ProviderName)
 		s.logger.Warn("embedding provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
 	}
 	return nil, lastErr

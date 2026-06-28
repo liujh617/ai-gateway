@@ -91,6 +91,8 @@ func TestChatCompletionsStreamFallsBackOnOpenError(t *testing.T) {
 	if !strings.Contains(text, "data: [DONE]\n\n") {
 		t.Fatalf("missing DONE event: %s", text)
 	}
+
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_fallbacks_total{path="/v1/chat/completions",model="test-model",from_provider="primary-provider",to_provider="backup-provider"} 1`)
 }
 
 func TestChatCompletionsInvalidJSON(t *testing.T) {
@@ -229,6 +231,8 @@ func TestChatCompletionsFallsBackOnProviderError(t *testing.T) {
 	if fallback.chatReq.Model != "backup-test-model" {
 		t.Fatalf("fallback model = %q", fallback.chatReq.Model)
 	}
+
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_fallbacks_total{path="/v1/chat/completions",model="test-model",from_provider="primary-provider",to_provider="backup-provider"} 1`)
 }
 
 func TestChatCompletionsDoesNotFallBackOnInvalidRequest(t *testing.T) {
@@ -244,6 +248,7 @@ func TestChatCompletionsDoesNotFallBackOnInvalidRequest(t *testing.T) {
 	if fallback.chatReq.Model != "" {
 		t.Fatalf("fallback was called with model %q", fallback.chatReq.Model)
 	}
+	assertMetricsNotContains(t, handler, "open_ai_gateway_provider_fallbacks_total{")
 }
 
 func TestChatCompletionsProviderTimeout(t *testing.T) {
@@ -952,6 +957,8 @@ func TestEmbeddingsFallsBackOnProviderError(t *testing.T) {
 	if fallback.embeddingReq.Model != "backup-test-model" {
 		t.Fatalf("fallback model = %q", fallback.embeddingReq.Model)
 	}
+
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_fallbacks_total{path="/v1/embeddings",model="test-model",from_provider="primary-provider",to_provider="backup-provider"} 1`)
 }
 
 func TestChatCompletionsRejectsEmbeddingOnlyModel(t *testing.T) {
@@ -1175,6 +1182,33 @@ func assertError(t *testing.T, rr *httptest.ResponseRecorder, status int, typ st
 	if got.Error.Type != typ {
 		t.Fatalf("error type = %q, want %q", got.Error.Type, typ)
 	}
+}
+
+func assertMetricsContains(t *testing.T, handler http.Handler, want string) {
+	t.Helper()
+	text := collectMetrics(t, handler)
+	if !strings.Contains(text, want) {
+		t.Fatalf("metrics missing %s: %s", want, text)
+	}
+}
+
+func assertMetricsNotContains(t *testing.T, handler http.Handler, unwanted string) {
+	t.Helper()
+	text := collectMetrics(t, handler)
+	if strings.Contains(text, unwanted) {
+		t.Fatalf("metrics unexpectedly contained %s: %s", unwanted, text)
+	}
+}
+
+func collectMetrics(t *testing.T, handler http.Handler) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("metrics status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	return rr.Body.String()
 }
 
 func assertNoSniff(t *testing.T, rr *httptest.ResponseRecorder) {

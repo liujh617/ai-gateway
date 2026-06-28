@@ -12,9 +12,10 @@ import (
 )
 
 type Metrics struct {
-	mu       sync.Mutex
-	requests map[metricKey]requestMetric
-	tokens   map[tokenMetricKey]int64
+	mu        sync.Mutex
+	requests  map[metricKey]requestMetric
+	tokens    map[tokenMetricKey]int64
+	fallbacks map[fallbackMetricKey]int64
 }
 
 type metricKey struct {
@@ -35,10 +36,18 @@ type tokenMetricKey struct {
 	Type     string
 }
 
+type fallbackMetricKey struct {
+	Path         string
+	Model        string
+	FromProvider string
+	ToProvider   string
+}
+
 func NewMetrics() *Metrics {
 	return &Metrics{
-		requests: make(map[metricKey]requestMetric),
-		tokens:   make(map[tokenMetricKey]int64),
+		requests:  make(map[metricKey]requestMetric),
+		tokens:    make(map[tokenMetricKey]int64),
+		fallbacks: make(map[fallbackMetricKey]int64),
 	}
 }
 
@@ -79,6 +88,22 @@ func (m *Metrics) ObserveTokens(path, model, providerName, tokenType string, tok
 		Type:     tokenType,
 	}
 	m.tokens[key] += int64(tokens)
+}
+
+func (m *Metrics) ObserveProviderFallback(path, model, fromProvider, toProvider string) {
+	if m == nil || model == "" || fromProvider == "" || toProvider == "" {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := fallbackMetricKey{
+		Path:         routes.NormalizePath(path),
+		Model:        model,
+		FromProvider: fromProvider,
+		ToProvider:   toProvider,
+	}
+	m.fallbacks[key]++
 }
 
 func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
@@ -122,6 +147,20 @@ func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
 			item.Key.Model,
 			item.Key.Provider,
 			item.Key.Type,
+			item.Value,
+		)
+	}
+
+	fallbackSnapshot := m.fallbackSnapshot()
+	fmt.Fprintln(w, "# HELP open_ai_gateway_provider_fallbacks_total Total provider fallback attempts.")
+	fmt.Fprintln(w, "# TYPE open_ai_gateway_provider_fallbacks_total counter")
+	for _, item := range fallbackSnapshot {
+		fmt.Fprintf(w,
+			"open_ai_gateway_provider_fallbacks_total{path=%q,model=%q,from_provider=%q,to_provider=%q} %d\n",
+			item.Key.Path,
+			item.Key.Model,
+			item.Key.FromProvider,
+			item.Key.ToProvider,
 			item.Value,
 		)
 	}
@@ -180,6 +219,36 @@ func (m *Metrics) tokenSnapshot() []tokenMetricSnapshotItem {
 			return cmp < 0
 		}
 		return left.Type < right.Type
+	})
+	return items
+}
+
+type fallbackMetricSnapshotItem struct {
+	Key   fallbackMetricKey
+	Value int64
+}
+
+func (m *Metrics) fallbackSnapshot() []fallbackMetricSnapshotItem {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	items := make([]fallbackMetricSnapshotItem, 0, len(m.fallbacks))
+	for key, value := range m.fallbacks {
+		items = append(items, fallbackMetricSnapshotItem{Key: key, Value: value})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		left := items[i].Key
+		right := items[j].Key
+		if cmp := strings.Compare(left.Path, right.Path); cmp != 0 {
+			return cmp < 0
+		}
+		if cmp := strings.Compare(left.Model, right.Model); cmp != 0 {
+			return cmp < 0
+		}
+		if cmp := strings.Compare(left.FromProvider, right.FromProvider); cmp != 0 {
+			return cmp < 0
+		}
+		return left.ToProvider < right.ToProvider
 	})
 	return items
 }

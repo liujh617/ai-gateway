@@ -133,7 +133,7 @@ curl -sS http://127.0.0.1:8080/healthz
 - chat completions streaming
 - 单模型主 provider 配置和可选 fallback provider
 - Bearer token 鉴权
-- 基础日志、request id、HTTP metrics、provider-reported token metrics、超时和错误响应
+- 基础日志、request id、HTTP metrics、provider-reported token metrics、provider fallback metrics、超时和错误响应
 
 不在第一阶段实现：
 
