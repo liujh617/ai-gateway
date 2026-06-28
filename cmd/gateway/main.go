@@ -181,12 +181,17 @@ func buildRouter(cfg *config.Config) (*router.ModelRouter, error) {
 		if upstreamModel == "" {
 			upstreamModel = externalModel
 		}
+		fallbacks, err := fallbackRoutes(externalModel, modelConfig.Fallbacks, providers)
+		if err != nil {
+			return nil, err
+		}
 		routes = append(routes, router.ModelRoute{
 			ExternalModel: externalModel,
 			UpstreamModel: upstreamModel,
 			ProviderName:  modelConfig.Provider,
 			Capabilities:  capabilities(modelConfig.Capabilities),
 			Provider:      provider,
+			Fallbacks:     fallbacks,
 		})
 	}
 	return router.NewModelRouter(routes), nil
@@ -200,4 +205,24 @@ func capabilities(values []string) map[string]bool {
 		out[value] = true
 	}
 	return out
+}
+
+func fallbackRoutes(externalModel string, fallbacks []config.ModelFallbackConfig, providers map[string]routerProvider) ([]router.ProviderRoute, error) {
+	routes := make([]router.ProviderRoute, 0, len(fallbacks))
+	for _, fallback := range fallbacks {
+		provider, ok := providers[fallback.Provider]
+		if !ok {
+			return nil, fmt.Errorf("model %q fallback references unknown provider %q", externalModel, fallback.Provider)
+		}
+		upstreamModel := fallback.UpstreamModel
+		if upstreamModel == "" {
+			upstreamModel = externalModel
+		}
+		routes = append(routes, router.ProviderRoute{
+			UpstreamModel: upstreamModel,
+			ProviderName:  fallback.Provider,
+			Provider:      provider,
+		})
+	}
+	return routes, nil
 }

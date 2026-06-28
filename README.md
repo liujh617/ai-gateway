@@ -94,6 +94,7 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 - `models.<external>.provider`: 对外模型路由到哪个 provider。
 - `models.<external>.upstream_model`: 转发给上游的真实模型名。
 - `models.<external>.capabilities`: 模型能力，支持 `chat`、`embeddings`；未配置时默认都支持。
+- `models.<external>.fallbacks`: 备用 provider 列表；主 provider 在 `429`、`5xx`、timeout 或非兼容错误时按顺序尝试。
 - `request_timeout_seconds`: 非流式请求的 provider 调用超时。
 - `stream_timeout_seconds`: 流式请求的最大持续时间。
 - `read_header_timeout_seconds`: HTTP server 读取请求头超时。
@@ -130,7 +131,7 @@ curl -sS http://127.0.0.1:8080/healthz
 - `POST /v1/chat/completions`
 - `POST /v1/embeddings`
 - chat completions streaming
-- 单 provider 配置
+- 单模型主 provider 配置和可选 fallback provider
 - Bearer token 鉴权
 - 基础日志、request id、超时和错误响应
 

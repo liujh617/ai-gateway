@@ -113,9 +113,10 @@ Compat Mapper 是外部 API 契约的主要守门员。
 - 根据对外模型名查找 provider。
 - 将对外模型名映射为上游模型名。
 - 校验模型是否支持当前 API 能力，例如 `chat` 或 `embeddings`。
+- 按模型配置提供主 provider 和 fallback provider 尝试顺序。
 - 返回明确的 model not found 或 unauthorized 错误。
 
-第一阶段只需要静态配置路由。后续可以扩展 weighted routing、fallback 和灰度策略。
+当前实现使用静态配置路由，并支持在非流式请求或流式建连阶段按顺序尝试 fallback provider。后续可以扩展 weighted routing 和灰度策略。
 
 ### Provider Adapter
 

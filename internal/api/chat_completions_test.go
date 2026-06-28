@@ -72,6 +72,27 @@ func TestChatCompletionsStreamOK(t *testing.T) {
 	}
 }
 
+func TestChatCompletionsStreamFallsBackOnOpenError(t *testing.T) {
+	primary := fake.New()
+	primary.StreamErr = errors.New("stream connect failed")
+	fallback := fake.New()
+	handler := newFallbackTestHandler(primary, fallback)
+	body := `{"model":"test-model","stream":true,"messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	text := rr.Body.String()
+	if !strings.Contains(text, `"model":"test-model"`) {
+		t.Fatalf("missing external model in fallback stream: %s", text)
+	}
+	if !strings.Contains(text, "data: [DONE]\n\n") {
+		t.Fatalf("missing DONE event: %s", text)
+	}
+}
+
 func TestChatCompletionsInvalidJSON(t *testing.T) {
 	handler := newTestHandler(fake.New())
 
@@ -184,6 +205,45 @@ func TestChatCompletionsProviderError(t *testing.T) {
 	rr := doJSON(handler, body, true)
 
 	assertError(t, rr, http.StatusBadGateway, "server_error")
+}
+
+func TestChatCompletionsFallsBackOnProviderError(t *testing.T) {
+	primary := fake.New()
+	primary.Err = errors.New("upstream failed")
+	fallback := &captureProvider{}
+	handler := newFallbackTestHandler(primary, fallback)
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	var got compat.ChatCompletionResponse
+	if err := json.NewDecoder(rr.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Model != "test-model" {
+		t.Fatalf("model = %q", got.Model)
+	}
+	if fallback.chatReq.Model != "backup-test-model" {
+		t.Fatalf("fallback model = %q", fallback.chatReq.Model)
+	}
+}
+
+func TestChatCompletionsDoesNotFallBackOnInvalidRequest(t *testing.T) {
+	primary := fake.New()
+	primary.Err = compat.InvalidRequest("upstream rejected request", "body")
+	fallback := &captureProvider{}
+	handler := newFallbackTestHandler(primary, fallback)
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
+	if fallback.chatReq.Model != "" {
+		t.Fatalf("fallback was called with model %q", fallback.chatReq.Model)
+	}
 }
 
 func TestChatCompletionsProviderTimeout(t *testing.T) {
@@ -840,6 +900,30 @@ func TestEmbeddingsProviderError(t *testing.T) {
 	assertError(t, rr, http.StatusBadGateway, "server_error")
 }
 
+func TestEmbeddingsFallsBackOnProviderError(t *testing.T) {
+	primary := fake.New()
+	primary.Err = errors.New("upstream failed")
+	fallback := &captureProvider{}
+	handler := newFallbackTestHandler(primary, fallback)
+	body := `{"model":"test-model","input":"hello"}`
+
+	rr := doEmbeddingsJSON(handler, body, true)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	var got compat.EmbeddingResponse
+	if err := json.NewDecoder(rr.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Model != "test-model" {
+		t.Fatalf("model = %q", got.Model)
+	}
+	if fallback.embeddingReq.Model != "backup-test-model" {
+		t.Fatalf("fallback model = %q", fallback.embeddingReq.Model)
+	}
+}
+
 func TestChatCompletionsRejectsEmbeddingOnlyModel(t *testing.T) {
 	handler := newCapabilityTestHandler(fake.New())
 	body := `{"model":"embedding-model","messages":[{"role":"user","content":"hello"}]}`
@@ -976,6 +1060,22 @@ func newTestHandlerWithLogger(p provider.Provider, logger *slog.Logger, opts api
 		Provider:      p,
 	}})
 	return api.NewServer(modelRouter, testAPIKey, logger, opts).Handler()
+}
+
+func newFallbackTestHandler(primary provider.Provider, fallback provider.Provider) http.Handler {
+	modelRouter := router.NewModelRouter([]router.ModelRoute{{
+		ExternalModel: "test-model",
+		UpstreamModel: "upstream-test-model",
+		ProviderName:  "primary-provider",
+		Provider:      primary,
+		Fallbacks: []router.ProviderRoute{{
+			UpstreamModel: "backup-test-model",
+			ProviderName:  "backup-provider",
+			Provider:      fallback,
+		}},
+	}})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	return api.NewServer(modelRouter, testAPIKey, logger).Handler()
 }
 
 func newCapabilityTestHandler(p provider.Provider) http.Handler {

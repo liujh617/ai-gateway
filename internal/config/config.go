@@ -38,9 +38,15 @@ type ProviderConfig struct {
 }
 
 type ModelConfig struct {
-	Provider      string   `json:"provider"`
-	UpstreamModel string   `json:"upstream_model"`
-	Capabilities  []string `json:"capabilities"`
+	Provider      string                `json:"provider"`
+	UpstreamModel string                `json:"upstream_model"`
+	Capabilities  []string              `json:"capabilities"`
+	Fallbacks     []ModelFallbackConfig `json:"fallbacks"`
+}
+
+type ModelFallbackConfig struct {
+	Provider      string `json:"provider"`
+	UpstreamModel string `json:"upstream_model"`
 }
 
 type RateLimitConfig struct {
@@ -74,6 +80,7 @@ type ModelSummary struct {
 	Provider      string
 	UpstreamModel string
 	Capabilities  []string
+	Fallbacks     []ModelFallbackConfig
 }
 
 func Load(path string) (*Config, error) {
@@ -144,6 +151,7 @@ func (c *Config) CheckReport() CheckReport {
 			Provider:      model.Provider,
 			UpstreamModel: upstreamModel,
 			Capabilities:  append([]string(nil), model.Capabilities...),
+			Fallbacks:     append([]ModelFallbackConfig(nil), model.Fallbacks...),
 		})
 	}
 	return report
@@ -272,6 +280,14 @@ func (c *Config) Validate() error {
 			case "chat", "embeddings":
 			default:
 				return fmt.Errorf("model %q has unsupported capability %q", externalModel, capability)
+			}
+		}
+		for index, fallback := range model.Fallbacks {
+			if strings.TrimSpace(fallback.Provider) == "" {
+				return fmt.Errorf("model %q fallback %d provider is required", externalModel, index)
+			}
+			if _, ok := c.Providers[fallback.Provider]; !ok {
+				return fmt.Errorf("model %q fallback %d references unknown provider %q", externalModel, index, fallback.Provider)
 			}
 		}
 	}

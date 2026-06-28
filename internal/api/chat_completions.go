@@ -11,6 +11,7 @@ import (
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/provider"
+	"open-ai-gateway/internal/router"
 )
 
 func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
@@ -37,18 +38,16 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	externalModel := req.Model
-	req.Model = route.UpstreamModel
-	middleware.SetLogRoute(r.Context(), externalModel, route.ProviderName, route.UpstreamModel)
 
 	if req.Stream {
-		s.streamChatCompletion(w, r, route.Provider, externalModel, req)
+		s.streamChatCompletion(w, r, route, externalModel, req)
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
 
-	resp, err := route.Provider.CreateChatCompletion(ctx, req)
+	resp, err := s.createChatCompletionWithFallback(ctx, r, route, externalModel, req)
 	if err != nil {
 		s.writeError(w, r, providerError(err))
 		return
@@ -59,7 +58,27 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-func (s *Server) streamChatCompletion(w http.ResponseWriter, r *http.Request, p provider.Provider, externalModel string, req compat.ChatCompletionRequest) {
+func (s *Server) createChatCompletionWithFallback(ctx context.Context, r *http.Request, route router.ModelRoute, externalModel string, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	var lastErr error
+	attempts := route.Attempts()
+	for index, attempt := range attempts {
+		attemptReq := req
+		attemptReq.Model = attempt.UpstreamModel
+		middleware.SetLogRoute(r.Context(), externalModel, attempt.ProviderName, attempt.UpstreamModel)
+		resp, err := attempt.Provider.CreateChatCompletion(ctx, attemptReq)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+		if index == len(attempts)-1 || !canFallbackProviderError(err) {
+			return nil, err
+		}
+		s.logger.Warn("chat completion provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
+	}
+	return nil, lastErr
+}
+
+func (s *Server) streamChatCompletion(w http.ResponseWriter, r *http.Request, route router.ModelRoute, externalModel string, req compat.ChatCompletionRequest) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		s.writeError(w, r, compat.ServerError(http.StatusInternalServerError, "streaming unsupported"))
@@ -69,7 +88,7 @@ func (s *Server) streamChatCompletion(w http.ResponseWriter, r *http.Request, p 
 	ctx, cancel := context.WithTimeout(r.Context(), s.streamTimeout)
 	defer cancel()
 
-	stream, err := p.StreamChatCompletion(ctx, req)
+	stream, err := s.openChatCompletionStreamWithFallback(ctx, r, route, externalModel, req)
 	if err != nil {
 		s.writeError(w, r, providerError(err))
 		return
@@ -107,6 +126,26 @@ func (s *Server) streamChatCompletion(w http.ResponseWriter, r *http.Request, p 
 	}
 }
 
+func (s *Server) openChatCompletionStreamWithFallback(ctx context.Context, r *http.Request, route router.ModelRoute, externalModel string, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
+	var lastErr error
+	attempts := route.Attempts()
+	for index, attempt := range attempts {
+		attemptReq := req
+		attemptReq.Model = attempt.UpstreamModel
+		middleware.SetLogRoute(r.Context(), externalModel, attempt.ProviderName, attempt.UpstreamModel)
+		stream, err := attempt.Provider.StreamChatCompletion(ctx, attemptReq)
+		if err == nil {
+			return stream, nil
+		}
+		lastErr = err
+		if index == len(attempts)-1 || !canFallbackProviderError(err) {
+			return nil, err
+		}
+		s.logger.Warn("stream chat completion provider failed before response; trying fallback", "provider", attempt.ProviderName, "error", err)
+	}
+	return nil, lastErr
+}
+
 func writeSSE(w io.Writer, value any) error {
 	payload, err := json.Marshal(value)
 	if err != nil {
@@ -125,6 +164,20 @@ func providerError(err error) *compat.Error {
 		return compat.ServerError(http.StatusGatewayTimeout, "provider timeout")
 	}
 	return compat.ServerError(http.StatusBadGateway, "provider error")
+}
+
+func canFallbackProviderError(err error) bool {
+	if errors.Is(err, context.Canceled) {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var compatErr *compat.Error
+	if errors.As(err, &compatErr) {
+		return compatErr.Status == http.StatusTooManyRequests || compatErr.Status >= 500
+	}
+	return true
 }
 
 func decodeError(err error) *compat.Error {

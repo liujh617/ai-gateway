@@ -13,6 +13,13 @@ type ModelRoute struct {
 	ProviderName  string
 	Capabilities  map[string]bool
 	Provider      provider.Provider
+	Fallbacks     []ProviderRoute
+}
+
+type ProviderRoute struct {
+	UpstreamModel string
+	ProviderName  string
+	Provider      provider.Provider
 }
 
 type ModelRouter struct {
@@ -22,7 +29,7 @@ type ModelRouter struct {
 func NewModelRouter(routes []ModelRoute) *ModelRouter {
 	byModel := make(map[string]ModelRoute, len(routes))
 	for _, route := range routes {
-		byModel[route.ExternalModel] = route
+		byModel[route.ExternalModel] = route.copy()
 	}
 	return &ModelRouter{routes: byModel}
 }
@@ -32,7 +39,7 @@ func (r *ModelRouter) Resolve(model string) (ModelRoute, *compat.Error) {
 	if !ok || route.Provider == nil {
 		return ModelRoute{}, compat.ModelNotFound(model)
 	}
-	return route, nil
+	return route.copy(), nil
 }
 
 func (r *ModelRouter) ResolveFor(model, capability string) (ModelRoute, *compat.Error) {
@@ -67,4 +74,37 @@ func (r *ModelRouter) ModelCount() int {
 		return 0
 	}
 	return len(r.routes)
+}
+
+func (r ModelRoute) Attempts() []ProviderRoute {
+	attempts := make([]ProviderRoute, 0, 1+len(r.Fallbacks))
+	attempts = append(attempts, ProviderRoute{
+		UpstreamModel: r.UpstreamModel,
+		ProviderName:  r.ProviderName,
+		Provider:      r.Provider,
+	})
+	attempts = append(attempts, r.Fallbacks...)
+	return attempts
+}
+
+func (r ModelRoute) copy() ModelRoute {
+	return ModelRoute{
+		ExternalModel: r.ExternalModel,
+		UpstreamModel: r.UpstreamModel,
+		ProviderName:  r.ProviderName,
+		Capabilities:  copyCapabilities(r.Capabilities),
+		Provider:      r.Provider,
+		Fallbacks:     append([]ProviderRoute(nil), r.Fallbacks...),
+	}
+}
+
+func copyCapabilities(in map[string]bool) map[string]bool {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]bool, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
 }

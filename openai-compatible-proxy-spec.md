@@ -360,7 +360,13 @@ data: [DONE]
     "gpt-4o-mini": {
       "provider": "openai",
       "upstream_model": "gpt-4o-mini",
-      "capabilities": ["chat"]
+      "capabilities": ["chat"],
+      "fallbacks": [
+        {
+          "provider": "backup-openai",
+          "upstream_model": "gpt-4o-mini"
+        }
+      ]
     },
     "qwen-plus": {
       "provider": "dashscope",
@@ -393,6 +399,8 @@ models:
 - `embeddings`: 可用于 `/v1/embeddings`
 
 未声明 `capabilities` 时默认同时支持 `chat` 和 `embeddings`，用于兼容早期配置。请求使用不支持该能力的模型时，返回 `404 invalid_request_error`。
+
+模型可以通过 `fallbacks` 声明备用 provider。主 provider 在非流式请求或流式建连阶段返回 `429`、`5xx`、timeout 或非兼容错误时，网关会按配置顺序尝试备用 provider。`400`、`401`、`404` 等客户端或鉴权类错误不会触发 fallback。流式响应一旦开始向客户端发送事件，后续读取错误不会再切换 provider，避免混合两个上游的 SSE 响应。
 
 OpenAI-compatible provider 的 `base_url` 会被统一规范化，去除首尾空白和末尾 `/`。规范化后的 `base_url` 必须是 `http` 或 `https` URL，且不能包含 query 或 fragment。配置校验和 provider 构造使用同一套规则。
 

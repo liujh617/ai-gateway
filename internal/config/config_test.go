@@ -211,6 +211,72 @@ func TestLoadConfigDefaultsCapabilities(t *testing.T) {
 	}
 }
 
+func TestLoadConfigAcceptsModelFallbacks(t *testing.T) {
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_key": "gateway-key",
+		"providers": {
+			"primary": {
+				"type": "fake"
+			},
+			"backup": {
+				"type": "fake"
+			}
+		},
+		"models": {
+			"test-model": {
+				"provider": "primary",
+				"upstream_model": "primary-model",
+				"fallbacks": [
+					{
+						"provider": "backup",
+						"upstream_model": "backup-model"
+					}
+				]
+			}
+		}
+	}`)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	fallbacks := cfg.Models["test-model"].Fallbacks
+	if len(fallbacks) != 1 || fallbacks[0].Provider != "backup" || fallbacks[0].UpstreamModel != "backup-model" {
+		t.Fatalf("fallbacks = %#v", fallbacks)
+	}
+}
+
+func TestLoadConfigValidatesModelFallbackProvider(t *testing.T) {
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_key": "gateway-key",
+		"providers": {
+			"primary": {
+				"type": "fake"
+			}
+		},
+		"models": {
+			"test-model": {
+				"provider": "primary",
+				"fallbacks": [
+					{
+						"provider": "missing"
+					}
+				]
+			}
+		}
+	}`)
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "fallback") || !strings.Contains(err.Error(), "unknown provider") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestEnvironmentOverrides(t *testing.T) {
 	t.Setenv("GATEWAY_ADDR", "127.0.0.1:9090")
 	t.Setenv("GATEWAY_API_KEY", "override-key")

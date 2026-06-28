@@ -137,6 +137,25 @@
             "enum": ["chat", "embeddings"]
           },
           "uniqueItems": true
+        },
+        "fallbacks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/model_fallback"
+          }
+        }
+      },
+      "required": ["provider"]
+    },
+    "model_fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "upstream_model": {
+          "type": "string"
         }
       },
       "required": ["provider"]

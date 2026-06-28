@@ -7,6 +7,7 @@ import (
 
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
+	"open-ai-gateway/internal/router"
 )
 
 func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
@@ -33,13 +34,11 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	externalModel := req.Model
-	req.Model = route.UpstreamModel
-	middleware.SetLogRoute(r.Context(), externalModel, route.ProviderName, route.UpstreamModel)
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
 
-	resp, err := route.Provider.CreateEmbedding(ctx, req)
+	resp, err := s.createEmbeddingWithFallback(ctx, r, route, externalModel, req)
 	if err != nil {
 		s.writeError(w, r, providerError(err))
 		return
@@ -48,4 +47,24 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (s *Server) createEmbeddingWithFallback(ctx context.Context, r *http.Request, route router.ModelRoute, externalModel string, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	var lastErr error
+	attempts := route.Attempts()
+	for index, attempt := range attempts {
+		attemptReq := req
+		attemptReq.Model = attempt.UpstreamModel
+		middleware.SetLogRoute(r.Context(), externalModel, attempt.ProviderName, attempt.UpstreamModel)
+		resp, err := attempt.Provider.CreateEmbedding(ctx, attemptReq)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+		if index == len(attempts)-1 || !canFallbackProviderError(err) {
+			return nil, err
+		}
+		s.logger.Warn("embedding provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
+	}
+	return nil, lastErr
 }
