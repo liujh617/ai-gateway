@@ -12,6 +12,7 @@ import (
 	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/provider"
 	"open-ai-gateway/internal/router"
+	"open-ai-gateway/internal/routes"
 )
 
 func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +68,7 @@ func (s *Server) createChatCompletionWithFallback(ctx context.Context, r *http.R
 		middleware.SetLogRoute(r.Context(), externalModel, attempt.ProviderName, attempt.UpstreamModel)
 		resp, err := attempt.Provider.CreateChatCompletion(ctx, attemptReq)
 		if err == nil {
+			s.observeUsage(routes.ChatCompletionsPath, externalModel, attempt.ProviderName, resp.Usage)
 			return resp, nil
 		}
 		lastErr = err

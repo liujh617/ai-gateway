@@ -14,6 +14,7 @@ import (
 type Metrics struct {
 	mu       sync.Mutex
 	requests map[metricKey]requestMetric
+	tokens   map[tokenMetricKey]int64
 }
 
 type metricKey struct {
@@ -27,9 +28,17 @@ type requestMetric struct {
 	DurationSeconds float64
 }
 
+type tokenMetricKey struct {
+	Path     string
+	Model    string
+	Provider string
+	Type     string
+}
+
 func NewMetrics() *Metrics {
 	return &Metrics{
 		requests: make(map[metricKey]requestMetric),
+		tokens:   make(map[tokenMetricKey]int64),
 	}
 }
 
@@ -54,6 +63,22 @@ func (m *Metrics) Observe(method, path string, status int, duration time.Duratio
 	current.Count++
 	current.DurationSeconds += duration.Seconds()
 	m.requests[key] = current
+}
+
+func (m *Metrics) ObserveTokens(path, model, providerName, tokenType string, tokens int) {
+	if m == nil || tokens <= 0 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := tokenMetricKey{
+		Path:     routes.NormalizePath(path),
+		Model:    model,
+		Provider: providerName,
+		Type:     tokenType,
+	}
+	m.tokens[key] += int64(tokens)
 }
 
 func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
@@ -86,6 +111,20 @@ func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
 			item.Value.DurationSeconds,
 		)
 	}
+
+	tokenSnapshot := m.tokenSnapshot()
+	fmt.Fprintln(w, "# HELP open_ai_gateway_tokens_total Total provider-reported tokens.")
+	fmt.Fprintln(w, "# TYPE open_ai_gateway_tokens_total counter")
+	for _, item := range tokenSnapshot {
+		fmt.Fprintf(w,
+			"open_ai_gateway_tokens_total{path=%q,model=%q,provider=%q,type=%q} %d\n",
+			item.Key.Path,
+			item.Key.Model,
+			item.Key.Provider,
+			item.Key.Type,
+			item.Value,
+		)
+	}
 }
 
 type metricSnapshotItem struct {
@@ -111,6 +150,36 @@ func (m *Metrics) snapshot() []metricSnapshotItem {
 			return cmp < 0
 		}
 		return left.Status < right.Status
+	})
+	return items
+}
+
+type tokenMetricSnapshotItem struct {
+	Key   tokenMetricKey
+	Value int64
+}
+
+func (m *Metrics) tokenSnapshot() []tokenMetricSnapshotItem {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	items := make([]tokenMetricSnapshotItem, 0, len(m.tokens))
+	for key, value := range m.tokens {
+		items = append(items, tokenMetricSnapshotItem{Key: key, Value: value})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		left := items[i].Key
+		right := items[j].Key
+		if cmp := strings.Compare(left.Path, right.Path); cmp != 0 {
+			return cmp < 0
+		}
+		if cmp := strings.Compare(left.Model, right.Model); cmp != 0 {
+			return cmp < 0
+		}
+		if cmp := strings.Compare(left.Provider, right.Provider); cmp != 0 {
+			return cmp < 0
+		}
+		return left.Type < right.Type
 	})
 	return items
 }

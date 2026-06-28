@@ -87,7 +87,9 @@ Metrics endpoint:
 - Prometheus text exposition format
 - `open_ai_gateway_http_requests_total`
 - `open_ai_gateway_http_request_duration_seconds_total`
+- `open_ai_gateway_tokens_total`
 - Metrics `path` labels keep known routes and collapse unknown routes to `/__unknown__`.
+- Token metrics use provider-reported `usage` only and are labeled by path, external model, provider, and token type.
 
 Runtime probes:
 

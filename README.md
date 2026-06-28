@@ -133,14 +133,13 @@ curl -sS http://127.0.0.1:8080/healthz
 - chat completions streaming
 - 单模型主 provider 配置和可选 fallback provider
 - Bearer token 鉴权
-- 基础日志、request id、超时和错误响应
+- 基础日志、request id、HTTP metrics、provider-reported token metrics、超时和错误响应
 
 不在第一阶段实现：
 
 - 多租户配额
 - 成本统计
 - 管理后台
-- provider fallback
 - 完整 OpenAI API 覆盖
 
 ## 预期目录

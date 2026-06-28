@@ -8,6 +8,7 @@ import (
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/router"
+	"open-ai-gateway/internal/routes"
 )
 
 func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +59,7 @@ func (s *Server) createEmbeddingWithFallback(ctx context.Context, r *http.Reques
 		middleware.SetLogRoute(r.Context(), externalModel, attempt.ProviderName, attempt.UpstreamModel)
 		resp, err := attempt.Provider.CreateEmbedding(ctx, attemptReq)
 		if err == nil {
+			s.observeUsage(routes.EmbeddingsPath, externalModel, attempt.ProviderName, resp.Usage)
 			return resp, nil
 		}
 		lastErr = err

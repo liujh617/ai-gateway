@@ -418,10 +418,40 @@ func TestMetricsRecordsRequests(t *testing.T) {
 		`open_ai_gateway_http_requests_total{method="POST",path="/v1/chat/completions",status="200"} 1`,
 		`open_ai_gateway_http_requests_total{method="POST",path="/v1/chat/completions",status="400"} 1`,
 		`open_ai_gateway_http_request_duration_seconds_total{method="POST",path="/v1/chat/completions",status="200"}`,
+		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="prompt"} 1`,
+		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="completion"} 1`,
+		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total"} 2`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("metrics missing %s: %s", want, text)
 		}
+	}
+}
+
+func TestMetricsRecordsEmbeddingUsage(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	body := `{"model":"test-model","input":"hello"}`
+
+	ok := doEmbeddingsJSON(handler, body, true)
+	if ok.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", ok.Code, ok.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	text := rr.Body.String()
+	for _, want := range []string{
+		`open_ai_gateway_tokens_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="prompt"} 1`,
+		`open_ai_gateway_tokens_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="total"} 1`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("metrics missing %s: %s", want, text)
+		}
+	}
+	if strings.Contains(text, `open_ai_gateway_tokens_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="completion"}`) {
+		t.Fatalf("metrics recorded zero completion tokens: %s", text)
 	}
 }
 
