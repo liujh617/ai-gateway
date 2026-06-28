@@ -89,6 +89,20 @@ curl.exe -N http://127.0.0.1:8080/v1/chat/completions `
   -d "{\"model\":\"deepseek-v4-flash\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}"
 ```
 
+也可以运行仓库内置 smoke 脚本。未设置 `DEEPSEEK_API_KEY` 时脚本会跳过；设置后会启动本地网关并发起一次真实 DeepSeek 非流式 chat completions 请求：
+
+```powershell
+$env:DEEPSEEK_API_KEY="<your-deepseek-api-key>"
+wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "DEEPSEEK_API_KEY='$env:DEEPSEEK_API_KEY' make smoke-deepseek"
+```
+
+如需同时验证流式请求：
+
+```powershell
+$env:DEEPSEEK_API_KEY="<your-deepseek-api-key>"
+wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "DEEPSEEK_API_KEY='$env:DEEPSEEK_API_KEY' DEEPSEEK_SMOKE_STREAM=1 make smoke-deepseek"
+```
+
 ## Trae 客户端设置
 
 如果 Trae 支持自定义 OpenAI-compatible provider，使用以下值：
