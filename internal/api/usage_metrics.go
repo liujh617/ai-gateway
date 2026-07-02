@@ -1,14 +1,33 @@
 package api
 
-import "open-ai-gateway/internal/compat"
+import (
+	"open-ai-gateway/internal/compat"
+	"open-ai-gateway/internal/router"
+)
 
-func (s *Server) observeUsage(path, externalModel, providerName string, usage *compat.Usage) {
+func (s *Server) observeUsage(path, externalModel, providerName string, usage *compat.Usage, pricing router.TokenPricing) {
 	if usage == nil || s.metrics == nil {
 		return
 	}
 	s.metrics.ObserveTokens(path, externalModel, providerName, "prompt", usage.PromptTokens)
 	s.metrics.ObserveTokens(path, externalModel, providerName, "completion", usage.CompletionTokens)
 	s.metrics.ObserveTokens(path, externalModel, providerName, "total", usage.TotalTokens)
+	s.observeCost(path, externalModel, providerName, usage, pricing)
+}
+
+func (s *Server) observeCost(path, externalModel, providerName string, usage *compat.Usage, pricing router.TokenPricing) {
+	promptCost := tokenCostUSD(usage.PromptTokens, pricing.PromptUSDPer1MTokens)
+	completionCost := tokenCostUSD(usage.CompletionTokens, pricing.CompletionUSDPer1MTokens)
+	s.metrics.ObserveTokenCostUSD(path, externalModel, providerName, "prompt", promptCost)
+	s.metrics.ObserveTokenCostUSD(path, externalModel, providerName, "completion", completionCost)
+	s.metrics.ObserveTokenCostUSD(path, externalModel, providerName, "total", promptCost+completionCost)
+}
+
+func tokenCostUSD(tokens int, usdPer1MTokens float64) float64 {
+	if tokens <= 0 || usdPer1MTokens <= 0 {
+		return 0
+	}
+	return float64(tokens) * usdPer1MTokens / 1_000_000
 }
 
 func (s *Server) observeProviderFallback(path, externalModel, fromProvider, toProvider string) {
@@ -16,4 +35,25 @@ func (s *Server) observeProviderFallback(path, externalModel, fromProvider, toPr
 		return
 	}
 	s.metrics.ObserveProviderFallback(path, externalModel, fromProvider, toProvider)
+}
+
+func (s *Server) observeProviderHealth(providerName string) {
+	if s.metrics == nil || s.providerHealth == nil {
+		return
+	}
+	for _, item := range s.providerHealth.Snapshot() {
+		if item.Provider == providerName {
+			s.metrics.ObserveProviderHealth(item.Provider, item.Healthy)
+			return
+		}
+	}
+}
+
+func (s *Server) syncProviderHealthMetrics() {
+	if s.metrics == nil || s.providerHealth == nil {
+		return
+	}
+	for _, item := range s.providerHealth.Snapshot() {
+		s.metrics.ObserveProviderHealth(item.Provider, item.Healthy)
+	}
 }

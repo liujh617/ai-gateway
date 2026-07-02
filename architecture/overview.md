@@ -88,10 +88,14 @@ Metrics endpoint:
 - `open_ai_gateway_http_requests_total`
 - `open_ai_gateway_http_request_duration_seconds_total`
 - `open_ai_gateway_tokens_total`
+- `open_ai_gateway_token_cost_usd_total`
 - `open_ai_gateway_provider_fallbacks_total`
+- `open_ai_gateway_provider_health_status`
 - Metrics `path` labels keep known routes and collapse unknown routes to `/__unknown__`.
-- Token metrics use provider-reported `usage` only and are labeled by path, external model, provider, and token type.
+- Token metrics use provider-reported `usage` only and are labeled by path, external model, provider, and token type. Streaming chat completions record token metrics only when an upstream SSE chunk includes `usage`.
+- Cost metrics use provider-reported `usage` plus optional per-model or fallback pricing config, and are labeled by path, external model, provider, and token type.
 - Provider fallback metrics are labeled by path, external model, source provider, and target provider.
+- Provider health metrics expose each provider's in-memory circuit breaker state.
 
 Runtime probes:
 
@@ -118,9 +122,10 @@ Compat Mapper 是外部 API 契约的主要守门员。
 - 将对外模型名映射为上游模型名。
 - 校验模型是否支持当前 API 能力，例如 `chat` 或 `embeddings`。
 - 按模型配置提供主 provider 和 fallback provider 尝试顺序。
+- 携带每个 provider 尝试对应的可选 token pricing。
 - 返回明确的 model not found 或 unauthorized 错误。
 
-当前实现使用静态配置路由，并支持在非流式请求或流式建连阶段按顺序尝试 fallback provider。后续可以扩展 weighted routing 和灰度策略。
+当前实现使用静态配置路由，并支持在非流式请求或流式建连阶段按顺序尝试 fallback provider。provider 连续出现可 fallback 错误后会短暂熔断，后续请求会跳过 unhealthy provider，冷却结束后再次尝试。后续可以扩展 weighted routing 和灰度策略。
 
 ### Provider Adapter
 
@@ -158,10 +163,12 @@ Provider Adapter 不应直接依赖 HTTP handler。
 职责：
 
 - 加载监听地址。
-- 加载网关 API key。
+- 加载一个或多个网关 API key。
 - 加载 provider 配置。
 - 加载模型映射。
+- 加载模型和 fallback 的可选 token pricing。
 - 加载超时配置。
+- 加载 provider health / circuit breaker 配置。
 - 通过共享的 upstream URL 校验逻辑，校验 OpenAI-compatible provider `base_url` 只使用 `http` 或 `https`，且不包含 query 或 fragment。
 
 当前实现使用 JSON 配置文件，并通过 `GATEWAY_CONFIG` 指定路径。无配置时使用 fake provider 默认配置。
@@ -199,6 +206,7 @@ cmd/gateway/
 internal/api/
   server.go
   chat_completions.go
+  provider_health.go
 
 internal/compat/
   types.go

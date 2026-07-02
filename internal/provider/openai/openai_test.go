@@ -314,6 +314,39 @@ func TestStreamChatCompletionReadsSSE(t *testing.T) {
 	if second.Choices[0].Delta.Content != "lo" {
 		t.Fatalf("second content = %q", second.Choices[0].Delta.Content)
 	}
+	if second.Usage != nil {
+		t.Fatalf("second usage = %+v", second.Usage)
+	}
+	if _, err := stream.Next(context.Background()); err != io.EOF {
+		t.Fatalf("end error = %v, want EOF", err)
+	}
+}
+
+func TestStreamChatCompletionReadsUsageChunk(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"id\":\"chatcmpl_upstream\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"upstream-model\",\"choices\":[],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":5,\"total_tokens\":8}}\n\n")
+		io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	stream, err := p.StreamChatCompletion(context.Background(), chatRequest())
+	if err != nil {
+		t.Fatalf("StreamChatCompletion: %v", err)
+	}
+	defer stream.Close()
+
+	chunk, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("usage chunk: %v", err)
+	}
+	if chunk.Usage == nil {
+		t.Fatal("usage was not parsed")
+	}
+	if chunk.Usage.PromptTokens != 3 || chunk.Usage.CompletionTokens != 5 || chunk.Usage.TotalTokens != 8 {
+		t.Fatalf("usage = %+v", chunk.Usage)
+	}
 	if _, err := stream.Next(context.Background()); err != io.EOF {
 		t.Fatalf("end error = %v, want EOF", err)
 	}

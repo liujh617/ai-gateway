@@ -87,6 +87,8 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 
 配置结构：
 
+- `api_key`: 网关客户端 Bearer token，保留用于单 key 和早期配置。
+- `api_keys`: 网关客户端 Bearer token 列表；非空时任一 token 都可通过鉴权。
 - `providers.<name>.type`: 当前支持 `fake` 和 `openai-compatible`。
 - `providers.<name>.base_url`: OpenAI-compatible base URL，例如 `https://api.openai.com/v1`。
 - `providers.<name>.api_key_env`: 上游 API key 所在环境变量名。
@@ -106,6 +108,11 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 - `log.format`: 日志格式，支持 `text` 或 `json`。
 - `log.level`: 日志级别，支持 `debug`、`info`、`warn`、`error`。
 - `rate_limit.requests_per_minute`: 按 Bearer token 的简单内存限流，`0` 表示关闭。
+- `provider_health.failure_threshold`: provider 连续可 fallback 错误达到该次数后短暂熔断，默认 `2`。
+- `provider_health.cooldown_seconds`: provider 熔断后的冷却时间，默认 `30`。
+- `models.<external>.pricing.prompt_usd_per_1m_tokens`: 可选 prompt token 单价，用于成本指标，单位 USD / 1M tokens。
+- `models.<external>.pricing.completion_usd_per_1m_tokens`: 可选 completion token 单价，用于成本指标，单位 USD / 1M tokens。
+- `models.<external>.fallbacks[].pricing`: fallback provider 可配置独立单价。
 
 配置自检：
 
@@ -133,12 +140,12 @@ curl -sS http://127.0.0.1:8080/healthz
 - chat completions streaming
 - 单模型主 provider 配置和可选 fallback provider
 - Bearer token 鉴权
-- 基础日志、request id、HTTP metrics、provider-reported token metrics、provider fallback metrics、超时和错误响应
+- 基础日志、request id、HTTP metrics、provider-reported token metrics（含带 `usage` 的流式响应）、可选 token cost metrics、provider fallback metrics、provider health metrics、provider circuit breaker、超时和错误响应
 
 不在第一阶段实现：
 
 - 多租户配额
-- 成本统计
+- 持久化成本统计、账单和租户维度成本归集
 - 管理后台
 - 完整 OpenAI API 覆盖
 

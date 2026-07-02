@@ -72,6 +72,34 @@ func TestChatCompletionsStreamOK(t *testing.T) {
 	}
 }
 
+func TestChatCompletionsStreamRecordsUsageMetrics(t *testing.T) {
+	handler := newPricingTestHandler(&usageStreamProvider{}, router.TokenPricing{
+		PromptUSDPer1MTokens:     1000000,
+		CompletionUSDPer1MTokens: 2000000,
+	})
+	body := `{"model":"test-model","stream":true,"messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	text := rr.Body.String()
+	if !strings.Contains(text, `"usage":{"prompt_tokens":3,"completion_tokens":5,"total_tokens":8}`) {
+		t.Fatalf("missing usage chunk: %s", text)
+	}
+	for _, want := range []string{
+		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="prompt"} 3`,
+		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="completion"} 5`,
+		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total"} 8`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="prompt"} 3.000000000`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="completion"} 10.000000000`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total"} 13.000000000`,
+	} {
+		assertMetricsContains(t, handler, want)
+	}
+}
+
 func TestChatCompletionsStreamFallsBackOnOpenError(t *testing.T) {
 	primary := fake.New()
 	primary.StreamErr = errors.New("stream connect failed")
@@ -233,6 +261,88 @@ func TestChatCompletionsFallsBackOnProviderError(t *testing.T) {
 	}
 
 	assertMetricsContains(t, handler, `open_ai_gateway_provider_fallbacks_total{path="/v1/chat/completions",model="test-model",from_provider="primary-provider",to_provider="backup-provider"} 1`)
+}
+
+func TestChatCompletionsFallbackUsesFallbackPricing(t *testing.T) {
+	primary := fake.New()
+	primary.Err = errors.New("upstream failed")
+	fallback := fake.New()
+	handler := newFallbackPricingTestHandler(primary, fallback)
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	assertMetricsContains(t, handler, `open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="backup-provider",type="prompt"} 3.000000000`)
+	assertMetricsContains(t, handler, `open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="backup-provider",type="completion"} 4.000000000`)
+	assertMetricsNotContains(t, handler, `open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="primary-provider"`)
+}
+
+func TestChatCompletionsSkipsUnhealthyProvider(t *testing.T) {
+	primary := &countingProvider{err: errors.New("upstream failed")}
+	fallback := &captureProvider{}
+	handler := newFallbackTestHandler(primary, fallback)
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	for i := 0; i < 2; i++ {
+		rr := doJSON(handler, body, true)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("request %d status = %d, body = %s", i, rr.Code, rr.Body.String())
+		}
+	}
+	if calls := primary.ChatCalls(); calls != 2 {
+		t.Fatalf("primary calls before circuit = %d, want 2", calls)
+	}
+
+	rr := doJSON(handler, body, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if calls := primary.ChatCalls(); calls != 2 {
+		t.Fatalf("primary was called while unhealthy: calls = %d", calls)
+	}
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_health_status{provider="primary-provider",state="healthy"} 0`)
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_health_status{provider="primary-provider",state="unhealthy"} 1`)
+}
+
+func TestChatCompletionsProviderHealthRecoversAfterCooldown(t *testing.T) {
+	primary := &countingProvider{err: errors.New("upstream failed"), responseText: "primary ok"}
+	fallback := &captureProvider{}
+	handler := newFallbackTestHandlerWithOptions(primary, fallback, api.Options{
+		ProviderHealthOptions: api.ProviderHealthOptions{
+			FailureThreshold: 2,
+			Cooldown:         time.Millisecond,
+		},
+	})
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	for i := 0; i < 2; i++ {
+		rr := doJSON(handler, body, true)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("request %d status = %d, body = %s", i, rr.Code, rr.Body.String())
+		}
+	}
+	primary.SetError(nil)
+	time.Sleep(5 * time.Millisecond)
+
+	rr := doJSON(handler, body, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	var got compat.ChatCompletionResponse
+	if err := json.NewDecoder(rr.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if string(got.Choices[0].Message.Content) != `"primary ok"` {
+		t.Fatalf("response content = %s", got.Choices[0].Message.Content)
+	}
+	if calls := primary.ChatCalls(); calls != 3 {
+		t.Fatalf("primary calls after recovery = %d, want 3", calls)
+	}
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_health_status{provider="primary-provider",state="healthy"} 1`)
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_health_status{provider="primary-provider",state="unhealthy"} 0`)
 }
 
 func TestChatCompletionsDoesNotFallBackOnInvalidRequest(t *testing.T) {
@@ -402,7 +512,10 @@ func TestSecurityHeaders(t *testing.T) {
 }
 
 func TestMetricsRecordsRequests(t *testing.T) {
-	handler := newTestHandler(fake.New())
+	handler := newPricingTestHandler(fake.New(), router.TokenPricing{
+		PromptUSDPer1MTokens:     1000000,
+		CompletionUSDPer1MTokens: 2000000,
+	})
 	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
 
 	ok := doJSON(handler, body, true)
@@ -426,6 +539,9 @@ func TestMetricsRecordsRequests(t *testing.T) {
 		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="prompt"} 1`,
 		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="completion"} 1`,
 		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total"} 2`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="prompt"} 1.000000000`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="completion"} 2.000000000`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total"} 3.000000000`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("metrics missing %s: %s", want, text)
@@ -434,7 +550,10 @@ func TestMetricsRecordsRequests(t *testing.T) {
 }
 
 func TestMetricsRecordsEmbeddingUsage(t *testing.T) {
-	handler := newTestHandler(fake.New())
+	handler := newPricingTestHandler(fake.New(), router.TokenPricing{
+		PromptUSDPer1MTokens:     1000000,
+		CompletionUSDPer1MTokens: 2000000,
+	})
 	body := `{"model":"test-model","input":"hello"}`
 
 	ok := doEmbeddingsJSON(handler, body, true)
@@ -450,6 +569,8 @@ func TestMetricsRecordsEmbeddingUsage(t *testing.T) {
 	for _, want := range []string{
 		`open_ai_gateway_tokens_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="prompt"} 1`,
 		`open_ai_gateway_tokens_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="total"} 1`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="prompt"} 1.000000000`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="total"} 1.000000000`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("metrics missing %s: %s", want, text)
@@ -961,6 +1082,32 @@ func TestEmbeddingsFallsBackOnProviderError(t *testing.T) {
 	assertMetricsContains(t, handler, `open_ai_gateway_provider_fallbacks_total{path="/v1/embeddings",model="test-model",from_provider="primary-provider",to_provider="backup-provider"} 1`)
 }
 
+func TestEmbeddingsSkipsUnhealthyProvider(t *testing.T) {
+	primary := &countingProvider{err: errors.New("upstream failed")}
+	fallback := &captureProvider{}
+	handler := newFallbackTestHandler(primary, fallback)
+	body := `{"model":"test-model","input":"hello"}`
+
+	for i := 0; i < 2; i++ {
+		rr := doEmbeddingsJSON(handler, body, true)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("request %d status = %d, body = %s", i, rr.Code, rr.Body.String())
+		}
+	}
+	if calls := primary.EmbeddingCalls(); calls != 2 {
+		t.Fatalf("primary calls before circuit = %d, want 2", calls)
+	}
+
+	rr := doEmbeddingsJSON(handler, body, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if calls := primary.EmbeddingCalls(); calls != 2 {
+		t.Fatalf("primary was called while unhealthy: calls = %d", calls)
+	}
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_health_status{provider="primary-provider",state="unhealthy"} 1`)
+}
+
 func TestChatCompletionsRejectsEmbeddingOnlyModel(t *testing.T) {
 	handler := newCapabilityTestHandler(fake.New())
 	body := `{"model":"embedding-model","messages":[{"role":"user","content":"hello"}]}`
@@ -1099,7 +1246,23 @@ func newTestHandlerWithLogger(p provider.Provider, logger *slog.Logger, opts api
 	return api.NewServer(modelRouter, testAPIKey, logger, opts).Handler()
 }
 
+func newPricingTestHandler(p provider.Provider, pricing router.TokenPricing) http.Handler {
+	modelRouter := router.NewModelRouter([]router.ModelRoute{{
+		ExternalModel: "test-model",
+		UpstreamModel: "upstream-test-model",
+		ProviderName:  "fake-provider",
+		Provider:      p,
+		Pricing:       pricing,
+	}})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	return api.NewServer(modelRouter, testAPIKey, logger).Handler()
+}
+
 func newFallbackTestHandler(primary provider.Provider, fallback provider.Provider) http.Handler {
+	return newFallbackTestHandlerWithOptions(primary, fallback, api.Options{})
+}
+
+func newFallbackTestHandlerWithOptions(primary provider.Provider, fallback provider.Provider, opts api.Options) http.Handler {
 	modelRouter := router.NewModelRouter([]router.ModelRoute{{
 		ExternalModel: "test-model",
 		UpstreamModel: "upstream-test-model",
@@ -1109,6 +1272,30 @@ func newFallbackTestHandler(primary provider.Provider, fallback provider.Provide
 			UpstreamModel: "backup-test-model",
 			ProviderName:  "backup-provider",
 			Provider:      fallback,
+		}},
+	}})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	return api.NewServer(modelRouter, testAPIKey, logger, opts).Handler()
+}
+
+func newFallbackPricingTestHandler(primary provider.Provider, fallback provider.Provider) http.Handler {
+	modelRouter := router.NewModelRouter([]router.ModelRoute{{
+		ExternalModel: "test-model",
+		UpstreamModel: "upstream-test-model",
+		ProviderName:  "primary-provider",
+		Provider:      primary,
+		Pricing: router.TokenPricing{
+			PromptUSDPer1MTokens:     1000000,
+			CompletionUSDPer1MTokens: 2000000,
+		},
+		Fallbacks: []router.ProviderRoute{{
+			UpstreamModel: "backup-test-model",
+			ProviderName:  "backup-provider",
+			Provider:      fallback,
+			Pricing: router.TokenPricing{
+				PromptUSDPer1MTokens:     3000000,
+				CompletionUSDPer1MTokens: 4000000,
+			},
 		}},
 	}})
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -1284,6 +1471,156 @@ func (p *captureProvider) CreateEmbedding(ctx context.Context, req compat.Embedd
 			Embedding: []float64{0.1, 0.2},
 		}},
 	}, nil
+}
+
+type countingProvider struct {
+	mu             sync.Mutex
+	err            error
+	responseText   string
+	chatCalls      int
+	embeddingCalls int
+}
+
+func (p *countingProvider) ListModels(ctx context.Context) ([]compat.Model, error) {
+	return nil, nil
+}
+
+func (p *countingProvider) CreateChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	p.mu.Lock()
+	p.chatCalls++
+	err := p.err
+	responseText := p.responseText
+	p.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	if responseText == "" {
+		responseText = "ok"
+	}
+	content, _ := json.Marshal(responseText)
+	return &compat.ChatCompletionResponse{
+		ID:      "chatcmpl_counting",
+		Object:  "chat.completion",
+		Created: 1,
+		Model:   req.Model,
+		Choices: []compat.ChatCompletionChoice{{
+			Index: 0,
+			Message: compat.ChatMessage{
+				Role:    "assistant",
+				Content: content,
+			},
+			FinishReason: "stop",
+		}},
+	}, nil
+}
+
+func (p *countingProvider) StreamChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
+	p.mu.Lock()
+	p.chatCalls++
+	err := p.err
+	p.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	return fake.New().StreamChatCompletion(ctx, req)
+}
+
+func (p *countingProvider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	p.mu.Lock()
+	p.embeddingCalls++
+	err := p.err
+	p.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	return &compat.EmbeddingResponse{
+		Object: "list",
+		Model:  req.Model,
+		Data: []compat.EmbeddingData{{
+			Object:    "embedding",
+			Index:     0,
+			Embedding: []float64{0.1},
+		}},
+	}, nil
+}
+
+func (p *countingProvider) SetError(err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.err = err
+}
+
+func (p *countingProvider) ChatCalls() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.chatCalls
+}
+
+func (p *countingProvider) EmbeddingCalls() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.embeddingCalls
+}
+
+type usageStreamProvider struct{}
+
+func (p *usageStreamProvider) ListModels(ctx context.Context) ([]compat.Model, error) {
+	return nil, nil
+}
+
+func (p *usageStreamProvider) CreateChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *usageStreamProvider) StreamChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
+	return &usageStream{model: req.Model}, nil
+}
+
+func (p *usageStreamProvider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+type usageStream struct {
+	model string
+	index int
+}
+
+func (s *usageStream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s.index++
+	switch s.index {
+	case 1:
+		return &compat.ChatCompletionChunk{
+			ID:      "chatcmpl_usage",
+			Object:  "chat.completion.chunk",
+			Created: 1,
+			Model:   s.model,
+			Choices: []compat.ChatCompletionChunkChoice{{
+				Index: 0,
+				Delta: compat.ChatMessageDelta{Content: "hello"},
+			}},
+		}, nil
+	case 2:
+		return &compat.ChatCompletionChunk{
+			ID:      "chatcmpl_usage",
+			Object:  "chat.completion.chunk",
+			Created: 1,
+			Model:   s.model,
+			Usage: &compat.Usage{
+				PromptTokens:     3,
+				CompletionTokens: 5,
+				TotalTokens:      8,
+			},
+		}, nil
+	default:
+		return nil, io.EOF
+	}
+}
+
+func (s *usageStream) Close() error {
+	return nil
 }
 
 type blockingStream struct {

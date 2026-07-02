@@ -15,7 +15,9 @@ type Metrics struct {
 	mu        sync.Mutex
 	requests  map[metricKey]requestMetric
 	tokens    map[tokenMetricKey]int64
+	costs     map[costMetricKey]float64
 	fallbacks map[fallbackMetricKey]int64
+	health    map[string]bool
 }
 
 type metricKey struct {
@@ -36,6 +38,13 @@ type tokenMetricKey struct {
 	Type     string
 }
 
+type costMetricKey struct {
+	Path     string
+	Model    string
+	Provider string
+	Type     string
+}
+
 type fallbackMetricKey struct {
 	Path         string
 	Model        string
@@ -47,7 +56,9 @@ func NewMetrics() *Metrics {
 	return &Metrics{
 		requests:  make(map[metricKey]requestMetric),
 		tokens:    make(map[tokenMetricKey]int64),
+		costs:     make(map[costMetricKey]float64),
 		fallbacks: make(map[fallbackMetricKey]int64),
+		health:    make(map[string]bool),
 	}
 }
 
@@ -90,6 +101,22 @@ func (m *Metrics) ObserveTokens(path, model, providerName, tokenType string, tok
 	m.tokens[key] += int64(tokens)
 }
 
+func (m *Metrics) ObserveTokenCostUSD(path, model, providerName, tokenType string, cost float64) {
+	if m == nil || cost <= 0 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := costMetricKey{
+		Path:     routes.NormalizePath(path),
+		Model:    model,
+		Provider: providerName,
+		Type:     tokenType,
+	}
+	m.costs[key] += cost
+}
+
 func (m *Metrics) ObserveProviderFallback(path, model, fromProvider, toProvider string) {
 	if m == nil || model == "" || fromProvider == "" || toProvider == "" {
 		return
@@ -104,6 +131,16 @@ func (m *Metrics) ObserveProviderFallback(path, model, fromProvider, toProvider 
 		ToProvider:   toProvider,
 	}
 	m.fallbacks[key]++
+}
+
+func (m *Metrics) ObserveProviderHealth(providerName string, healthy bool) {
+	if m == nil || providerName == "" {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.health[providerName] = healthy
 }
 
 func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
@@ -151,6 +188,20 @@ func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
 		)
 	}
 
+	costSnapshot := m.costSnapshot()
+	fmt.Fprintln(w, "# HELP open_ai_gateway_token_cost_usd_total Total provider-reported token cost in USD.")
+	fmt.Fprintln(w, "# TYPE open_ai_gateway_token_cost_usd_total counter")
+	for _, item := range costSnapshot {
+		fmt.Fprintf(w,
+			"open_ai_gateway_token_cost_usd_total{path=%q,model=%q,provider=%q,type=%q} %.9f\n",
+			item.Key.Path,
+			item.Key.Model,
+			item.Key.Provider,
+			item.Key.Type,
+			item.Value,
+		)
+	}
+
 	fallbackSnapshot := m.fallbackSnapshot()
 	fmt.Fprintln(w, "# HELP open_ai_gateway_provider_fallbacks_total Total provider fallback attempts.")
 	fmt.Fprintln(w, "# TYPE open_ai_gateway_provider_fallbacks_total counter")
@@ -163,6 +214,20 @@ func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
 			item.Key.ToProvider,
 			item.Value,
 		)
+	}
+
+	healthSnapshot := m.healthSnapshot()
+	fmt.Fprintln(w, "# HELP open_ai_gateway_provider_health_status Current provider health status.")
+	fmt.Fprintln(w, "# TYPE open_ai_gateway_provider_health_status gauge")
+	for _, item := range healthSnapshot {
+		healthyValue := 0
+		unhealthyValue := 1
+		if item.Healthy {
+			healthyValue = 1
+			unhealthyValue = 0
+		}
+		fmt.Fprintf(w, "open_ai_gateway_provider_health_status{provider=%q,state=%q} %d\n", item.Provider, "healthy", healthyValue)
+		fmt.Fprintf(w, "open_ai_gateway_provider_health_status{provider=%q,state=%q} %d\n", item.Provider, "unhealthy", unhealthyValue)
 	}
 }
 
@@ -223,6 +288,36 @@ func (m *Metrics) tokenSnapshot() []tokenMetricSnapshotItem {
 	return items
 }
 
+type costMetricSnapshotItem struct {
+	Key   costMetricKey
+	Value float64
+}
+
+func (m *Metrics) costSnapshot() []costMetricSnapshotItem {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	items := make([]costMetricSnapshotItem, 0, len(m.costs))
+	for key, value := range m.costs {
+		items = append(items, costMetricSnapshotItem{Key: key, Value: value})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		left := items[i].Key
+		right := items[j].Key
+		if cmp := strings.Compare(left.Path, right.Path); cmp != 0 {
+			return cmp < 0
+		}
+		if cmp := strings.Compare(left.Model, right.Model); cmp != 0 {
+			return cmp < 0
+		}
+		if cmp := strings.Compare(left.Provider, right.Provider); cmp != 0 {
+			return cmp < 0
+		}
+		return left.Type < right.Type
+	})
+	return items
+}
+
 type fallbackMetricSnapshotItem struct {
 	Key   fallbackMetricKey
 	Value int64
@@ -249,6 +344,25 @@ func (m *Metrics) fallbackSnapshot() []fallbackMetricSnapshotItem {
 			return cmp < 0
 		}
 		return left.ToProvider < right.ToProvider
+	})
+	return items
+}
+
+type healthMetricSnapshotItem struct {
+	Provider string
+	Healthy  bool
+}
+
+func (m *Metrics) healthSnapshot() []healthMetricSnapshotItem {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	items := make([]healthMetricSnapshotItem, 0, len(m.health))
+	for providerName, healthy := range m.health {
+		items = append(items, healthMetricSnapshotItem{Provider: providerName, Healthy: healthy})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Provider < items[j].Provider
 	})
 	return items
 }

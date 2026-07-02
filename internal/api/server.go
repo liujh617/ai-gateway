@@ -16,20 +16,23 @@ import (
 type Server struct {
 	router         *router.ModelRouter
 	logger         *slog.Logger
-	apiKey         string
+	apiKeys        []string
 	requestTimeout time.Duration
 	streamTimeout  time.Duration
 	rateLimiter    *middleware.RateLimiter
 	metrics        *middleware.Metrics
+	providerHealth *providerHealth
 	maxBodyBytes   int64
 }
 
 type Options struct {
-	RequestTimeout time.Duration
-	StreamTimeout  time.Duration
-	RateLimiter    *middleware.RateLimiter
-	Metrics        *middleware.Metrics
-	MaxBodyBytes   int64
+	RequestTimeout        time.Duration
+	StreamTimeout         time.Duration
+	RateLimiter           *middleware.RateLimiter
+	Metrics               *middleware.Metrics
+	ProviderHealthOptions ProviderHealthOptions
+	APIKeys               []string
+	MaxBodyBytes          int64
 }
 
 func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logger, options ...Options) *Server {
@@ -52,14 +55,24 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 	if opts.Metrics == nil {
 		opts.Metrics = middleware.NewMetrics()
 	}
+	apiKeys := append([]string(nil), opts.APIKeys...)
+	if len(apiKeys) == 0 && apiKey != "" {
+		apiKeys = []string{apiKey}
+	}
+	providerHealth := newProviderHealth(opts.ProviderHealthOptions)
+	for _, providerName := range modelRouter.ProviderNames() {
+		providerHealth.Register(providerName)
+		opts.Metrics.ObserveProviderHealth(providerName, true)
+	}
 	return &Server{
 		router:         modelRouter,
-		apiKey:         apiKey,
+		apiKeys:        apiKeys,
 		logger:         logger,
 		requestTimeout: opts.RequestTimeout,
 		streamTimeout:  opts.StreamTimeout,
 		rateLimiter:    opts.RateLimiter,
 		metrics:        opts.Metrics,
+		providerHealth: providerHealth,
 		maxBodyBytes:   opts.MaxBodyBytes,
 	}
 }
@@ -81,7 +94,7 @@ func (s *Server) Handler() http.Handler {
 	if s.rateLimiter != nil {
 		handler = s.rateLimiter.Middleware(s)(handler)
 	}
-	handler = middleware.Auth(s.apiKey, s)(handler)
+	handler = middleware.Auth(s.apiKeys, s)(handler)
 	if s.metrics != nil {
 		handler = s.metrics.Middleware(handler)
 	}
@@ -160,6 +173,7 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	s.syncProviderHealthMetrics()
 	if r.Method == http.MethodHead {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 		return

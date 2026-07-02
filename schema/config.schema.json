@@ -13,6 +13,15 @@
       "type": "string",
       "description": "Gateway API key for client Bearer auth."
     },
+    "api_keys": {
+      "type": "array",
+      "description": "Gateway API keys for client Bearer auth.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
     "request_timeout_seconds": {
       "type": "integer",
       "minimum": 0
@@ -50,6 +59,9 @@
     },
     "rate_limit": {
       "$ref": "#/$defs/rate_limit"
+    },
+    "provider_health": {
+      "$ref": "#/$defs/provider_health"
     },
     "providers": {
       "type": "object",
@@ -90,6 +102,20 @@
       "additionalProperties": false,
       "properties": {
         "requests_per_minute": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "provider_health": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "failure_threshold": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cooldown_seconds": {
           "type": "integer",
           "minimum": 0
         }
@@ -138,6 +164,9 @@
           },
           "uniqueItems": true
         },
+        "pricing": {
+          "$ref": "#/$defs/pricing"
+        },
         "fallbacks": {
           "type": "array",
           "items": {
@@ -156,9 +185,26 @@
         },
         "upstream_model": {
           "type": "string"
+        },
+        "pricing": {
+          "$ref": "#/$defs/pricing"
         }
       },
       "required": ["provider"]
+    },
+    "pricing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "prompt_usd_per_1m_tokens": {
+          "type": "number",
+          "minimum": 0
+        },
+        "completion_usd_per_1m_tokens": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
     }
   }
 }

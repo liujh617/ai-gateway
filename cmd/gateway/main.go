@@ -54,7 +54,12 @@ func main() {
 		RequestTimeout: cfg.RequestTimeout(),
 		StreamTimeout:  cfg.StreamTimeout(),
 		RateLimiter:    middleware.NewRateLimiter(cfg.RateLimit.RequestsPerMinute),
-		MaxBodyBytes:   cfg.MaxRequestBodyBytes,
+		APIKeys:        cfg.GatewayAPIKeys(),
+		ProviderHealthOptions: api.ProviderHealthOptions{
+			FailureThreshold: cfg.ProviderHealth.FailureThreshold,
+			Cooldown:         cfg.ProviderHealthCooldown(),
+		},
+		MaxBodyBytes: cfg.MaxRequestBodyBytes,
 	})
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,
@@ -68,6 +73,7 @@ func main() {
 	logger.Info("open-ai-gateway configured",
 		"providers", cfg.ProviderNames(),
 		"models", cfg.ModelNames(),
+		"gateway_api_key_count", len(cfg.GatewayAPIKeys()),
 		"request_timeout_seconds", cfg.RequestTimeoutSeconds,
 		"stream_timeout_seconds", cfg.StreamTimeoutSeconds,
 		"read_header_timeout_seconds", cfg.ReadHeaderTimeoutSeconds,
@@ -79,6 +85,8 @@ func main() {
 		"log_format", cfg.Log.Format,
 		"log_level", cfg.Log.Level,
 		"rate_limit_requests_per_minute", cfg.RateLimit.RequestsPerMinute,
+		"provider_health_failure_threshold", cfg.ProviderHealth.FailureThreshold,
+		"provider_health_cooldown_seconds", cfg.ProviderHealth.CooldownSeconds,
 	)
 
 	if err := serve(ctx, httpServer, cfg.ShutdownTimeout(), logger); err != nil {
@@ -191,6 +199,7 @@ func buildRouter(cfg *config.Config) (*router.ModelRouter, error) {
 			ProviderName:  modelConfig.Provider,
 			Capabilities:  capabilities(modelConfig.Capabilities),
 			Provider:      provider,
+			Pricing:       pricing(modelConfig.Pricing),
 			Fallbacks:     fallbacks,
 		})
 	}
@@ -222,7 +231,15 @@ func fallbackRoutes(externalModel string, fallbacks []config.ModelFallbackConfig
 			UpstreamModel: upstreamModel,
 			ProviderName:  fallback.Provider,
 			Provider:      provider,
+			Pricing:       pricing(fallback.Pricing),
 		})
 	}
 	return routes, nil
+}
+
+func pricing(value config.PricingConfig) router.TokenPricing {
+	return router.TokenPricing{
+		PromptUSDPer1MTokens:     value.PromptUSDPer1MTokens,
+		CompletionUSDPer1MTokens: value.CompletionUSDPer1MTokens,
+	}
 }

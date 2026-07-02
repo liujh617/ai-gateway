@@ -211,6 +211,65 @@ func TestLoadConfigDefaultsCapabilities(t *testing.T) {
 	}
 }
 
+func TestLoadConfigAcceptsGatewayAPIKeys(t *testing.T) {
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_keys": ["client-key-1", "client-key-2"],
+		"providers": {
+			"fake": {
+				"type": "fake"
+			}
+		},
+		"models": {
+			"test-model": {
+				"provider": "fake"
+			}
+		}
+	}`)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	keys := cfg.GatewayAPIKeys()
+	if len(keys) != 2 || keys[0] != "client-key-1" || keys[1] != "client-key-2" {
+		t.Fatalf("gateway keys = %#v", keys)
+	}
+}
+
+func TestLoadConfigRejectsInvalidGatewayAPIKeys(t *testing.T) {
+	for name, rawKeys := range map[string]string{
+		"empty":     `["client-key", ""]`,
+		"duplicate": `["client-key", "client-key"]`,
+		"space":     `[" client-key "]`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := writeConfig(t, `{
+				"addr": "127.0.0.1:8080",
+				"api_keys": `+rawKeys+`,
+				"providers": {
+					"fake": {
+						"type": "fake"
+					}
+				},
+				"models": {
+					"test-model": {
+						"provider": "fake"
+					}
+				}
+			}`)
+
+			_, err := config.Load(path)
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if !strings.Contains(err.Error(), "api_keys") {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
 func TestLoadConfigAcceptsModelFallbacks(t *testing.T) {
 	path := writeConfig(t, `{
 		"addr": "127.0.0.1:8080",
@@ -227,10 +286,18 @@ func TestLoadConfigAcceptsModelFallbacks(t *testing.T) {
 			"test-model": {
 				"provider": "primary",
 				"upstream_model": "primary-model",
+				"pricing": {
+					"prompt_usd_per_1m_tokens": 0.1,
+					"completion_usd_per_1m_tokens": 0.2
+				},
 				"fallbacks": [
 					{
 						"provider": "backup",
-						"upstream_model": "backup-model"
+						"upstream_model": "backup-model",
+						"pricing": {
+							"prompt_usd_per_1m_tokens": 0.3,
+							"completion_usd_per_1m_tokens": 0.4
+						}
 					}
 				]
 			}
@@ -244,6 +311,12 @@ func TestLoadConfigAcceptsModelFallbacks(t *testing.T) {
 	fallbacks := cfg.Models["test-model"].Fallbacks
 	if len(fallbacks) != 1 || fallbacks[0].Provider != "backup" || fallbacks[0].UpstreamModel != "backup-model" {
 		t.Fatalf("fallbacks = %#v", fallbacks)
+	}
+	if cfg.Models["test-model"].Pricing.PromptUSDPer1MTokens != 0.1 {
+		t.Fatalf("pricing = %#v", cfg.Models["test-model"].Pricing)
+	}
+	if fallbacks[0].Pricing.CompletionUSDPer1MTokens != 0.4 {
+		t.Fatalf("fallback pricing = %#v", fallbacks[0].Pricing)
 	}
 }
 
@@ -277,6 +350,42 @@ func TestLoadConfigValidatesModelFallbackProvider(t *testing.T) {
 	}
 }
 
+func TestLoadConfigValidatesPricing(t *testing.T) {
+	for name, body := range map[string]string{
+		"model":    `"pricing":{"prompt_usd_per_1m_tokens":-0.1}`,
+		"fallback": `"fallbacks":[{"provider":"backup","pricing":{"completion_usd_per_1m_tokens":-0.1}}]`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := writeConfig(t, `{
+				"addr": "127.0.0.1:8080",
+				"api_key": "gateway-key",
+				"providers": {
+					"primary": {
+						"type": "fake"
+					},
+					"backup": {
+						"type": "fake"
+					}
+				},
+				"models": {
+					"test-model": {
+						"provider": "primary",
+						`+body+`
+					}
+				}
+			}`)
+
+			_, err := config.Load(path)
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if !strings.Contains(err.Error(), "pricing") {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
 func TestEnvironmentOverrides(t *testing.T) {
 	t.Setenv("GATEWAY_ADDR", "127.0.0.1:9090")
 	t.Setenv("GATEWAY_API_KEY", "override-key")
@@ -290,6 +399,19 @@ func TestEnvironmentOverrides(t *testing.T) {
 	}
 	if cfg.APIKey != "override-key" {
 		t.Fatalf("api key = %q", cfg.APIKey)
+	}
+}
+
+func TestEnvironmentAPIKeysOverride(t *testing.T) {
+	t.Setenv("GATEWAY_API_KEYS", "env-key-1, env-key-2")
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("Load default: %v", err)
+	}
+	keys := cfg.GatewayAPIKeys()
+	if len(keys) != 2 || keys[0] != "env-key-1" || keys[1] != "env-key-2" {
+		t.Fatalf("gateway keys = %#v", keys)
 	}
 }
 
@@ -407,7 +529,7 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	t.Setenv("UPSTREAM_KEY", "secret-value")
 	path := writeConfig(t, `{
 		"addr": "127.0.0.1:8080",
-		"api_key": "gateway-key",
+		"api_keys": ["gateway-key-one", "gateway-key-two"],
 		"providers": {
 			"openai": {
 				"type": "openai-compatible",
@@ -434,6 +556,9 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	text := string(payload)
 	if strings.Contains(text, "secret-value") || strings.Contains(text, "gateway-key") {
 		t.Fatalf("report leaked secret: %s", text)
+	}
+	if report.GatewayAPIKeyCount != 2 {
+		t.Fatalf("gateway api key count = %d", report.GatewayAPIKeyCount)
 	}
 	if len(report.Providers) != 1 || !report.Providers[0].APIKeyEnvSet {
 		t.Fatalf("provider summary = %#v", report.Providers)

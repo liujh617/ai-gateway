@@ -16,6 +16,10 @@
   "rate_limit": {
     "requests_per_minute": 60
   },
+  "provider_health": {
+    "failure_threshold": 2,
+    "cooldown_seconds": 30
+  },
   "providers": {
     "deepseek": {
       "type": "openai-compatible",

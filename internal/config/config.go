@@ -15,6 +15,7 @@ import (
 type Config struct {
 	Addr                     string                    `json:"addr"`
 	APIKey                   string                    `json:"api_key"`
+	APIKeys                  []string                  `json:"api_keys"`
 	RequestTimeoutSeconds    int                       `json:"request_timeout_seconds"`
 	StreamTimeoutSeconds     int                       `json:"stream_timeout_seconds"`
 	ReadHeaderTimeoutSeconds int                       `json:"read_header_timeout_seconds"`
@@ -25,6 +26,7 @@ type Config struct {
 	MaxRequestBodyBytes      int64                     `json:"max_request_body_bytes"`
 	Log                      LogConfig                 `json:"log"`
 	RateLimit                RateLimitConfig           `json:"rate_limit"`
+	ProviderHealth           ProviderHealthConfig      `json:"provider_health"`
 	Providers                map[string]ProviderConfig `json:"providers"`
 	Models                   map[string]ModelConfig    `json:"models"`
 }
@@ -41,16 +43,28 @@ type ModelConfig struct {
 	Provider      string                `json:"provider"`
 	UpstreamModel string                `json:"upstream_model"`
 	Capabilities  []string              `json:"capabilities"`
+	Pricing       PricingConfig         `json:"pricing"`
 	Fallbacks     []ModelFallbackConfig `json:"fallbacks"`
 }
 
 type ModelFallbackConfig struct {
-	Provider      string `json:"provider"`
-	UpstreamModel string `json:"upstream_model"`
+	Provider      string        `json:"provider"`
+	UpstreamModel string        `json:"upstream_model"`
+	Pricing       PricingConfig `json:"pricing"`
+}
+
+type PricingConfig struct {
+	PromptUSDPer1MTokens     float64 `json:"prompt_usd_per_1m_tokens"`
+	CompletionUSDPer1MTokens float64 `json:"completion_usd_per_1m_tokens"`
 }
 
 type RateLimitConfig struct {
 	RequestsPerMinute int `json:"requests_per_minute"`
+}
+
+type ProviderHealthConfig struct {
+	FailureThreshold int `json:"failure_threshold"`
+	CooldownSeconds  int `json:"cooldown_seconds"`
 }
 
 type LogConfig struct {
@@ -59,11 +73,12 @@ type LogConfig struct {
 }
 
 type CheckReport struct {
-	ProviderCount int
-	ModelCount    int
-	Providers     []ProviderSummary
-	Models        []ModelSummary
-	Warnings      []string
+	GatewayAPIKeyCount int
+	ProviderCount      int
+	ModelCount         int
+	Providers          []ProviderSummary
+	Models             []ModelSummary
+	Warnings           []string
 }
 
 type ProviderSummary struct {
@@ -80,6 +95,7 @@ type ModelSummary struct {
 	Provider      string
 	UpstreamModel string
 	Capabilities  []string
+	Pricing       PricingConfig
 	Fallbacks     []ModelFallbackConfig
 }
 
@@ -118,8 +134,9 @@ func Check(path string) (*Config, CheckReport, error) {
 
 func (c *Config) CheckReport() CheckReport {
 	report := CheckReport{
-		ProviderCount: len(c.Providers),
-		ModelCount:    len(c.Models),
+		GatewayAPIKeyCount: len(c.GatewayAPIKeys()),
+		ProviderCount:      len(c.Providers),
+		ModelCount:         len(c.Models),
 	}
 
 	for _, name := range c.ProviderNames() {
@@ -151,6 +168,7 @@ func (c *Config) CheckReport() CheckReport {
 			Provider:      model.Provider,
 			UpstreamModel: upstreamModel,
 			Capabilities:  append([]string(nil), model.Capabilities...),
+			Pricing:       model.Pricing,
 			Fallbacks:     append([]ModelFallbackConfig(nil), model.Fallbacks...),
 		})
 	}
@@ -197,6 +215,9 @@ func (c *Config) Validate() error {
 	if strings.TrimSpace(c.Addr) == "" {
 		return fmt.Errorf("addr is required")
 	}
+	if err := validateGatewayAPIKeys(c.APIKeys); err != nil {
+		return err
+	}
 	if _, _, err := net.SplitHostPort(c.Addr); err != nil {
 		return fmt.Errorf("addr must be host:port: %w", err)
 	}
@@ -232,6 +253,12 @@ func (c *Config) Validate() error {
 	}
 	if c.RateLimit.RequestsPerMinute < 0 {
 		return fmt.Errorf("rate_limit.requests_per_minute must be non-negative")
+	}
+	if c.ProviderHealth.FailureThreshold < 0 {
+		return fmt.Errorf("provider_health.failure_threshold must be non-negative")
+	}
+	if c.ProviderHealth.CooldownSeconds < 0 {
+		return fmt.Errorf("provider_health.cooldown_seconds must be non-negative")
 	}
 	switch c.Log.Format {
 	case "text", "json":
@@ -282,6 +309,9 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("model %q has unsupported capability %q", externalModel, capability)
 			}
 		}
+		if err := validatePricing(model.Pricing); err != nil {
+			return fmt.Errorf("model %q pricing %w", externalModel, err)
+		}
 		for index, fallback := range model.Fallbacks {
 			if strings.TrimSpace(fallback.Provider) == "" {
 				return fmt.Errorf("model %q fallback %d provider is required", externalModel, index)
@@ -289,7 +319,20 @@ func (c *Config) Validate() error {
 			if _, ok := c.Providers[fallback.Provider]; !ok {
 				return fmt.Errorf("model %q fallback %d references unknown provider %q", externalModel, index, fallback.Provider)
 			}
+			if err := validatePricing(fallback.Pricing); err != nil {
+				return fmt.Errorf("model %q fallback %d pricing %w", externalModel, index, err)
+			}
 		}
+	}
+	return nil
+}
+
+func validatePricing(pricing PricingConfig) error {
+	if pricing.PromptUSDPer1MTokens < 0 {
+		return fmt.Errorf("prompt_usd_per_1m_tokens must be non-negative")
+	}
+	if pricing.CompletionUSDPer1MTokens < 0 {
+		return fmt.Errorf("completion_usd_per_1m_tokens must be non-negative")
 	}
 	return nil
 }
@@ -324,6 +367,11 @@ func (c *Config) applyDefaults() {
 	}
 	if env := os.Getenv("GATEWAY_API_KEY"); env != "" {
 		c.APIKey = env
+		c.APIKeys = nil
+	}
+	if env := os.Getenv("GATEWAY_API_KEYS"); env != "" {
+		c.APIKey = ""
+		c.APIKeys = splitAPIKeys(env)
 	}
 	if c.RequestTimeoutSeconds == 0 {
 		c.RequestTimeoutSeconds = 60
@@ -348,6 +396,12 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Log.Level == "" {
 		c.Log.Level = "info"
+	}
+	if c.ProviderHealth.FailureThreshold == 0 {
+		c.ProviderHealth.FailureThreshold = 2
+	}
+	if c.ProviderHealth.CooldownSeconds == 0 {
+		c.ProviderHealth.CooldownSeconds = 30
 	}
 	for name, provider := range c.Providers {
 		if provider.TimeoutSeconds == 0 {
@@ -393,6 +447,45 @@ func durationFromSeconds(seconds int) time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
+func (c *Config) GatewayAPIKeys() []string {
+	if len(c.APIKeys) > 0 {
+		return append([]string(nil), c.APIKeys...)
+	}
+	if c.APIKey == "" {
+		return nil
+	}
+	return []string{c.APIKey}
+}
+
+func validateGatewayAPIKeys(keys []string) error {
+	seen := make(map[string]struct{}, len(keys))
+	for index, key := range keys {
+		if strings.TrimSpace(key) == "" {
+			return fmt.Errorf("api_keys[%d] must be non-empty", index)
+		}
+		if key != strings.TrimSpace(key) {
+			return fmt.Errorf("api_keys[%d] must not contain leading or trailing whitespace", index)
+		}
+		if _, ok := seen[key]; ok {
+			return fmt.Errorf("api_keys[%d] duplicates another gateway API key", index)
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
+}
+
+func splitAPIKeys(value string) []string {
+	parts := strings.Split(value, ",")
+	keys := make([]string, 0, len(parts))
+	for _, part := range parts {
+		key := strings.TrimSpace(part)
+		if key != "" {
+			keys = append(keys, key)
+		}
+	}
+	return keys
+}
+
 func (c *Config) RequestTimeout() time.Duration {
 	if c.RequestTimeoutSeconds <= 0 {
 		return 60 * time.Second
@@ -405,6 +498,13 @@ func (c *Config) StreamTimeout() time.Duration {
 		return 10 * time.Minute
 	}
 	return time.Duration(c.StreamTimeoutSeconds) * time.Second
+}
+
+func (c *Config) ProviderHealthCooldown() time.Duration {
+	if c.ProviderHealth.CooldownSeconds <= 0 {
+		return 30 * time.Second
+	}
+	return time.Duration(c.ProviderHealth.CooldownSeconds) * time.Second
 }
 
 func (p ProviderConfig) ResolvedAPIKey() string {

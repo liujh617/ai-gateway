@@ -13,6 +13,7 @@ type ModelRoute struct {
 	ProviderName  string
 	Capabilities  map[string]bool
 	Provider      provider.Provider
+	Pricing       TokenPricing
 	Fallbacks     []ProviderRoute
 }
 
@@ -20,6 +21,12 @@ type ProviderRoute struct {
 	UpstreamModel string
 	ProviderName  string
 	Provider      provider.Provider
+	Pricing       TokenPricing
+}
+
+type TokenPricing struct {
+	PromptUSDPer1MTokens     float64
+	CompletionUSDPer1MTokens float64
 }
 
 type ModelRouter struct {
@@ -54,6 +61,9 @@ func (r *ModelRouter) ResolveFor(model, capability string) (ModelRoute, *compat.
 }
 
 func (r *ModelRouter) Models() []compat.Model {
+	if r == nil {
+		return nil
+	}
 	models := make([]compat.Model, 0, len(r.routes))
 	for model := range r.routes {
 		models = append(models, compat.Model{
@@ -69,6 +79,29 @@ func (r *ModelRouter) Models() []compat.Model {
 	return models
 }
 
+func (r *ModelRouter) ProviderNames() []string {
+	if r == nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	for _, route := range r.routes {
+		if route.ProviderName != "" {
+			seen[route.ProviderName] = struct{}{}
+		}
+		for _, fallback := range route.Fallbacks {
+			if fallback.ProviderName != "" {
+				seen[fallback.ProviderName] = struct{}{}
+			}
+		}
+	}
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 func (r *ModelRouter) ModelCount() int {
 	if r == nil {
 		return 0
@@ -82,6 +115,7 @@ func (r ModelRoute) Attempts() []ProviderRoute {
 		UpstreamModel: r.UpstreamModel,
 		ProviderName:  r.ProviderName,
 		Provider:      r.Provider,
+		Pricing:       r.Pricing,
 	})
 	attempts = append(attempts, r.Fallbacks...)
 	return attempts
@@ -94,6 +128,7 @@ func (r ModelRoute) copy() ModelRoute {
 		ProviderName:  r.ProviderName,
 		Capabilities:  copyCapabilities(r.Capabilities),
 		Provider:      r.Provider,
+		Pricing:       r.Pricing,
 		Fallbacks:     append([]ProviderRoute(nil), r.Fallbacks...),
 	}
 }

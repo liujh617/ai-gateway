@@ -52,23 +52,46 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createEmbeddingWithFallback(ctx context.Context, r *http.Request, route router.ModelRoute, externalModel string, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
 	var lastErr error
+	var skippedFrom string
 	attempts := route.Attempts()
 	for index, attempt := range attempts {
+		if !s.providerHealth.Healthy(attempt.ProviderName) {
+			s.observeProviderHealth(attempt.ProviderName)
+			if skippedFrom == "" {
+				skippedFrom = attempt.ProviderName
+			}
+			s.logger.Warn("embedding provider circuit open; trying fallback", "provider", attempt.ProviderName)
+			continue
+		}
+		if skippedFrom != "" {
+			s.observeProviderFallback(routes.EmbeddingsPath, externalModel, skippedFrom, attempt.ProviderName)
+			skippedFrom = ""
+		}
 		attemptReq := req
 		attemptReq.Model = attempt.UpstreamModel
 		middleware.SetLogRoute(r.Context(), externalModel, attempt.ProviderName, attempt.UpstreamModel)
 		resp, err := attempt.Provider.CreateEmbedding(ctx, attemptReq)
 		if err == nil {
-			s.observeUsage(routes.EmbeddingsPath, externalModel, attempt.ProviderName, resp.Usage)
+			s.providerHealth.MarkSuccess(attempt.ProviderName)
+			s.observeProviderHealth(attempt.ProviderName)
+			s.observeUsage(routes.EmbeddingsPath, externalModel, attempt.ProviderName, resp.Usage, attempt.Pricing)
 			return resp, nil
 		}
 		lastErr = err
+		if canFallbackProviderError(err) {
+			s.providerHealth.MarkFailure(attempt.ProviderName)
+			s.observeProviderHealth(attempt.ProviderName)
+		}
 		if index == len(attempts)-1 || !canFallbackProviderError(err) {
 			return nil, err
 		}
-		nextAttempt := attempts[index+1]
-		s.observeProviderFallback(routes.EmbeddingsPath, externalModel, attempt.ProviderName, nextAttempt.ProviderName)
+		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
+			s.observeProviderFallback(routes.EmbeddingsPath, externalModel, attempt.ProviderName, nextProviderName)
+		}
 		s.logger.Warn("embedding provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
+	}
+	if skippedFrom != "" {
+		return nil, providerUnavailableError()
 	}
 	return nil, lastErr
 }
