@@ -635,4 +635,4 @@ open-ai-gateway check-config
 GATEWAY_CHECK_CONFIG=1 open-ai-gateway
 ```
 
-自检会加载配置、应用默认值、执行配置校验，并输出 provider/model 摘要和 warning。输出不得包含 API key 明文。
+自检会加载配置、应用默认值、执行配置校验，并输出 gateway client、provider/model 摘要和 warning。gateway client 摘要只包含非敏感 `name`、可见模型白名单和限流覆盖；输出不得包含 API key 明文。

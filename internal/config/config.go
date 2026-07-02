@@ -86,11 +86,18 @@ type LogConfig struct {
 
 type CheckReport struct {
 	GatewayAPIKeyCount int
+	GatewayClients     []GatewayClientSummary
 	ProviderCount      int
 	ModelCount         int
 	Providers          []ProviderSummary
 	Models             []ModelSummary
 	Warnings           []string
+}
+
+type GatewayClientSummary struct {
+	Name                       string
+	Models                     []string
+	RateLimitRequestsPerMinute *int
 }
 
 type ProviderSummary struct {
@@ -151,6 +158,14 @@ func (c *Config) CheckReport() CheckReport {
 		ModelCount:         len(c.Models),
 	}
 
+	for _, client := range c.GatewayAPIClients() {
+		report.GatewayClients = append(report.GatewayClients, GatewayClientSummary{
+			Name:                       client.Name,
+			Models:                     append([]string(nil), client.Models...),
+			RateLimitRequestsPerMinute: copyIntPointer(client.RateLimit.RequestsPerMinute),
+		})
+	}
+
 	for _, name := range c.ProviderNames() {
 		provider := c.Providers[name]
 		summary := ProviderSummary{
@@ -185,6 +200,14 @@ func (c *Config) CheckReport() CheckReport {
 		})
 	}
 	return report
+}
+
+func copyIntPointer(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	copied := *value
+	return &copied
 }
 
 func Default() *Config {

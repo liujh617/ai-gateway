@@ -613,7 +613,7 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	path := writeConfig(t, `{
 		"addr": "127.0.0.1:8080",
 		"api_clients": [
-			{"name":"alpha","api_key":"gateway-key-one"},
+			{"name":"alpha","api_key":"gateway-key-one","models":["gpt-4o-mini"],"rate_limit":{"requests_per_minute":60}},
 			{"name":"beta","api_key":"gateway-key-two"}
 		],
 		"providers": {
@@ -645,6 +645,18 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	}
 	if report.GatewayAPIKeyCount != 2 {
 		t.Fatalf("gateway api key count = %d", report.GatewayAPIKeyCount)
+	}
+	if len(report.GatewayClients) != 2 {
+		t.Fatalf("gateway clients = %#v", report.GatewayClients)
+	}
+	if report.GatewayClients[0].Name != "alpha" || len(report.GatewayClients[0].Models) != 1 || report.GatewayClients[0].Models[0] != "gpt-4o-mini" {
+		t.Fatalf("alpha summary = %#v", report.GatewayClients[0])
+	}
+	if report.GatewayClients[0].RateLimitRequestsPerMinute == nil || *report.GatewayClients[0].RateLimitRequestsPerMinute != 60 {
+		t.Fatalf("alpha rate limit summary = %#v", report.GatewayClients[0].RateLimitRequestsPerMinute)
+	}
+	if report.GatewayClients[1].Name != "beta" || len(report.GatewayClients[1].Models) != 0 || report.GatewayClients[1].RateLimitRequestsPerMinute != nil {
+		t.Fatalf("beta summary = %#v", report.GatewayClients[1])
 	}
 	if len(report.Providers) != 1 || !report.Providers[0].APIKeyEnvSet {
 		t.Fatalf("provider summary = %#v", report.Providers)
