@@ -643,6 +643,30 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	if strings.Contains(text, "secret-value") || strings.Contains(text, "gateway-key") {
 		t.Fatalf("report leaked secret: %s", text)
 	}
+	for _, want := range []string{
+		`"gateway_api_key_count":2`,
+		`"gateway_clients"`,
+		`"rate_limit_requests_per_minute":60`,
+		`"provider_count":1`,
+		`"api_key_env_set":true`,
+		`"upstream_model":"gpt-4o-mini"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("report missing %s: %s", want, text)
+		}
+	}
+	for _, unwanted := range []string{
+		"GatewayAPIKeyCount",
+		"GatewayClients",
+		"RateLimitRequestsPerMinute",
+		"ProviderCount",
+		"APIKeyEnvSet",
+		"UpstreamModel",
+	} {
+		if strings.Contains(text, unwanted) {
+			t.Fatalf("report used unstable field %q: %s", unwanted, text)
+		}
+	}
 	if report.GatewayAPIKeyCount != 2 {
 		t.Fatalf("gateway api key count = %d", report.GatewayAPIKeyCount)
 	}

@@ -85,37 +85,37 @@ type LogConfig struct {
 }
 
 type CheckReport struct {
-	GatewayAPIKeyCount int
-	GatewayClients     []GatewayClientSummary
-	ProviderCount      int
-	ModelCount         int
-	Providers          []ProviderSummary
-	Models             []ModelSummary
-	Warnings           []string
+	GatewayAPIKeyCount int                    `json:"gateway_api_key_count"`
+	GatewayClients     []GatewayClientSummary `json:"gateway_clients"`
+	ProviderCount      int                    `json:"provider_count"`
+	ModelCount         int                    `json:"model_count"`
+	Providers          []ProviderSummary      `json:"providers"`
+	Models             []ModelSummary         `json:"models"`
+	Warnings           []string               `json:"warnings"`
 }
 
 type GatewayClientSummary struct {
-	Name                       string
-	Models                     []string
-	RateLimitRequestsPerMinute *int
+	Name                       string   `json:"name"`
+	Models                     []string `json:"models"`
+	RateLimitRequestsPerMinute *int     `json:"rate_limit_requests_per_minute"`
 }
 
 type ProviderSummary struct {
-	Name         string
-	Type         string
-	BaseURL      string
-	APIKeySet    bool
-	APIKeyEnv    string
-	APIKeyEnvSet bool
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	BaseURL      string `json:"base_url"`
+	APIKeySet    bool   `json:"api_key_set"`
+	APIKeyEnv    string `json:"api_key_env"`
+	APIKeyEnvSet bool   `json:"api_key_env_set"`
 }
 
 type ModelSummary struct {
-	Name          string
-	Provider      string
-	UpstreamModel string
-	Capabilities  []string
-	Pricing       PricingConfig
-	Fallbacks     []ModelFallbackConfig
+	Name          string                `json:"name"`
+	Provider      string                `json:"provider"`
+	UpstreamModel string                `json:"upstream_model"`
+	Capabilities  []string              `json:"capabilities"`
+	Pricing       PricingConfig         `json:"pricing"`
+	Fallbacks     []ModelFallbackConfig `json:"fallbacks"`
 }
 
 func Load(path string) (*Config, error) {
