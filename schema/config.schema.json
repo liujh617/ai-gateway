@@ -22,6 +22,13 @@
       },
       "uniqueItems": true
     },
+    "api_clients": {
+      "type": "array",
+      "description": "Named gateway API keys for client Bearer auth and observability labels.",
+      "items": {
+        "$ref": "#/$defs/api_client"
+      }
+    },
     "request_timeout_seconds": {
       "type": "integer",
       "minimum": 0
@@ -56,6 +63,21 @@
     },
     "log": {
       "$ref": "#/$defs/log"
+    },
+    "api_client": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "api_key": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["name", "api_key"]
     },
     "rate_limit": {
       "$ref": "#/$defs/rate_limit"

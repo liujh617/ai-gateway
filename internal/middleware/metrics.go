@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sort"
@@ -20,10 +21,17 @@ type Metrics struct {
 	health    map[string]bool
 }
 
+type metricsFieldsKey struct{}
+
+type MetricsFields struct {
+	Client string
+}
+
 type metricKey struct {
 	Method string
 	Path   string
 	Status int
+	Client string
 }
 
 type requestMetric struct {
@@ -36,6 +44,7 @@ type tokenMetricKey struct {
 	Model    string
 	Provider string
 	Type     string
+	Client   string
 }
 
 type costMetricKey struct {
@@ -43,6 +52,7 @@ type costMetricKey struct {
 	Model    string
 	Provider string
 	Type     string
+	Client   string
 }
 
 type fallbackMetricKey struct {
@@ -65,27 +75,45 @@ func NewMetrics() *Metrics {
 func (m *Metrics) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
+		fields := &MetricsFields{}
+		r = r.WithContext(context.WithValue(r.Context(), metricsFieldsKey{}, fields))
 		rec := &metricsRecorder{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rec, r)
-		m.Observe(r.Method, routes.NormalizePath(r.URL.Path), rec.status, time.Since(started))
+		client := fields.Client
+		if client == "" {
+			if routes.IsPublicPath(r.URL.Path) {
+				client = "public"
+			} else {
+				client = "unauthenticated"
+			}
+		}
+		m.Observe(r.Method, routes.NormalizePath(r.URL.Path), rec.status, client, time.Since(started))
 	})
 }
 
-func (m *Metrics) Observe(method, path string, status int, duration time.Duration) {
+func SetMetricsClient(ctx context.Context, client string) {
+	fields, _ := ctx.Value(metricsFieldsKey{}).(*MetricsFields)
+	if fields == nil {
+		return
+	}
+	fields.Client = client
+}
+
+func (m *Metrics) Observe(method, path string, status int, client string, duration time.Duration) {
 	if m == nil {
 		return
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	key := metricKey{Method: method, Path: path, Status: status}
+	key := metricKey{Method: method, Path: path, Status: status, Client: client}
 	current := m.requests[key]
 	current.Count++
 	current.DurationSeconds += duration.Seconds()
 	m.requests[key] = current
 }
 
-func (m *Metrics) ObserveTokens(path, model, providerName, tokenType string, tokens int) {
+func (m *Metrics) ObserveTokens(path, model, providerName, tokenType, client string, tokens int) {
 	if m == nil || tokens <= 0 {
 		return
 	}
@@ -97,11 +125,12 @@ func (m *Metrics) ObserveTokens(path, model, providerName, tokenType string, tok
 		Model:    model,
 		Provider: providerName,
 		Type:     tokenType,
+		Client:   client,
 	}
 	m.tokens[key] += int64(tokens)
 }
 
-func (m *Metrics) ObserveTokenCostUSD(path, model, providerName, tokenType string, cost float64) {
+func (m *Metrics) ObserveTokenCostUSD(path, model, providerName, tokenType, client string, cost float64) {
 	if m == nil || cost <= 0 {
 		return
 	}
@@ -113,6 +142,7 @@ func (m *Metrics) ObserveTokenCostUSD(path, model, providerName, tokenType strin
 		Model:    model,
 		Provider: providerName,
 		Type:     tokenType,
+		Client:   client,
 	}
 	m.costs[key] += cost
 }
@@ -154,10 +184,11 @@ func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
 	fmt.Fprintln(w, "# TYPE open_ai_gateway_http_requests_total counter")
 	for _, item := range snapshot {
 		fmt.Fprintf(w,
-			"open_ai_gateway_http_requests_total{method=%q,path=%q,status=%q} %d\n",
+			"open_ai_gateway_http_requests_total{method=%q,path=%q,status=%q,client=%q} %d\n",
 			item.Key.Method,
 			item.Key.Path,
 			fmt.Sprint(item.Key.Status),
+			item.Key.Client,
 			item.Value.Count,
 		)
 	}
@@ -166,10 +197,11 @@ func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
 	fmt.Fprintln(w, "# TYPE open_ai_gateway_http_request_duration_seconds_total counter")
 	for _, item := range snapshot {
 		fmt.Fprintf(w,
-			"open_ai_gateway_http_request_duration_seconds_total{method=%q,path=%q,status=%q} %.9f\n",
+			"open_ai_gateway_http_request_duration_seconds_total{method=%q,path=%q,status=%q,client=%q} %.9f\n",
 			item.Key.Method,
 			item.Key.Path,
 			fmt.Sprint(item.Key.Status),
+			item.Key.Client,
 			item.Value.DurationSeconds,
 		)
 	}
@@ -179,11 +211,12 @@ func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
 	fmt.Fprintln(w, "# TYPE open_ai_gateway_tokens_total counter")
 	for _, item := range tokenSnapshot {
 		fmt.Fprintf(w,
-			"open_ai_gateway_tokens_total{path=%q,model=%q,provider=%q,type=%q} %d\n",
+			"open_ai_gateway_tokens_total{path=%q,model=%q,provider=%q,type=%q,client=%q} %d\n",
 			item.Key.Path,
 			item.Key.Model,
 			item.Key.Provider,
 			item.Key.Type,
+			item.Key.Client,
 			item.Value,
 		)
 	}
@@ -193,11 +226,12 @@ func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
 	fmt.Fprintln(w, "# TYPE open_ai_gateway_token_cost_usd_total counter")
 	for _, item := range costSnapshot {
 		fmt.Fprintf(w,
-			"open_ai_gateway_token_cost_usd_total{path=%q,model=%q,provider=%q,type=%q} %.9f\n",
+			"open_ai_gateway_token_cost_usd_total{path=%q,model=%q,provider=%q,type=%q,client=%q} %.9f\n",
 			item.Key.Path,
 			item.Key.Model,
 			item.Key.Provider,
 			item.Key.Type,
+			item.Key.Client,
 			item.Value,
 		)
 	}
@@ -253,7 +287,10 @@ func (m *Metrics) snapshot() []metricSnapshotItem {
 		if cmp := strings.Compare(left.Method, right.Method); cmp != 0 {
 			return cmp < 0
 		}
-		return left.Status < right.Status
+		if left.Status != right.Status {
+			return left.Status < right.Status
+		}
+		return left.Client < right.Client
 	})
 	return items
 }
@@ -283,7 +320,10 @@ func (m *Metrics) tokenSnapshot() []tokenMetricSnapshotItem {
 		if cmp := strings.Compare(left.Provider, right.Provider); cmp != 0 {
 			return cmp < 0
 		}
-		return left.Type < right.Type
+		if cmp := strings.Compare(left.Type, right.Type); cmp != 0 {
+			return cmp < 0
+		}
+		return left.Client < right.Client
 	})
 	return items
 }
@@ -313,7 +353,10 @@ func (m *Metrics) costSnapshot() []costMetricSnapshotItem {
 		if cmp := strings.Compare(left.Provider, right.Provider); cmp != 0 {
 			return cmp < 0
 		}
-		return left.Type < right.Type
+		if cmp := strings.Compare(left.Type, right.Type); cmp != 0 {
+			return cmp < 0
+		}
+		return left.Client < right.Client
 	})
 	return items
 }

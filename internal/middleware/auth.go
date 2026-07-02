@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"crypto/subtle"
 	"net/http"
 	"strings"
@@ -13,42 +14,79 @@ type ErrorWriter interface {
 	WriteError(w http.ResponseWriter, err *compat.Error)
 }
 
-func Auth(apiKeys []string, errors ErrorWriter) func(http.Handler) http.Handler {
-	keys := append([]string(nil), apiKeys...)
+type AuthCredential struct {
+	Client string
+	APIKey string
+}
+
+type clientKey struct{}
+
+func Auth(credentials []AuthCredential, errors ErrorWriter) func(http.Handler) http.Handler {
+	credentials = copyCredentials(credentials)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if routes.IsPublicPath(r.URL.Path) {
+				SetMetricsClient(r.Context(), "public")
 				next.ServeHTTP(w, r)
 				return
 			}
-			if len(keys) == 0 {
+			if len(credentials) == 0 {
+				SetMetricsClient(r.Context(), "unconfigured")
 				next.ServeHTTP(w, r)
 				return
 			}
-			if !validBearerToken(r.Header.Get("Authorization"), keys) {
+			client, ok := validBearerToken(r.Header.Get("Authorization"), credentials)
+			if !ok {
 				SetLogError(r.Context(), "authentication_error", nil)
+				SetMetricsClient(r.Context(), "unauthenticated")
 				errors.WriteError(w, compat.Authentication("invalid authorization token"))
 				return
 			}
+			SetLogClient(r.Context(), client)
+			SetMetricsClient(r.Context(), client)
+			r = r.WithContext(WithClient(r.Context(), client))
 			next.ServeHTTP(w, r)
 		})
 	}
 }
 
-func validBearerToken(header string, keys []string) bool {
+func WithClient(ctx context.Context, client string) context.Context {
+	return context.WithValue(ctx, clientKey{}, client)
+}
+
+func ClientFromContext(ctx context.Context) string {
+	client, _ := ctx.Value(clientKey{}).(string)
+	return client
+}
+
+func validBearerToken(header string, credentials []AuthCredential) (string, bool) {
 	got := strings.TrimSpace(header)
 	const prefix = "Bearer "
 	if !strings.HasPrefix(got, prefix) {
-		return false
+		return "", false
 	}
 	token := strings.TrimSpace(strings.TrimPrefix(got, prefix))
 	if token == "" {
-		return false
+		return "", false
 	}
-	for _, key := range keys {
-		if subtle.ConstantTimeCompare([]byte(token), []byte(key)) == 1 {
-			return true
+	for _, credential := range credentials {
+		if subtle.ConstantTimeCompare([]byte(token), []byte(credential.APIKey)) == 1 {
+			return credential.Client, true
 		}
 	}
-	return false
+	return "", false
+}
+
+func copyCredentials(in []AuthCredential) []AuthCredential {
+	out := make([]AuthCredential, 0, len(in))
+	for _, credential := range in {
+		if credential.APIKey == "" {
+			continue
+		}
+		if credential.Client == "" {
+			credential.Client = "default"
+		}
+		out = append(out, credential)
+	}
+	return out
 }

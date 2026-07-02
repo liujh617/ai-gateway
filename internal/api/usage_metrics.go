@@ -1,26 +1,32 @@
 package api
 
 import (
+	"context"
+
 	"open-ai-gateway/internal/compat"
+	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/router"
 )
 
-func (s *Server) observeUsage(path, externalModel, providerName string, usage *compat.Usage, pricing router.TokenPricing) {
+func (s *Server) observeUsage(path, externalModel, providerName, client string, usage *compat.Usage, pricing router.TokenPricing) {
 	if usage == nil || s.metrics == nil {
 		return
 	}
-	s.metrics.ObserveTokens(path, externalModel, providerName, "prompt", usage.PromptTokens)
-	s.metrics.ObserveTokens(path, externalModel, providerName, "completion", usage.CompletionTokens)
-	s.metrics.ObserveTokens(path, externalModel, providerName, "total", usage.TotalTokens)
-	s.observeCost(path, externalModel, providerName, usage, pricing)
+	if client == "" {
+		client = "unconfigured"
+	}
+	s.metrics.ObserveTokens(path, externalModel, providerName, "prompt", client, usage.PromptTokens)
+	s.metrics.ObserveTokens(path, externalModel, providerName, "completion", client, usage.CompletionTokens)
+	s.metrics.ObserveTokens(path, externalModel, providerName, "total", client, usage.TotalTokens)
+	s.observeCost(path, externalModel, providerName, usage, pricing, client)
 }
 
-func (s *Server) observeCost(path, externalModel, providerName string, usage *compat.Usage, pricing router.TokenPricing) {
+func (s *Server) observeCost(path, externalModel, providerName string, usage *compat.Usage, pricing router.TokenPricing, client string) {
 	promptCost := tokenCostUSD(usage.PromptTokens, pricing.PromptUSDPer1MTokens)
 	completionCost := tokenCostUSD(usage.CompletionTokens, pricing.CompletionUSDPer1MTokens)
-	s.metrics.ObserveTokenCostUSD(path, externalModel, providerName, "prompt", promptCost)
-	s.metrics.ObserveTokenCostUSD(path, externalModel, providerName, "completion", completionCost)
-	s.metrics.ObserveTokenCostUSD(path, externalModel, providerName, "total", promptCost+completionCost)
+	s.metrics.ObserveTokenCostUSD(path, externalModel, providerName, "prompt", client, promptCost)
+	s.metrics.ObserveTokenCostUSD(path, externalModel, providerName, "completion", client, completionCost)
+	s.metrics.ObserveTokenCostUSD(path, externalModel, providerName, "total", client, promptCost+completionCost)
 }
 
 func tokenCostUSD(tokens int, usdPer1MTokens float64) float64 {
@@ -28,6 +34,10 @@ func tokenCostUSD(tokens int, usdPer1MTokens float64) float64 {
 		return 0
 	}
 	return float64(tokens) * usdPer1MTokens / 1_000_000
+}
+
+func clientFromContext(ctx context.Context) string {
+	return middleware.ClientFromContext(ctx)
 }
 
 func (s *Server) observeProviderFallback(path, externalModel, fromProvider, toProvider string) {

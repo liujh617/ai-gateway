@@ -54,7 +54,7 @@ func main() {
 		RequestTimeout: cfg.RequestTimeout(),
 		StreamTimeout:  cfg.StreamTimeout(),
 		RateLimiter:    middleware.NewRateLimiter(cfg.RateLimit.RequestsPerMinute),
-		APIKeys:        cfg.GatewayAPIKeys(),
+		Credentials:    gatewayCredentials(cfg),
 		ProviderHealthOptions: api.ProviderHealthOptions{
 			FailureThreshold: cfg.ProviderHealth.FailureThreshold,
 			Cooldown:         cfg.ProviderHealthCooldown(),
@@ -73,7 +73,7 @@ func main() {
 	logger.Info("open-ai-gateway configured",
 		"providers", cfg.ProviderNames(),
 		"models", cfg.ModelNames(),
-		"gateway_api_key_count", len(cfg.GatewayAPIKeys()),
+		"gateway_api_key_count", len(cfg.GatewayAPIClients()),
 		"request_timeout_seconds", cfg.RequestTimeoutSeconds,
 		"stream_timeout_seconds", cfg.StreamTimeoutSeconds,
 		"read_header_timeout_seconds", cfg.ReadHeaderTimeoutSeconds,
@@ -235,6 +235,18 @@ func fallbackRoutes(externalModel string, fallbacks []config.ModelFallbackConfig
 		})
 	}
 	return routes, nil
+}
+
+func gatewayCredentials(cfg *config.Config) []middleware.AuthCredential {
+	clients := cfg.GatewayAPIClients()
+	credentials := make([]middleware.AuthCredential, 0, len(clients))
+	for _, client := range clients {
+		credentials = append(credentials, middleware.AuthCredential{
+			Client: client.Name,
+			APIKey: client.APIKey,
+		})
+	}
+	return credentials
 }
 
 func pricing(value config.PricingConfig) router.TokenPricing {

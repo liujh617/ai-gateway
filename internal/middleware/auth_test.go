@@ -10,7 +10,10 @@ import (
 )
 
 func TestAuthAcceptsAnyConfiguredAPIKey(t *testing.T) {
-	handler := Auth([]string{"first-key", "second-key"}, testErrorWriter{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := Auth([]AuthCredential{
+		{Client: "first", APIKey: "first-key"},
+		{Client: "second", APIKey: "second-key"},
+	}, testErrorWriter{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -28,7 +31,10 @@ func TestAuthAcceptsAnyConfiguredAPIKey(t *testing.T) {
 }
 
 func TestAuthRejectsUnknownAPIKey(t *testing.T) {
-	handler := Auth([]string{"first-key", "second-key"}, testErrorWriter{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := Auth([]AuthCredential{
+		{Client: "first", APIKey: "first-key"},
+		{Client: "second", APIKey: "second-key"},
+	}, testErrorWriter{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
@@ -43,7 +49,7 @@ func TestAuthRejectsUnknownAPIKey(t *testing.T) {
 }
 
 func TestAuthAllowsPublicRoutesWithoutAPIKey(t *testing.T) {
-	handler := Auth([]string{"first-key"}, testErrorWriter{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := Auth([]AuthCredential{{Client: "first", APIKey: "first-key"}}, testErrorWriter{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)

@@ -73,6 +73,7 @@ Upstream Model Service
 - `status`
 - `latency_ms`
 - `external_model`
+- `client`
 - `provider`
 - `upstream_model`
 - `stream`
@@ -92,8 +93,9 @@ Metrics endpoint:
 - `open_ai_gateway_provider_fallbacks_total`
 - `open_ai_gateway_provider_health_status`
 - Metrics `path` labels keep known routes and collapse unknown routes to `/__unknown__`.
-- Token metrics use provider-reported `usage` only and are labeled by path, external model, provider, and token type. Streaming chat completions record token metrics only when an upstream SSE chunk includes `usage`.
-- Cost metrics use provider-reported `usage` plus optional per-model or fallback pricing config, and are labeled by path, external model, provider, and token type.
+- HTTP metrics include the non-secret gateway client label when available.
+- Token metrics use provider-reported `usage` only and are labeled by path, external model, provider, token type, and gateway client. Streaming chat completions record token metrics only when an upstream SSE chunk includes `usage`.
+- Cost metrics use provider-reported `usage` plus optional per-model or fallback pricing config, and are labeled by path, external model, provider, token type, and gateway client.
 - Provider fallback metrics are labeled by path, external model, source provider, and target provider.
 - Provider health metrics expose each provider's in-memory circuit breaker state.
 
@@ -163,7 +165,7 @@ Provider Adapter 不应直接依赖 HTTP handler。
 职责：
 
 - 加载监听地址。
-- 加载一个或多个网关 API key。
+- 加载一个或多个网关 API key，支持非敏感 gateway client name。
 - 加载 provider 配置。
 - 加载模型映射。
 - 加载模型和 fallback 的可选 token pricing。

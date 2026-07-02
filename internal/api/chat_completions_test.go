@@ -89,12 +89,12 @@ func TestChatCompletionsStreamRecordsUsageMetrics(t *testing.T) {
 		t.Fatalf("missing usage chunk: %s", text)
 	}
 	for _, want := range []string{
-		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="prompt"} 3`,
-		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="completion"} 5`,
-		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total"} 8`,
-		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="prompt"} 3.000000000`,
-		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="completion"} 10.000000000`,
-		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total"} 13.000000000`,
+		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="prompt",client="default"} 3`,
+		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="completion",client="default"} 5`,
+		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total",client="default"} 8`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="prompt",client="default"} 3.000000000`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="completion",client="default"} 10.000000000`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total",client="default"} 13.000000000`,
 	} {
 		assertMetricsContains(t, handler, want)
 	}
@@ -275,8 +275,8 @@ func TestChatCompletionsFallbackUsesFallbackPricing(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
 	}
-	assertMetricsContains(t, handler, `open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="backup-provider",type="prompt"} 3.000000000`)
-	assertMetricsContains(t, handler, `open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="backup-provider",type="completion"} 4.000000000`)
+	assertMetricsContains(t, handler, `open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="backup-provider",type="prompt",client="default"} 3.000000000`)
+	assertMetricsContains(t, handler, `open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="backup-provider",type="completion",client="default"} 4.000000000`)
 	assertMetricsNotContains(t, handler, `open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="primary-provider"`)
 }
 
@@ -533,18 +533,56 @@ func TestMetricsRecordsRequests(t *testing.T) {
 
 	text := rr.Body.String()
 	for _, want := range []string{
-		`open_ai_gateway_http_requests_total{method="POST",path="/v1/chat/completions",status="200"} 1`,
-		`open_ai_gateway_http_requests_total{method="POST",path="/v1/chat/completions",status="400"} 1`,
-		`open_ai_gateway_http_request_duration_seconds_total{method="POST",path="/v1/chat/completions",status="200"}`,
-		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="prompt"} 1`,
-		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="completion"} 1`,
-		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total"} 2`,
-		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="prompt"} 1.000000000`,
-		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="completion"} 2.000000000`,
-		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total"} 3.000000000`,
+		`open_ai_gateway_http_requests_total{method="POST",path="/v1/chat/completions",status="200",client="default"} 1`,
+		`open_ai_gateway_http_requests_total{method="POST",path="/v1/chat/completions",status="400",client="default"} 1`,
+		`open_ai_gateway_http_request_duration_seconds_total{method="POST",path="/v1/chat/completions",status="200",client="default"}`,
+		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="prompt",client="default"} 1`,
+		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="completion",client="default"} 1`,
+		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total",client="default"} 2`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="prompt",client="default"} 1.000000000`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="completion",client="default"} 2.000000000`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total",client="default"} 3.000000000`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("metrics missing %s: %s", want, text)
+		}
+	}
+}
+
+func TestMetricsAndLogsIncludeClientLabelWithoutToken(t *testing.T) {
+	var logs bytes.Buffer
+	handler := newCredentialTestHandler(fake.New(), slog.New(slog.NewJSONHandler(&logs, nil)))
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	alpha := doJSONWithKey(handler, body, "alpha-secret")
+	if alpha.Code != http.StatusOK {
+		t.Fatalf("alpha status = %d, body = %s", alpha.Code, alpha.Body.String())
+	}
+	beta := doJSONWithKey(handler, body, "beta-secret")
+	if beta.Code != http.StatusOK {
+		t.Fatalf("beta status = %d, body = %s", beta.Code, beta.Body.String())
+	}
+
+	metrics := collectMetrics(t, handler)
+	for _, want := range []string{
+		`open_ai_gateway_http_requests_total{method="POST",path="/v1/chat/completions",status="200",client="alpha"} 1`,
+		`open_ai_gateway_http_requests_total{method="POST",path="/v1/chat/completions",status="200",client="beta"} 1`,
+		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total",client="alpha"} 2`,
+		`open_ai_gateway_tokens_total{path="/v1/chat/completions",model="test-model",provider="fake-provider",type="total",client="beta"} 2`,
+	} {
+		if !strings.Contains(metrics, want) {
+			t.Fatalf("metrics missing %s: %s", want, metrics)
+		}
+	}
+	text := logs.String()
+	for _, want := range []string{`"client":"alpha"`, `"client":"beta"`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("logs missing %s: %s", want, text)
+		}
+	}
+	for _, secret := range []string{"alpha-secret", "beta-secret"} {
+		if strings.Contains(text, secret) || strings.Contains(metrics, secret) {
+			t.Fatalf("secret leaked: logs=%s metrics=%s", text, metrics)
 		}
 	}
 }
@@ -567,10 +605,10 @@ func TestMetricsRecordsEmbeddingUsage(t *testing.T) {
 
 	text := rr.Body.String()
 	for _, want := range []string{
-		`open_ai_gateway_tokens_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="prompt"} 1`,
-		`open_ai_gateway_tokens_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="total"} 1`,
-		`open_ai_gateway_token_cost_usd_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="prompt"} 1.000000000`,
-		`open_ai_gateway_token_cost_usd_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="total"} 1.000000000`,
+		`open_ai_gateway_tokens_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="prompt",client="default"} 1`,
+		`open_ai_gateway_tokens_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="total",client="default"} 1`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="prompt",client="default"} 1.000000000`,
+		`open_ai_gateway_token_cost_usd_total{path="/v1/embeddings",model="test-model",provider="fake-provider",type="total",client="default"} 1.000000000`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("metrics missing %s: %s", want, text)
@@ -597,7 +635,7 @@ func TestMetricsNormalizesUnknownPaths(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	text := rr.Body.String()
-	want := `open_ai_gateway_http_requests_total{method="GET",path="/__unknown__",status="404"} 2`
+	want := `open_ai_gateway_http_requests_total{method="GET",path="/__unknown__",status="404",client="default"} 2`
 	if !strings.Contains(text, want) {
 		t.Fatalf("metrics missing %s: %s", want, text)
 	}
@@ -620,7 +658,7 @@ func TestMetricsKeepsKnownPathForMethodNotAllowed(t *testing.T) {
 	metricsRR := httptest.NewRecorder()
 	handler.ServeHTTP(metricsRR, metricsReq)
 
-	want := `open_ai_gateway_http_requests_total{method="GET",path="/v1/chat/completions",status="405"} 1`
+	want := `open_ai_gateway_http_requests_total{method="GET",path="/v1/chat/completions",status="405",client="default"} 1`
 	if !strings.Contains(metricsRR.Body.String(), want) {
 		t.Fatalf("metrics missing %s: %s", want, metricsRR.Body.String())
 	}
@@ -1258,6 +1296,21 @@ func newPricingTestHandler(p provider.Provider, pricing router.TokenPricing) htt
 	return api.NewServer(modelRouter, testAPIKey, logger).Handler()
 }
 
+func newCredentialTestHandler(p provider.Provider, logger *slog.Logger) http.Handler {
+	modelRouter := router.NewModelRouter([]router.ModelRoute{{
+		ExternalModel: "test-model",
+		UpstreamModel: "upstream-test-model",
+		ProviderName:  "fake-provider",
+		Provider:      p,
+	}})
+	return api.NewServer(modelRouter, "", logger, api.Options{
+		Credentials: []middleware.AuthCredential{
+			{Client: "alpha", APIKey: "alpha-secret"},
+			{Client: "beta", APIKey: "beta-secret"},
+		},
+	}).Handler()
+}
+
 func newFallbackTestHandler(primary provider.Provider, fallback provider.Provider) http.Handler {
 	return newFallbackTestHandlerWithOptions(primary, fallback, api.Options{})
 }
@@ -1325,6 +1378,15 @@ func newCapabilityTestHandler(p provider.Provider) http.Handler {
 
 func doJSON(handler http.Handler, body string, auth bool) *httptest.ResponseRecorder {
 	return doJSONWithContentType(handler, body, auth, "application/json")
+}
+
+func doJSONWithKey(handler http.Handler, body string, apiKey string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	return rr
 }
 
 func doJSONWithContentType(handler http.Handler, body string, auth bool, contentType string) *httptest.ResponseRecorder {

@@ -12,6 +12,7 @@ import (
 type logFieldsKey struct{}
 
 type LogFields struct {
+	Client        string
 	ExternalModel string
 	Provider      string
 	UpstreamModel string
@@ -39,6 +40,9 @@ func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 			if fields.ExternalModel != "" {
 				attrs = append(attrs, "external_model", fields.ExternalModel)
 			}
+			if fields.Client != "" {
+				attrs = append(attrs, "client", fields.Client)
+			}
 			if fields.Provider != "" {
 				attrs = append(attrs, "provider", fields.Provider)
 			}
@@ -57,6 +61,14 @@ func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 			logger.Info("request completed", attrs...)
 		})
 	}
+}
+
+func SetLogClient(ctx context.Context, client string) {
+	fields := logFieldsFromContext(ctx)
+	if fields == nil {
+		return
+	}
+	fields.Client = client
 }
 
 func SetLogRoute(ctx context.Context, externalModel, providerName, upstreamModel string) {

@@ -16,7 +16,7 @@ import (
 type Server struct {
 	router         *router.ModelRouter
 	logger         *slog.Logger
-	apiKeys        []string
+	credentials    []middleware.AuthCredential
 	requestTimeout time.Duration
 	streamTimeout  time.Duration
 	rateLimiter    *middleware.RateLimiter
@@ -31,7 +31,7 @@ type Options struct {
 	RateLimiter           *middleware.RateLimiter
 	Metrics               *middleware.Metrics
 	ProviderHealthOptions ProviderHealthOptions
-	APIKeys               []string
+	Credentials           []middleware.AuthCredential
 	MaxBodyBytes          int64
 }
 
@@ -55,9 +55,12 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 	if opts.Metrics == nil {
 		opts.Metrics = middleware.NewMetrics()
 	}
-	apiKeys := append([]string(nil), opts.APIKeys...)
-	if len(apiKeys) == 0 && apiKey != "" {
-		apiKeys = []string{apiKey}
+	credentials := append([]middleware.AuthCredential(nil), opts.Credentials...)
+	if len(credentials) == 0 && apiKey != "" {
+		credentials = []middleware.AuthCredential{{
+			Client: "default",
+			APIKey: apiKey,
+		}}
 	}
 	providerHealth := newProviderHealth(opts.ProviderHealthOptions)
 	for _, providerName := range modelRouter.ProviderNames() {
@@ -66,7 +69,7 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 	}
 	return &Server{
 		router:         modelRouter,
-		apiKeys:        apiKeys,
+		credentials:    credentials,
 		logger:         logger,
 		requestTimeout: opts.RequestTimeout,
 		streamTimeout:  opts.StreamTimeout,
@@ -94,7 +97,7 @@ func (s *Server) Handler() http.Handler {
 	if s.rateLimiter != nil {
 		handler = s.rateLimiter.Middleware(s)(handler)
 	}
-	handler = middleware.Auth(s.apiKeys, s)(handler)
+	handler = middleware.Auth(s.credentials, s)(handler)
 	if s.metrics != nil {
 		handler = s.metrics.Middleware(handler)
 	}

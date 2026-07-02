@@ -16,6 +16,7 @@ type Config struct {
 	Addr                     string                    `json:"addr"`
 	APIKey                   string                    `json:"api_key"`
 	APIKeys                  []string                  `json:"api_keys"`
+	APIClients               []GatewayClientConfig     `json:"api_clients"`
 	RequestTimeoutSeconds    int                       `json:"request_timeout_seconds"`
 	StreamTimeoutSeconds     int                       `json:"stream_timeout_seconds"`
 	ReadHeaderTimeoutSeconds int                       `json:"read_header_timeout_seconds"`
@@ -37,6 +38,11 @@ type ProviderConfig struct {
 	APIKey         string `json:"api_key"`
 	APIKeyEnv      string `json:"api_key_env"`
 	TimeoutSeconds int    `json:"timeout_seconds"`
+}
+
+type GatewayClientConfig struct {
+	Name   string `json:"name"`
+	APIKey string `json:"api_key"`
 }
 
 type ModelConfig struct {
@@ -218,6 +224,9 @@ func (c *Config) Validate() error {
 	if err := validateGatewayAPIKeys(c.APIKeys); err != nil {
 		return err
 	}
+	if err := validateGatewayAPIClients(c.APIClients); err != nil {
+		return err
+	}
 	if _, _, err := net.SplitHostPort(c.Addr); err != nil {
 		return fmt.Errorf("addr must be host:port: %w", err)
 	}
@@ -368,10 +377,12 @@ func (c *Config) applyDefaults() {
 	if env := os.Getenv("GATEWAY_API_KEY"); env != "" {
 		c.APIKey = env
 		c.APIKeys = nil
+		c.APIClients = nil
 	}
 	if env := os.Getenv("GATEWAY_API_KEYS"); env != "" {
 		c.APIKey = ""
 		c.APIKeys = splitAPIKeys(env)
+		c.APIClients = nil
 	}
 	if c.RequestTimeoutSeconds == 0 {
 		c.RequestTimeoutSeconds = 60
@@ -448,13 +459,38 @@ func durationFromSeconds(seconds int) time.Duration {
 }
 
 func (c *Config) GatewayAPIKeys() []string {
+	clients := c.GatewayAPIClients()
+	if len(clients) > 0 {
+		keys := make([]string, 0, len(clients))
+		for _, client := range clients {
+			keys = append(keys, client.APIKey)
+		}
+		return keys
+	}
+	return nil
+}
+
+func (c *Config) GatewayAPIClients() []GatewayClientConfig {
+	if len(c.APIClients) > 0 {
+		return append([]GatewayClientConfig(nil), c.APIClients...)
+	}
 	if len(c.APIKeys) > 0 {
-		return append([]string(nil), c.APIKeys...)
+		clients := make([]GatewayClientConfig, 0, len(c.APIKeys))
+		for index, key := range c.APIKeys {
+			clients = append(clients, GatewayClientConfig{
+				Name:   fmt.Sprintf("key_%d", index+1),
+				APIKey: key,
+			})
+		}
+		return clients
 	}
 	if c.APIKey == "" {
 		return nil
 	}
-	return []string{c.APIKey}
+	return []GatewayClientConfig{{
+		Name:   "default",
+		APIKey: c.APIKey,
+	}}
 }
 
 func validateGatewayAPIKeys(keys []string) error {
@@ -470,6 +506,34 @@ func validateGatewayAPIKeys(keys []string) error {
 			return fmt.Errorf("api_keys[%d] duplicates another gateway API key", index)
 		}
 		seen[key] = struct{}{}
+	}
+	return nil
+}
+
+func validateGatewayAPIClients(clients []GatewayClientConfig) error {
+	seenNames := make(map[string]struct{}, len(clients))
+	seenKeys := make(map[string]struct{}, len(clients))
+	for index, client := range clients {
+		if strings.TrimSpace(client.Name) == "" {
+			return fmt.Errorf("api_clients[%d].name must be non-empty", index)
+		}
+		if client.Name != strings.TrimSpace(client.Name) {
+			return fmt.Errorf("api_clients[%d].name must not contain leading or trailing whitespace", index)
+		}
+		if strings.TrimSpace(client.APIKey) == "" {
+			return fmt.Errorf("api_clients[%d].api_key must be non-empty", index)
+		}
+		if client.APIKey != strings.TrimSpace(client.APIKey) {
+			return fmt.Errorf("api_clients[%d].api_key must not contain leading or trailing whitespace", index)
+		}
+		if _, ok := seenNames[client.Name]; ok {
+			return fmt.Errorf("api_clients[%d].name duplicates another gateway client", index)
+		}
+		if _, ok := seenKeys[client.APIKey]; ok {
+			return fmt.Errorf("api_clients[%d].api_key duplicates another gateway API key", index)
+		}
+		seenNames[client.Name] = struct{}{}
+		seenKeys[client.APIKey] = struct{}{}
 	}
 	return nil
 }

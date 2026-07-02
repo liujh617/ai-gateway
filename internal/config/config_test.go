@@ -237,6 +237,39 @@ func TestLoadConfigAcceptsGatewayAPIKeys(t *testing.T) {
 	}
 }
 
+func TestLoadConfigAcceptsGatewayAPIClients(t *testing.T) {
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_clients": [
+			{"name": "alpha", "api_key": "client-key-1"},
+			{"name": "beta", "api_key": "client-key-2"}
+		],
+		"providers": {
+			"fake": {
+				"type": "fake"
+			}
+		},
+		"models": {
+			"test-model": {
+				"provider": "fake"
+			}
+		}
+	}`)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	clients := cfg.GatewayAPIClients()
+	if len(clients) != 2 || clients[0].Name != "alpha" || clients[1].APIKey != "client-key-2" {
+		t.Fatalf("gateway clients = %#v", clients)
+	}
+	keys := cfg.GatewayAPIKeys()
+	if len(keys) != 2 || keys[0] != "client-key-1" || keys[1] != "client-key-2" {
+		t.Fatalf("gateway keys = %#v", keys)
+	}
+}
+
 func TestLoadConfigRejectsInvalidGatewayAPIKeys(t *testing.T) {
 	for name, rawKeys := range map[string]string{
 		"empty":     `["client-key", ""]`,
@@ -264,6 +297,42 @@ func TestLoadConfigRejectsInvalidGatewayAPIKeys(t *testing.T) {
 				t.Fatal("expected validation error")
 			}
 			if !strings.Contains(err.Error(), "api_keys") {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
+func TestLoadConfigRejectsInvalidGatewayAPIClients(t *testing.T) {
+	for name, rawClients := range map[string]string{
+		"empty-name":     `[{"name":"","api_key":"client-key"}]`,
+		"empty-key":      `[{"name":"alpha","api_key":""}]`,
+		"duplicate-name": `[{"name":"alpha","api_key":"one"},{"name":"alpha","api_key":"two"}]`,
+		"duplicate-key":  `[{"name":"alpha","api_key":"same"},{"name":"beta","api_key":"same"}]`,
+		"space-name":     `[{"name":" alpha ","api_key":"client-key"}]`,
+		"space-key":      `[{"name":"alpha","api_key":" client-key "}]`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := writeConfig(t, `{
+				"addr": "127.0.0.1:8080",
+				"api_clients": `+rawClients+`,
+				"providers": {
+					"fake": {
+						"type": "fake"
+					}
+				},
+				"models": {
+					"test-model": {
+						"provider": "fake"
+					}
+				}
+			}`)
+
+			_, err := config.Load(path)
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if !strings.Contains(err.Error(), "api_clients") {
 				t.Fatalf("error = %v", err)
 			}
 		})
@@ -529,7 +598,10 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	t.Setenv("UPSTREAM_KEY", "secret-value")
 	path := writeConfig(t, `{
 		"addr": "127.0.0.1:8080",
-		"api_keys": ["gateway-key-one", "gateway-key-two"],
+		"api_clients": [
+			{"name":"alpha","api_key":"gateway-key-one"},
+			{"name":"beta","api_key":"gateway-key-two"}
+		],
 		"providers": {
 			"openai": {
 				"type": "openai-compatible",

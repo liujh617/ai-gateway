@@ -20,7 +20,7 @@ https://gateway.example.com/v1
 Authorization: Bearer <gateway-api-key>
 ```
 
-网关可以配置单个 `api_key`，也可以配置多个 `api_keys`。当 `api_keys` 非空时，任一列表中的 token 都可以通过鉴权；`api_key` 继续保留用于兼容早期配置。`GATEWAY_API_KEY` 可以覆盖单个 key，`GATEWAY_API_KEYS` 可以用逗号分隔的多个 key 覆盖列表。配置自检和日志不得输出实际 gateway API key。
+网关可以配置单个 `api_key`、多个 `api_keys`，或带非敏感名称的 `api_clients`。当 `api_clients` 非空时，任一 client 的 token 都可以通过鉴权，并使用 client `name` 作为日志和 metrics 标签；`api_key` 和 `api_keys` 继续保留用于兼容早期配置，默认 client 标签分别为 `default` 和 `key_1`、`key_2` 等。`GATEWAY_API_KEY` 可以覆盖单个 key，`GATEWAY_API_KEYS` 可以用逗号分隔的多个 key 覆盖列表。配置自检、日志和 metrics 不得输出实际 gateway API key。
 
 缺少、无效或无权限访问模型时，返回 OpenAI-compatible error response。
 
@@ -192,6 +192,7 @@ HTTP 指标标签：
 - `method`
 - `path`
 - `status`
+- `client`: gateway client name；公开路由为 `public`，鉴权失败为 `unauthenticated`
 
 `path` 标签只保留已知路由。未知路由统一归一化为 `/__unknown__`，避免恶意或异常路径造成 Prometheus label cardinality 无界增长。
 
@@ -203,6 +204,7 @@ Token 指标标签：
 - `model`
 - `provider`
 - `type`: `prompt`、`completion` 或 `total`
+- `client`
 
 Cost 指标仅在对应模型路由配置了 `pricing` 且 provider 返回了 `usage` 时记录。成本按 provider 返回的 token 数和配置中的每百万 token USD 单价计算，不做 token 估算，也不从 prompt 或 completion 内容推断成本。
 
@@ -212,6 +214,7 @@ Cost 指标标签：
 - `model`
 - `provider`
 - `type`: `prompt`、`completion` 或 `total`
+- `client`
 
 Provider fallback 指标在请求从主 provider 切换到备用 provider 时递增。流式响应只统计建连阶段的 fallback；SSE 已开始发送后不会切换 provider，也不会产生 fallback 指标。
 

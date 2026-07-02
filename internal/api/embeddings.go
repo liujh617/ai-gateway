@@ -74,7 +74,7 @@ func (s *Server) createEmbeddingWithFallback(ctx context.Context, r *http.Reques
 		if err == nil {
 			s.providerHealth.MarkSuccess(attempt.ProviderName)
 			s.observeProviderHealth(attempt.ProviderName)
-			s.observeUsage(routes.EmbeddingsPath, externalModel, attempt.ProviderName, resp.Usage, attempt.Pricing)
+			s.observeUsage(routes.EmbeddingsPath, externalModel, attempt.ProviderName, clientFromContext(r.Context()), resp.Usage, attempt.Pricing)
 			return resp, nil
 		}
 		lastErr = err

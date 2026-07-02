@@ -83,7 +83,7 @@ func (s *Server) createChatCompletionWithFallback(ctx context.Context, r *http.R
 		if err == nil {
 			s.providerHealth.MarkSuccess(attempt.ProviderName)
 			s.observeProviderHealth(attempt.ProviderName)
-			s.observeUsage(routes.ChatCompletionsPath, externalModel, attempt.ProviderName, resp.Usage, attempt.Pricing)
+			s.observeUsage(routes.ChatCompletionsPath, externalModel, attempt.ProviderName, clientFromContext(r.Context()), resp.Usage, attempt.Pricing)
 			return resp, nil
 		}
 		lastErr = err
@@ -149,7 +149,7 @@ func (s *Server) streamChatCompletion(w http.ResponseWriter, r *http.Request, ro
 			return
 		}
 		chunk.Model = externalModel
-		s.observeUsage(routes.ChatCompletionsPath, externalModel, providerName, chunk.Usage, pricing)
+		s.observeUsage(routes.ChatCompletionsPath, externalModel, providerName, clientFromContext(r.Context()), chunk.Usage, pricing)
 		if err := writeSSE(w, chunk); err != nil {
 			s.logger.Debug("failed to write stream chunk", "error", err)
 			return
