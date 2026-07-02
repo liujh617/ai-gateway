@@ -241,7 +241,7 @@ func TestLoadConfigAcceptsGatewayAPIClients(t *testing.T) {
 	path := writeConfig(t, `{
 		"addr": "127.0.0.1:8080",
 		"api_clients": [
-			{"name": "alpha", "api_key": "client-key-1", "rate_limit": {"requests_per_minute": 30}},
+			{"name": "alpha", "api_key": "client-key-1", "models": ["test-model"], "rate_limit": {"requests_per_minute": 30}},
 			{"name": "beta", "api_key": "client-key-2"}
 		],
 		"providers": {
@@ -266,6 +266,9 @@ func TestLoadConfigAcceptsGatewayAPIClients(t *testing.T) {
 	}
 	if clients[0].RateLimit.RequestsPerMinute == nil || *clients[0].RateLimit.RequestsPerMinute != 30 {
 		t.Fatalf("alpha rate limit = %#v", clients[0].RateLimit.RequestsPerMinute)
+	}
+	if len(clients[0].Models) != 1 || clients[0].Models[0] != "test-model" {
+		t.Fatalf("alpha models = %#v", clients[0].Models)
 	}
 	if clients[1].RateLimit.RequestsPerMinute != nil {
 		t.Fatalf("beta rate limit = %#v", clients[1].RateLimit.RequestsPerMinute)
@@ -311,13 +314,17 @@ func TestLoadConfigRejectsInvalidGatewayAPIKeys(t *testing.T) {
 
 func TestLoadConfigRejectsInvalidGatewayAPIClients(t *testing.T) {
 	for name, rawClients := range map[string]string{
-		"empty-name":     `[{"name":"","api_key":"client-key"}]`,
-		"empty-key":      `[{"name":"alpha","api_key":""}]`,
-		"duplicate-name": `[{"name":"alpha","api_key":"one"},{"name":"alpha","api_key":"two"}]`,
-		"duplicate-key":  `[{"name":"alpha","api_key":"same"},{"name":"beta","api_key":"same"}]`,
-		"space-name":     `[{"name":" alpha ","api_key":"client-key"}]`,
-		"space-key":      `[{"name":"alpha","api_key":" client-key "}]`,
-		"negative-limit": `[{"name":"alpha","api_key":"client-key","rate_limit":{"requests_per_minute":-1}}]`,
+		"empty-name":      `[{"name":"","api_key":"client-key"}]`,
+		"empty-key":       `[{"name":"alpha","api_key":""}]`,
+		"duplicate-name":  `[{"name":"alpha","api_key":"one"},{"name":"alpha","api_key":"two"}]`,
+		"duplicate-key":   `[{"name":"alpha","api_key":"same"},{"name":"beta","api_key":"same"}]`,
+		"space-name":      `[{"name":" alpha ","api_key":"client-key"}]`,
+		"space-key":       `[{"name":"alpha","api_key":" client-key "}]`,
+		"negative-limit":  `[{"name":"alpha","api_key":"client-key","rate_limit":{"requests_per_minute":-1}}]`,
+		"empty-model":     `[{"name":"alpha","api_key":"client-key","models":[""]}]`,
+		"space-model":     `[{"name":"alpha","api_key":"client-key","models":[" test-model "]}]`,
+		"unknown-model":   `[{"name":"alpha","api_key":"client-key","models":["missing-model"]}]`,
+		"duplicate-model": `[{"name":"alpha","api_key":"client-key","models":["test-model","test-model"]}]`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := writeConfig(t, `{

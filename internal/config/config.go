@@ -43,6 +43,7 @@ type ProviderConfig struct {
 type GatewayClientConfig struct {
 	Name      string                `json:"name"`
 	APIKey    string                `json:"api_key"`
+	Models    []string              `json:"models"`
 	RateLimit ClientRateLimitConfig `json:"rate_limit"`
 }
 
@@ -338,6 +339,9 @@ func (c *Config) Validate() error {
 			}
 		}
 	}
+	if err := c.validateGatewayClientModels(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -534,6 +538,14 @@ func validateGatewayAPIClients(clients []GatewayClientConfig) error {
 		if client.RateLimit.RequestsPerMinute != nil && *client.RateLimit.RequestsPerMinute < 0 {
 			return fmt.Errorf("api_clients[%d].rate_limit.requests_per_minute must be non-negative", index)
 		}
+		for modelIndex, model := range client.Models {
+			if strings.TrimSpace(model) == "" {
+				return fmt.Errorf("api_clients[%d].models[%d] must be non-empty", index, modelIndex)
+			}
+			if model != strings.TrimSpace(model) {
+				return fmt.Errorf("api_clients[%d].models[%d] must not contain leading or trailing whitespace", index, modelIndex)
+			}
+		}
 		if _, ok := seenNames[client.Name]; ok {
 			return fmt.Errorf("api_clients[%d].name duplicates another gateway client", index)
 		}
@@ -542,6 +554,22 @@ func validateGatewayAPIClients(clients []GatewayClientConfig) error {
 		}
 		seenNames[client.Name] = struct{}{}
 		seenKeys[client.APIKey] = struct{}{}
+	}
+	return nil
+}
+
+func (c *Config) validateGatewayClientModels() error {
+	for clientIndex, client := range c.APIClients {
+		seen := make(map[string]struct{}, len(client.Models))
+		for modelIndex, model := range client.Models {
+			if _, ok := c.Models[model]; !ok {
+				return fmt.Errorf("api_clients[%d].models[%d] references unknown model %q", clientIndex, modelIndex, model)
+			}
+			if _, ok := seen[model]; ok {
+				return fmt.Errorf("api_clients[%d].models[%d] duplicates another model", clientIndex, modelIndex)
+			}
+			seen[model] = struct{}{}
+		}
 	}
 	return nil
 }

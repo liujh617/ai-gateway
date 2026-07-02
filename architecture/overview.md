@@ -166,6 +166,7 @@ Provider Adapter 不应直接依赖 HTTP handler。
 
 - 加载监听地址。
 - 加载一个或多个网关 API key，支持非敏感 gateway client name。
+- 加载可选的 gateway client 模型白名单。
 - 加载全局限流和可选的 gateway client 限流覆盖。
 - 加载 provider 配置。
 - 加载模型映射。

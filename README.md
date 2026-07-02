@@ -89,7 +89,7 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 
 - `api_key`: 网关客户端 Bearer token，保留用于单 key 和早期配置。
 - `api_keys`: 网关客户端 Bearer token 列表；非空时任一 token 都可通过鉴权。
-- `api_clients`: 带非敏感 `name` 的网关客户端 Bearer token 列表；`name` 会进入日志和 metrics 的 `client` 标签，`api_key` 不会输出；可用 `rate_limit.requests_per_minute` 覆盖该 client 的限流。
+- `api_clients`: 带非敏感 `name` 的网关客户端 Bearer token 列表；`name` 会进入日志和 metrics 的 `client` 标签，`api_key` 不会输出；可用 `models` 限制该 client 可见模型，可用 `rate_limit.requests_per_minute` 覆盖该 client 的限流。
 - `providers.<name>.type`: 当前支持 `fake` 和 `openai-compatible`。
 - `providers.<name>.base_url`: OpenAI-compatible base URL，例如 `https://api.openai.com/v1`。
 - `providers.<name>.api_key_env`: 上游 API key 所在环境变量名。

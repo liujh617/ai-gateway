@@ -55,6 +55,7 @@ func main() {
 		StreamTimeout:  cfg.StreamTimeout(),
 		RateLimiter:    middleware.NewClientRateLimiter(cfg.RateLimit.RequestsPerMinute, gatewayClientRateLimits(cfg)),
 		Credentials:    gatewayCredentials(cfg),
+		ClientModels:   gatewayClientModels(cfg),
 		ProviderHealthOptions: api.ProviderHealthOptions{
 			FailureThreshold: cfg.ProviderHealth.FailureThreshold,
 			Cooldown:         cfg.ProviderHealthCooldown(),
@@ -86,6 +87,7 @@ func main() {
 		"log_level", cfg.Log.Level,
 		"rate_limit_requests_per_minute", cfg.RateLimit.RequestsPerMinute,
 		"client_rate_limit_overrides", len(gatewayClientRateLimits(cfg)),
+		"client_model_overrides", len(gatewayClientModels(cfg)),
 		"provider_health_failure_threshold", cfg.ProviderHealth.FailureThreshold,
 		"provider_health_cooldown_seconds", cfg.ProviderHealth.CooldownSeconds,
 	)
@@ -259,6 +261,17 @@ func gatewayClientRateLimits(cfg *config.Config) map[string]int {
 		}
 	}
 	return limits
+}
+
+func gatewayClientModels(cfg *config.Config) map[string][]string {
+	clients := cfg.GatewayAPIClients()
+	models := make(map[string][]string)
+	for _, client := range clients {
+		if len(client.Models) > 0 {
+			models[client.Name] = append([]string(nil), client.Models...)
+		}
+	}
+	return models
 }
 
 func pricing(value config.PricingConfig) router.TokenPricing {

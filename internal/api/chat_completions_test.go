@@ -757,6 +757,49 @@ func TestModelsOK(t *testing.T) {
 	}
 }
 
+func TestModelsFilteredByClientAccess(t *testing.T) {
+	handler, _ := newClientModelAccessTestHandler()
+
+	alphaReq := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	alphaReq.Header.Set("Authorization", "Bearer alpha-secret")
+	alphaRR := httptest.NewRecorder()
+	handler.ServeHTTP(alphaRR, alphaReq)
+
+	if alphaRR.Code != http.StatusOK {
+		t.Fatalf("alpha status = %d, body = %s", alphaRR.Code, alphaRR.Body.String())
+	}
+	if !strings.Contains(alphaRR.Body.String(), `"id":"test-model"`) {
+		t.Fatalf("alpha missing allowed model: %s", alphaRR.Body.String())
+	}
+	if strings.Contains(alphaRR.Body.String(), `"id":"other-model"`) {
+		t.Fatalf("alpha saw disallowed model: %s", alphaRR.Body.String())
+	}
+
+	betaReq := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	betaReq.Header.Set("Authorization", "Bearer beta-secret")
+	betaRR := httptest.NewRecorder()
+	handler.ServeHTTP(betaRR, betaReq)
+
+	if betaRR.Code != http.StatusOK {
+		t.Fatalf("beta status = %d, body = %s", betaRR.Code, betaRR.Body.String())
+	}
+	if !strings.Contains(betaRR.Body.String(), `"id":"test-model"`) || !strings.Contains(betaRR.Body.String(), `"id":"other-model"`) {
+		t.Fatalf("beta models = %s", betaRR.Body.String())
+	}
+}
+
+func TestChatCompletionsRejectsClientDisallowedModel(t *testing.T) {
+	handler, provider := newClientModelAccessTestHandler()
+	body := `{"model":"other-model","messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSONWithKey(handler, body, "alpha-secret")
+
+	assertError(t, rr, http.StatusNotFound, "invalid_request_error")
+	if calls := provider.ChatCalls(); calls != 0 {
+		t.Fatalf("provider chat calls = %d", calls)
+	}
+}
+
 func TestModelsHeadRequiresAuth(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	req := httptest.NewRequest(http.MethodHead, "/v1/models", nil)
@@ -1309,6 +1352,35 @@ func newCredentialTestHandler(p provider.Provider, logger *slog.Logger) http.Han
 			{Client: "beta", APIKey: "beta-secret"},
 		},
 	}).Handler()
+}
+
+func newClientModelAccessTestHandler() (http.Handler, *countingProvider) {
+	p := &countingProvider{}
+	modelRouter := router.NewModelRouter([]router.ModelRoute{
+		{
+			ExternalModel: "test-model",
+			UpstreamModel: "upstream-test-model",
+			ProviderName:  "fake-provider",
+			Provider:      p,
+		},
+		{
+			ExternalModel: "other-model",
+			UpstreamModel: "upstream-other-model",
+			ProviderName:  "fake-provider",
+			Provider:      p,
+		},
+	})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := api.NewServer(modelRouter, "", logger, api.Options{
+		Credentials: []middleware.AuthCredential{
+			{Client: "alpha", APIKey: "alpha-secret"},
+			{Client: "beta", APIKey: "beta-secret"},
+		},
+		ClientModels: map[string][]string{
+			"alpha": {"test-model"},
+		},
+	}).Handler()
+	return handler, p
 }
 
 func newFallbackTestHandler(primary provider.Provider, fallback provider.Provider) http.Handler {

@@ -22,6 +22,7 @@ type Server struct {
 	rateLimiter    *middleware.RateLimiter
 	metrics        *middleware.Metrics
 	providerHealth *providerHealth
+	clientModels   map[string]map[string]bool
 	maxBodyBytes   int64
 }
 
@@ -32,6 +33,7 @@ type Options struct {
 	Metrics               *middleware.Metrics
 	ProviderHealthOptions ProviderHealthOptions
 	Credentials           []middleware.AuthCredential
+	ClientModels          map[string][]string
 	MaxBodyBytes          int64
 }
 
@@ -76,6 +78,7 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 		rateLimiter:    opts.RateLimiter,
 		metrics:        opts.Metrics,
 		providerHealth: providerHealth,
+		clientModels:   copyClientModels(opts.ClientModels),
 		maxBodyBytes:   opts.MaxBodyBytes,
 	}
 }
@@ -138,7 +141,7 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewEncoder(w).Encode(compat.ModelListResponse{
 		Object: "list",
-		Data:   s.router.Models(),
+		Data:   s.modelsForClient(middleware.ClientFromContext(r.Context())),
 	})
 }
 
@@ -150,6 +153,52 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status": "ok",
 	})
+}
+
+func (s *Server) modelAllowedForRequest(r *http.Request, model string) bool {
+	client := middleware.ClientFromContext(r.Context())
+	allowed, ok := s.clientModels[client]
+	if !ok || len(allowed) == 0 {
+		return true
+	}
+	return allowed[model]
+}
+
+func (s *Server) modelsForClient(client string) []compat.Model {
+	models := s.router.Models()
+	allowed, ok := s.clientModels[client]
+	if !ok || len(allowed) == 0 {
+		return models
+	}
+	filtered := models[:0]
+	for _, model := range models {
+		if allowed[model.ID] {
+			filtered = append(filtered, model)
+		}
+	}
+	return filtered
+}
+
+func copyClientModels(in map[string][]string) map[string]map[string]bool {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]map[string]bool, len(in))
+	for client, models := range in {
+		if client == "" || len(models) == 0 {
+			continue
+		}
+		allowed := make(map[string]bool, len(models))
+		for _, model := range models {
+			if model != "" {
+				allowed[model] = true
+			}
+		}
+		if len(allowed) > 0 {
+			out[client] = allowed
+		}
+	}
+	return out
 }
 
 func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
