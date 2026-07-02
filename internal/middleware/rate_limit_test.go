@@ -1,0 +1,63 @@
+package middleware
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestRateLimiterUsesClientOverrides(t *testing.T) {
+	limiter := NewClientRateLimiter(10, map[string]int{"alpha": 1})
+	handler := Auth([]AuthCredential{
+		{Client: "alpha", APIKey: "alpha-key"},
+		{Client: "beta", APIKey: "beta-key"},
+	}, testErrorWriter{})(limiter.Middleware(testErrorWriter{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})))
+
+	first := performLimitedRequest(handler, "alpha-key")
+	if first.Code != http.StatusNoContent {
+		t.Fatalf("first alpha status = %d, body = %s", first.Code, first.Body.String())
+	}
+	second := performLimitedRequest(handler, "alpha-key")
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second alpha status = %d, body = %s", second.Code, second.Body.String())
+	}
+	beta := performLimitedRequest(handler, "beta-key")
+	if beta.Code != http.StatusNoContent {
+		t.Fatalf("beta status = %d, body = %s", beta.Code, beta.Body.String())
+	}
+}
+
+func TestRateLimiterClientOverrideCanDisableLimit(t *testing.T) {
+	limiter := NewClientRateLimiter(1, map[string]int{"alpha": 0})
+	handler := Auth([]AuthCredential{
+		{Client: "alpha", APIKey: "alpha-key"},
+		{Client: "beta", APIKey: "beta-key"},
+	}, testErrorWriter{})(limiter.Middleware(testErrorWriter{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})))
+
+	for i := 0; i < 2; i++ {
+		rr := performLimitedRequest(handler, "alpha-key")
+		if rr.Code != http.StatusNoContent {
+			t.Fatalf("alpha request %d status = %d, body = %s", i+1, rr.Code, rr.Body.String())
+		}
+	}
+	firstBeta := performLimitedRequest(handler, "beta-key")
+	if firstBeta.Code != http.StatusNoContent {
+		t.Fatalf("first beta status = %d, body = %s", firstBeta.Code, firstBeta.Body.String())
+	}
+	secondBeta := performLimitedRequest(handler, "beta-key")
+	if secondBeta.Code != http.StatusTooManyRequests {
+		t.Fatalf("second beta status = %d, body = %s", secondBeta.Code, secondBeta.Body.String())
+	}
+}
+
+func performLimitedRequest(handler http.Handler, apiKey string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	return rr
+}

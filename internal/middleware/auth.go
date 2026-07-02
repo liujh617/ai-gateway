@@ -31,7 +31,9 @@ func Auth(credentials []AuthCredential, errors ErrorWriter) func(http.Handler) h
 				return
 			}
 			if len(credentials) == 0 {
-				SetMetricsClient(r.Context(), "unconfigured")
+				client := "unconfigured"
+				SetMetricsClient(r.Context(), client)
+				r = r.WithContext(WithClient(r.Context(), client))
 				next.ServeHTTP(w, r)
 				return
 			}

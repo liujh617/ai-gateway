@@ -241,7 +241,7 @@ func TestLoadConfigAcceptsGatewayAPIClients(t *testing.T) {
 	path := writeConfig(t, `{
 		"addr": "127.0.0.1:8080",
 		"api_clients": [
-			{"name": "alpha", "api_key": "client-key-1"},
+			{"name": "alpha", "api_key": "client-key-1", "rate_limit": {"requests_per_minute": 30}},
 			{"name": "beta", "api_key": "client-key-2"}
 		],
 		"providers": {
@@ -263,6 +263,12 @@ func TestLoadConfigAcceptsGatewayAPIClients(t *testing.T) {
 	clients := cfg.GatewayAPIClients()
 	if len(clients) != 2 || clients[0].Name != "alpha" || clients[1].APIKey != "client-key-2" {
 		t.Fatalf("gateway clients = %#v", clients)
+	}
+	if clients[0].RateLimit.RequestsPerMinute == nil || *clients[0].RateLimit.RequestsPerMinute != 30 {
+		t.Fatalf("alpha rate limit = %#v", clients[0].RateLimit.RequestsPerMinute)
+	}
+	if clients[1].RateLimit.RequestsPerMinute != nil {
+		t.Fatalf("beta rate limit = %#v", clients[1].RateLimit.RequestsPerMinute)
 	}
 	keys := cfg.GatewayAPIKeys()
 	if len(keys) != 2 || keys[0] != "client-key-1" || keys[1] != "client-key-2" {
@@ -311,6 +317,7 @@ func TestLoadConfigRejectsInvalidGatewayAPIClients(t *testing.T) {
 		"duplicate-key":  `[{"name":"alpha","api_key":"same"},{"name":"beta","api_key":"same"}]`,
 		"space-name":     `[{"name":" alpha ","api_key":"client-key"}]`,
 		"space-key":      `[{"name":"alpha","api_key":" client-key "}]`,
+		"negative-limit": `[{"name":"alpha","api_key":"client-key","rate_limit":{"requests_per_minute":-1}}]`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := writeConfig(t, `{

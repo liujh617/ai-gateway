@@ -53,7 +53,7 @@ func main() {
 	apiServer := api.NewServer(modelRouter, cfg.APIKey, logger, api.Options{
 		RequestTimeout: cfg.RequestTimeout(),
 		StreamTimeout:  cfg.StreamTimeout(),
-		RateLimiter:    middleware.NewRateLimiter(cfg.RateLimit.RequestsPerMinute),
+		RateLimiter:    middleware.NewClientRateLimiter(cfg.RateLimit.RequestsPerMinute, gatewayClientRateLimits(cfg)),
 		Credentials:    gatewayCredentials(cfg),
 		ProviderHealthOptions: api.ProviderHealthOptions{
 			FailureThreshold: cfg.ProviderHealth.FailureThreshold,
@@ -85,6 +85,7 @@ func main() {
 		"log_format", cfg.Log.Format,
 		"log_level", cfg.Log.Level,
 		"rate_limit_requests_per_minute", cfg.RateLimit.RequestsPerMinute,
+		"client_rate_limit_overrides", len(gatewayClientRateLimits(cfg)),
 		"provider_health_failure_threshold", cfg.ProviderHealth.FailureThreshold,
 		"provider_health_cooldown_seconds", cfg.ProviderHealth.CooldownSeconds,
 	)
@@ -247,6 +248,17 @@ func gatewayCredentials(cfg *config.Config) []middleware.AuthCredential {
 		})
 	}
 	return credentials
+}
+
+func gatewayClientRateLimits(cfg *config.Config) map[string]int {
+	clients := cfg.GatewayAPIClients()
+	limits := make(map[string]int)
+	for _, client := range clients {
+		if client.RateLimit.RequestsPerMinute != nil {
+			limits[client.Name] = *client.RateLimit.RequestsPerMinute
+		}
+	}
+	return limits
 }
 
 func pricing(value config.PricingConfig) router.TokenPricing {

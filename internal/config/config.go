@@ -41,8 +41,13 @@ type ProviderConfig struct {
 }
 
 type GatewayClientConfig struct {
-	Name   string `json:"name"`
-	APIKey string `json:"api_key"`
+	Name      string                `json:"name"`
+	APIKey    string                `json:"api_key"`
+	RateLimit ClientRateLimitConfig `json:"rate_limit"`
+}
+
+type ClientRateLimitConfig struct {
+	RequestsPerMinute *int `json:"requests_per_minute,omitempty"`
 }
 
 type ModelConfig struct {
@@ -525,6 +530,9 @@ func validateGatewayAPIClients(clients []GatewayClientConfig) error {
 		}
 		if client.APIKey != strings.TrimSpace(client.APIKey) {
 			return fmt.Errorf("api_clients[%d].api_key must not contain leading or trailing whitespace", index)
+		}
+		if client.RateLimit.RequestsPerMinute != nil && *client.RateLimit.RequestsPerMinute < 0 {
+			return fmt.Errorf("api_clients[%d].rate_limit.requests_per_minute must be non-negative", index)
 		}
 		if _, ok := seenNames[client.Name]; ok {
 			return fmt.Errorf("api_clients[%d].name duplicates another gateway client", index)

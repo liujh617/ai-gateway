@@ -59,7 +59,7 @@ Upstream Model Service
 - 基础访问日志。
 - 可配置日志格式和级别。
 - HTTP metrics。
-- 按 Bearer token 做简单 in-memory 限流。
+- 按 gateway client 做简单 in-memory 限流，并支持 per-client 覆盖。
 - 设置基础安全响应头。
 - 超时和 context 管理。
 - SIGINT/SIGTERM graceful shutdown。
@@ -166,6 +166,7 @@ Provider Adapter 不应直接依赖 HTTP handler。
 
 - 加载监听地址。
 - 加载一个或多个网关 API key，支持非敏感 gateway client name。
+- 加载全局限流和可选的 gateway client 限流覆盖。
 - 加载 provider 配置。
 - 加载模型映射。
 - 加载模型和 fallback 的可选 token pricing。

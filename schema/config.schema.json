@@ -64,21 +64,6 @@
     "log": {
       "$ref": "#/$defs/log"
     },
-    "api_client": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "name": {
-          "type": "string",
-          "minLength": 1
-        },
-        "api_key": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "required": ["name", "api_key"]
-    },
     "rate_limit": {
       "$ref": "#/$defs/rate_limit"
     },
@@ -105,6 +90,24 @@
     "models"
   ],
   "$defs": {
+    "api_client": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "api_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rate_limit": {
+          "$ref": "#/$defs/rate_limit"
+        }
+      },
+      "required": ["name", "api_key"]
+    },
     "log": {
       "type": "object",
       "additionalProperties": false,
