@@ -849,6 +849,18 @@ func TestChatCompletionsRejectsClientDisallowedModel(t *testing.T) {
 	}
 }
 
+func TestEmbeddingsRejectsClientDisallowedModel(t *testing.T) {
+	handler, provider := newClientModelAccessTestHandler()
+	body := `{"model":"other-model","input":"hello"}`
+
+	rr := doEmbeddingsJSONWithKey(handler, body, "alpha-secret")
+
+	assertError(t, rr, http.StatusNotFound, "invalid_request_error")
+	if calls := provider.EmbeddingCalls(); calls != 0 {
+		t.Fatalf("provider embedding calls = %d", calls)
+	}
+}
+
 func TestModelsHeadRequiresAuth(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	req := httptest.NewRequest(http.MethodHead, "/v1/models", nil)
@@ -1547,6 +1559,15 @@ func doJSONWithContentType(handler http.Handler, body string, auth bool, content
 
 func doEmbeddingsJSON(handler http.Handler, body string, auth bool) *httptest.ResponseRecorder {
 	return doEmbeddingsJSONWithContentType(handler, body, auth, "application/json")
+}
+
+func doEmbeddingsJSONWithKey(handler http.Handler, body string, apiKey string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/v1/embeddings", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	return rr
 }
 
 func doEmbeddingsJSONWithContentType(handler http.Handler, body string, auth bool, contentType string) *httptest.ResponseRecorder {
