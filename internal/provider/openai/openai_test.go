@@ -940,6 +940,25 @@ func TestListModelsForwardsHeaders(t *testing.T) {
 	}
 }
 
+func TestListModelsOmitsAuthorizationWithoutAPIKey(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if auth := r.Header.Get("Authorization"); auth != "" {
+			t.Fatalf("authorization = %q", auth)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"object":"list","data":[]}`)
+	}))
+	defer server.Close()
+
+	p, err := openai.New(server.URL+"/v1", "", 0)
+	if err != nil {
+		t.Fatalf("new provider: %v", err)
+	}
+	if _, err := p.ListModels(context.Background()); err != nil {
+		t.Fatalf("ListModels: %v", err)
+	}
+}
+
 func TestListModelsTransportTimeoutIsDeadlineExceeded(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(200 * time.Millisecond)
