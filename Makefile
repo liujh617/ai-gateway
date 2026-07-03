@@ -7,7 +7,7 @@ COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X open-ai-gateway/internal/version.Version=$(VERSION) -X open-ai-gateway/internal/version.Commit=$(COMMIT) -X open-ai-gateway/internal/version.BuildTime=$(BUILD_TIME)
 
-.PHONY: fmt test race vet verify build run check-config check-config-examples smoke smoke-deepseek smoke-deepseek-skip release-check docker-build docker-run
+.PHONY: fmt test race vet verify build run check-config check-config-examples smoke smoke-rate-limit smoke-deepseek smoke-deepseek-skip release-check docker-build docker-run
 
 fmt:
 	$(GO)fmt -w cmd internal
@@ -38,13 +38,16 @@ check-config-examples:
 smoke:
 	bash scripts/smoke-fake.sh
 
+smoke-rate-limit:
+	bash scripts/smoke-rate-limit.sh
+
 smoke-deepseek:
 	bash scripts/smoke-deepseek.sh
 
 smoke-deepseek-skip:
 	DEEPSEEK_API_KEY= bash scripts/smoke-deepseek.sh
 
-release-check: verify check-config check-config-examples build smoke smoke-deepseek-skip
+release-check: verify check-config check-config-examples build smoke smoke-rate-limit smoke-deepseek-skip
 
 docker-build:
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_TIME=$(BUILD_TIME) -t $(IMAGE) .
