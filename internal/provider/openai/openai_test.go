@@ -940,22 +940,94 @@ func TestListModelsForwardsHeaders(t *testing.T) {
 	}
 }
 
-func TestListModelsOmitsAuthorizationWithoutAPIKey(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if auth := r.Header.Get("Authorization"); auth != "" {
-			t.Fatalf("authorization = %q", auth)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"object":"list","data":[]}`)
-	}))
-	defer server.Close()
-
-	p, err := openai.New(server.URL+"/v1", "", 0)
-	if err != nil {
-		t.Fatalf("new provider: %v", err)
+func TestProviderOmitsAuthorizationWithoutAPIKey(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		call func(t *testing.T, p *openai.Provider)
+	}{
+		{
+			name: "list models",
+			path: "/v1/models",
+			call: func(t *testing.T, p *openai.Provider) {
+				t.Helper()
+				if _, err := p.ListModels(context.Background()); err != nil {
+					t.Fatalf("ListModels: %v", err)
+				}
+			},
+		},
+		{
+			name: "chat completions",
+			path: "/v1/chat/completions",
+			call: func(t *testing.T, p *openai.Provider) {
+				t.Helper()
+				if _, err := p.CreateChatCompletion(context.Background(), chatRequest()); err != nil {
+					t.Fatalf("CreateChatCompletion: %v", err)
+				}
+			},
+		},
+		{
+			name: "stream chat completions",
+			path: "/v1/chat/completions",
+			call: func(t *testing.T, p *openai.Provider) {
+				t.Helper()
+				stream, err := p.StreamChatCompletion(context.Background(), chatRequest())
+				if err != nil {
+					t.Fatalf("StreamChatCompletion: %v", err)
+				}
+				if err := stream.Close(); err != nil {
+					t.Fatalf("close stream: %v", err)
+				}
+			},
+		},
+		{
+			name: "embeddings",
+			path: "/v1/embeddings",
+			call: func(t *testing.T, p *openai.Provider) {
+				t.Helper()
+				_, err := p.CreateEmbedding(context.Background(), compat.EmbeddingRequest{
+					Model: "upstream-embedding-model",
+					Input: json.RawMessage(`"hello"`),
+				})
+				if err != nil {
+					t.Fatalf("CreateEmbedding: %v", err)
+				}
+			},
+		},
 	}
-	if _, err := p.ListModels(context.Background()); err != nil {
-		t.Fatalf("ListModels: %v", err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != tt.path {
+					t.Fatalf("path = %s", r.URL.Path)
+				}
+				if auth := r.Header.Get("Authorization"); auth != "" {
+					t.Fatalf("authorization = %q", auth)
+				}
+				switch tt.name {
+				case "stream chat completions":
+					w.Header().Set("Content-Type", "text/event-stream")
+					io.WriteString(w, "data: [DONE]\n\n")
+				case "chat completions":
+					w.Header().Set("Content-Type", "application/json")
+					io.WriteString(w, `{"id":"chatcmpl_upstream","object":"chat.completion","created":1,"model":"upstream-model","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop"}]}`)
+				case "embeddings":
+					w.Header().Set("Content-Type", "application/json")
+					io.WriteString(w, `{"object":"list","model":"upstream-embedding-model","data":[{"object":"embedding","index":0,"embedding":[0.1]}]}`)
+				default:
+					w.Header().Set("Content-Type", "application/json")
+					io.WriteString(w, `{"object":"list","data":[]}`)
+				}
+			}))
+			defer server.Close()
+
+			p, err := openai.New(server.URL+"/v1", "", 0)
+			if err != nil {
+				t.Fatalf("new provider: %v", err)
+			}
+			tt.call(t, p)
+		})
 	}
 }
 
