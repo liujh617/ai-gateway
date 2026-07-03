@@ -977,6 +977,23 @@ func TestListModelsRejectsNonJSONContentType(t *testing.T) {
 	}
 }
 
+func TestListModelsRejectsTrailingJSONResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"object":"list","data":[{"id":"upstream-model","object":"model","created":0,"owned_by":"upstream"}]}{}`)
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.ListModels(context.Background())
+	if err == nil {
+		t.Fatal("expected trailing JSON response error")
+	}
+	if !strings.Contains(err.Error(), "single JSON value") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestCreateChatCompletionRejectsTrailingJSONResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
