@@ -47,7 +47,7 @@ GATEWAY_CONFIG=config.local.json make check-config
 go run ./cmd/gateway check-config
 ```
 
-自检输出包含 gateway client、provider health、provider/model 摘要和 warning，不包含 API key 明文。
+自检输出包含 gateway client、rate limit、provider health、provider/model 摘要和 warning，不包含 API key 明文。
 
 校验仓库示例配置：
 

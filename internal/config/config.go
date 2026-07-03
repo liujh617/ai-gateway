@@ -87,6 +87,7 @@ type LogConfig struct {
 type CheckReport struct {
 	GatewayAPIKeyCount             int                    `json:"gateway_api_key_count"`
 	GatewayClients                 []GatewayClientSummary `json:"gateway_clients"`
+	RateLimitRequestsPerMinute     int                    `json:"rate_limit_requests_per_minute"`
 	ProviderHealthFailureThreshold int                    `json:"provider_health_failure_threshold"`
 	ProviderHealthCooldownSeconds  int                    `json:"provider_health_cooldown_seconds"`
 	ProviderCount                  int                    `json:"provider_count"`
@@ -156,6 +157,7 @@ func Check(path string) (*Config, CheckReport, error) {
 func (c *Config) CheckReport() CheckReport {
 	report := CheckReport{
 		GatewayAPIKeyCount:             len(c.GatewayAPIKeys()),
+		RateLimitRequestsPerMinute:     c.RateLimit.RequestsPerMinute,
 		ProviderHealthFailureThreshold: c.ProviderHealth.FailureThreshold,
 		ProviderHealthCooldownSeconds:  c.ProviderHealth.CooldownSeconds,
 		ProviderCount:                  len(c.Providers),

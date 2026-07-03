@@ -616,6 +616,9 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 			{"name":"alpha","api_key":"gateway-key-one","models":["gpt-4o-mini"],"rate_limit":{"requests_per_minute":60}},
 			{"name":"beta","api_key":"gateway-key-two"}
 		],
+		"rate_limit": {
+			"requests_per_minute": 120
+		},
 		"providers": {
 			"openai": {
 				"type": "openai-compatible",
@@ -646,6 +649,7 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	for _, want := range []string{
 		`"gateway_api_key_count":2`,
 		`"gateway_clients"`,
+		`"rate_limit_requests_per_minute":120`,
 		`"rate_limit_requests_per_minute":60`,
 		`"provider_health_failure_threshold":2`,
 		`"provider_health_cooldown_seconds":30`,
@@ -676,6 +680,9 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	}
 	if len(report.GatewayClients) != 2 {
 		t.Fatalf("gateway clients = %#v", report.GatewayClients)
+	}
+	if report.RateLimitRequestsPerMinute != 120 {
+		t.Fatalf("rate limit summary = %d", report.RateLimitRequestsPerMinute)
 	}
 	if report.ProviderHealthFailureThreshold != 2 || report.ProviderHealthCooldownSeconds != 30 {
 		t.Fatalf("provider health summary = threshold %d cooldown %d", report.ProviderHealthFailureThreshold, report.ProviderHealthCooldownSeconds)
