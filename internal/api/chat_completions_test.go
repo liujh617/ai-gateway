@@ -124,6 +124,32 @@ func TestChatCompletionsStreamFallsBackOnOpenError(t *testing.T) {
 	assertMetricsContains(t, handler, `open_ai_gateway_provider_fallbacks_total{path="/v1/chat/completions",model="test-model",from_provider="primary-provider",to_provider="backup-provider",client="default"} 1`)
 }
 
+func TestChatCompletionsStreamSkipsUnhealthyProvider(t *testing.T) {
+	primary := &countingProvider{err: errors.New("stream connect failed")}
+	fallback := fake.New()
+	handler := newFallbackTestHandler(primary, fallback)
+	body := `{"model":"test-model","stream":true,"messages":[{"role":"user","content":"hello"}]}`
+
+	for i := 0; i < 2; i++ {
+		rr := doJSON(handler, body, true)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("request %d status = %d, body = %s", i, rr.Code, rr.Body.String())
+		}
+	}
+	if calls := primary.ChatCalls(); calls != 2 {
+		t.Fatalf("primary calls before circuit = %d, want 2", calls)
+	}
+
+	rr := doJSON(handler, body, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if calls := primary.ChatCalls(); calls != 2 {
+		t.Fatalf("primary was called while unhealthy: calls = %d", calls)
+	}
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_circuit_open_total{path="/v1/chat/completions",model="test-model",provider="primary-provider",client="default"} 1`)
+}
+
 func TestChatCompletionsInvalidJSON(t *testing.T) {
 	handler := newTestHandler(fake.New())
 
