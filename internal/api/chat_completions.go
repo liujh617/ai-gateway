@@ -71,6 +71,7 @@ func (s *Server) createChatCompletionWithFallback(ctx context.Context, r *http.R
 	for index, attempt := range attempts {
 		if !s.providerHealth.Healthy(attempt.ProviderName) {
 			s.observeProviderHealth(attempt.ProviderName)
+			s.observeProviderCircuitOpen(r.Context(), routes.ChatCompletionsPath, externalModel, attempt.ProviderName)
 			if skippedFrom == "" {
 				skippedFrom = attempt.ProviderName
 			}
@@ -170,6 +171,7 @@ func (s *Server) openChatCompletionStreamWithFallback(ctx context.Context, r *ht
 	for index, attempt := range attempts {
 		if !s.providerHealth.Healthy(attempt.ProviderName) {
 			s.observeProviderHealth(attempt.ProviderName)
+			s.observeProviderCircuitOpen(r.Context(), routes.ChatCompletionsPath, externalModel, attempt.ProviderName)
 			if skippedFrom == "" {
 				skippedFrom = attempt.ProviderName
 			}

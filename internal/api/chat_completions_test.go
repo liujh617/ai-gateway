@@ -304,6 +304,7 @@ func TestChatCompletionsSkipsUnhealthyProvider(t *testing.T) {
 	if calls := primary.ChatCalls(); calls != 2 {
 		t.Fatalf("primary was called while unhealthy: calls = %d", calls)
 	}
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_circuit_open_total{path="/v1/chat/completions",model="test-model",provider="primary-provider",client="default"} 1`)
 	assertMetricsContains(t, handler, `open_ai_gateway_provider_health_status{provider="primary-provider",state="healthy"} 0`)
 	assertMetricsContains(t, handler, `open_ai_gateway_provider_health_status{provider="primary-provider",state="unhealthy"} 1`)
 }

@@ -93,6 +93,7 @@ Metrics endpoint:
 - `open_ai_gateway_tokens_total`
 - `open_ai_gateway_token_cost_usd_total`
 - `open_ai_gateway_rate_limit_rejections_total`
+- `open_ai_gateway_provider_circuit_open_total`
 - `open_ai_gateway_provider_fallbacks_total`
 - `open_ai_gateway_provider_health_status`
 - Metrics `path` labels keep known routes and collapse unknown routes to `/__unknown__`.
@@ -100,6 +101,7 @@ Metrics endpoint:
 - Token metrics use provider-reported `usage` only and are labeled by path, external model, provider, token type, and gateway client. Streaming chat completions record token metrics only when an upstream SSE chunk includes `usage`.
 - Cost metrics use provider-reported `usage` plus optional per-model or fallback pricing config, and are labeled by path, external model, provider, token type, and gateway client.
 - Rate limit rejection metrics count gateway-side rate limiter rejections and are labeled by normalized path and gateway client.
+- Provider circuit open metrics count provider attempts skipped by the in-memory circuit breaker and are labeled by path, external model, provider, and gateway client.
 - Provider fallback metrics are labeled by path, external model, source provider, target provider, and gateway client.
 - Provider health metrics expose each provider's in-memory circuit breaker state.
 

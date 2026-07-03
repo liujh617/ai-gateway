@@ -18,6 +18,7 @@ type Metrics struct {
 	tokens              map[tokenMetricKey]int64
 	costs               map[costMetricKey]float64
 	rateLimitRejections map[rateLimitRejectionMetricKey]int64
+	circuitOpen         map[circuitOpenMetricKey]int64
 	fallbacks           map[fallbackMetricKey]int64
 	health              map[string]bool
 }
@@ -61,6 +62,13 @@ type rateLimitRejectionMetricKey struct {
 	Client string
 }
 
+type circuitOpenMetricKey struct {
+	Path     string
+	Model    string
+	Provider string
+	Client   string
+}
+
 type fallbackMetricKey struct {
 	Path         string
 	Model        string
@@ -75,6 +83,7 @@ func NewMetrics() *Metrics {
 		tokens:              make(map[tokenMetricKey]int64),
 		costs:               make(map[costMetricKey]float64),
 		rateLimitRejections: make(map[rateLimitRejectionMetricKey]int64),
+		circuitOpen:         make(map[circuitOpenMetricKey]int64),
 		fallbacks:           make(map[fallbackMetricKey]int64),
 		health:              make(map[string]bool),
 	}
@@ -170,6 +179,25 @@ func (m *Metrics) ObserveRateLimitRejection(path, client string) {
 		Client: client,
 	}
 	m.rateLimitRejections[key]++
+}
+
+func (m *Metrics) ObserveProviderCircuitOpen(path, model, providerName, client string) {
+	if m == nil || model == "" || providerName == "" {
+		return
+	}
+	if client == "" {
+		client = "unconfigured"
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := circuitOpenMetricKey{
+		Path:     routes.NormalizePath(path),
+		Model:    model,
+		Provider: providerName,
+		Client:   client,
+	}
+	m.circuitOpen[key]++
 }
 
 func (m *Metrics) ObserveProviderFallback(path, model, fromProvider, toProvider, client string) {
@@ -269,6 +297,20 @@ func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
 		fmt.Fprintf(w,
 			"open_ai_gateway_rate_limit_rejections_total{path=%q,client=%q} %d\n",
 			item.Key.Path,
+			item.Key.Client,
+			item.Value,
+		)
+	}
+
+	circuitOpenSnapshot := m.circuitOpenSnapshot()
+	fmt.Fprintln(w, "# HELP open_ai_gateway_provider_circuit_open_total Total provider attempts skipped because the circuit was open.")
+	fmt.Fprintln(w, "# TYPE open_ai_gateway_provider_circuit_open_total counter")
+	for _, item := range circuitOpenSnapshot {
+		fmt.Fprintf(w,
+			"open_ai_gateway_provider_circuit_open_total{path=%q,model=%q,provider=%q,client=%q} %d\n",
+			item.Key.Path,
+			item.Key.Model,
+			item.Key.Provider,
 			item.Key.Client,
 			item.Value,
 		)
@@ -410,6 +452,11 @@ type rateLimitRejectionMetricSnapshotItem struct {
 	Value int64
 }
 
+type circuitOpenMetricSnapshotItem struct {
+	Key   circuitOpenMetricKey
+	Value int64
+}
+
 func (m *Metrics) rateLimitRejectionSnapshot() []rateLimitRejectionMetricSnapshotItem {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -422,6 +469,31 @@ func (m *Metrics) rateLimitRejectionSnapshot() []rateLimitRejectionMetricSnapsho
 		left := items[i].Key
 		right := items[j].Key
 		if cmp := strings.Compare(left.Path, right.Path); cmp != 0 {
+			return cmp < 0
+		}
+		return left.Client < right.Client
+	})
+	return items
+}
+
+func (m *Metrics) circuitOpenSnapshot() []circuitOpenMetricSnapshotItem {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	items := make([]circuitOpenMetricSnapshotItem, 0, len(m.circuitOpen))
+	for key, value := range m.circuitOpen {
+		items = append(items, circuitOpenMetricSnapshotItem{Key: key, Value: value})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		left := items[i].Key
+		right := items[j].Key
+		if cmp := strings.Compare(left.Path, right.Path); cmp != 0 {
+			return cmp < 0
+		}
+		if cmp := strings.Compare(left.Model, right.Model); cmp != 0 {
+			return cmp < 0
+		}
+		if cmp := strings.Compare(left.Provider, right.Provider); cmp != 0 {
 			return cmp < 0
 		}
 		return left.Client < right.Client

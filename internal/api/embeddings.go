@@ -62,6 +62,7 @@ func (s *Server) createEmbeddingWithFallback(ctx context.Context, r *http.Reques
 	for index, attempt := range attempts {
 		if !s.providerHealth.Healthy(attempt.ProviderName) {
 			s.observeProviderHealth(attempt.ProviderName)
+			s.observeProviderCircuitOpen(r.Context(), routes.EmbeddingsPath, externalModel, attempt.ProviderName)
 			if skippedFrom == "" {
 				skippedFrom = attempt.ProviderName
 			}

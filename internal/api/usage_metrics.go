@@ -51,6 +51,17 @@ func (s *Server) observeProviderFallback(ctx context.Context, path, externalMode
 	s.metrics.ObserveProviderFallback(path, externalModel, fromProvider, toProvider, client)
 }
 
+func (s *Server) observeProviderCircuitOpen(ctx context.Context, path, externalModel, providerName string) {
+	if s.metrics == nil {
+		return
+	}
+	client := clientFromContext(ctx)
+	if client == "" {
+		client = "unconfigured"
+	}
+	s.metrics.ObserveProviderCircuitOpen(path, externalModel, providerName, client)
+}
+
 func (s *Server) observeProviderHealth(providerName string) {
 	if s.metrics == nil || s.providerHealth == nil {
 		return
