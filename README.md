@@ -35,6 +35,7 @@ make verify
 make run
 make check-config
 make check-config-examples
+make release-check
 ```
 
 本地服务级验证见 [Local Verification](docs/local-verification.md)。
