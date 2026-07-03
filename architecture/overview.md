@@ -182,7 +182,7 @@ Provider Adapter 不应直接依赖 HTTP handler。
 - 通过共享的 upstream URL 校验逻辑，校验 OpenAI-compatible provider `base_url` 只使用 `http` 或 `https`，且不包含 query 或 fragment。
 
 当前实现使用 JSON 配置文件，并通过 `GATEWAY_CONFIG` 指定路径。无配置时使用 fake provider 默认配置。
-配置自检以 snake_case JSON 字段输出 gateway client、server runtime、rate limit、provider health、provider 和 model 摘要；gateway client 摘要只包含非敏感名称、模型白名单和限流覆盖，不输出 API key。
+配置自检以 snake_case JSON 字段输出 listen addr、gateway client、server runtime、log、rate limit、provider health、provider 和 model 摘要；gateway client 摘要只包含非敏感名称、模型白名单和限流覆盖，不输出 API key。
 
 ## 请求流程
 
