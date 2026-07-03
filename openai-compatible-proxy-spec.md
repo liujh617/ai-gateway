@@ -656,4 +656,4 @@ open-ai-gateway check-config
 GATEWAY_CHECK_CONFIG=1 open-ai-gateway
 ```
 
-自检会加载配置、应用默认值、执行配置校验，并以 snake_case JSON 字段输出 listen addr、gateway client、server runtime、log、rate limit、provider health、provider/model 摘要和 warning。gateway client 摘要只包含非敏感 `name`、可见模型白名单和限流覆盖；provider 摘要包含 `timeout_seconds` 和 API key 是否配置等非敏感状态；输出不得包含 API key 明文。
+自检会加载配置、应用默认值、执行配置校验，并以 snake_case JSON 字段输出 listen addr、gateway client、server runtime、log、rate limit、provider health、provider/model 摘要和 warning。gateway client 摘要只包含非敏感 `name`、可见模型白名单和限流覆盖；provider 摘要包含 `timeout_seconds` 和 API key 是否配置等非敏感状态；model 和 fallback 摘要会显示默认补齐后的有效 `upstream_model`；输出不得包含 API key 明文。

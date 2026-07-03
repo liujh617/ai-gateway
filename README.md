@@ -122,7 +122,7 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 GATEWAY_CONFIG=config.example.json make check-config
 ```
 
-自检输出会用 snake_case JSON 字段显示 listen addr、gateway client、server runtime、log、rate limit、provider health、provider/model 摘要和 warning；provider 摘要包含 `timeout_seconds` 和 API key 是否配置等非敏感状态，不会输出 API key 明文。
+自检输出会用 snake_case JSON 字段显示 listen addr、gateway client、server runtime、log、rate limit、provider health、provider/model 摘要和 warning；provider 摘要包含 `timeout_seconds` 和 API key 是否配置等非敏感状态，model/fallback 摘要会显示有效 `upstream_model`，不会输出 API key 明文。
 
 配置 JSON Schema 见 [schema/config.schema.json](schema/config.schema.json)。
 
