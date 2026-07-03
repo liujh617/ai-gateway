@@ -27,8 +27,7 @@ Done
 
 ## 验收标准
 
-- `make release-check` 串联 verify、config examples、build 和 smoke。
+- `make release-check` 串联 verify、默认 config check、config examples、build 和 smoke。
 - release 文档说明 SemVer、changelog、build、runtime version 和 git tag。
 - CI 调用 release-check。
 - `make release-check` 在 WSL `Ubuntu-24.04` 中通过。
-

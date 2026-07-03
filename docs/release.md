@@ -27,6 +27,7 @@ make release-check VERSION=0.1.0
 `release-check` 会执行：
 
 - `make verify`
+- `make check-config`
 - `make check-config-examples`
 - `make build VERSION=<version>`
 - `make smoke`
@@ -79,4 +80,3 @@ git push origin v0.1.0
 - 不要在 release artifact 中包含 `config.local.json` 或任何真实 API key。
 - Docker 镜像发布前必须确认基础镜像来源符合部署环境要求。
 - 当前流程不自动推送镜像，镜像发布由后续任务补充。
-
