@@ -649,6 +649,14 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	for _, want := range []string{
 		`"gateway_api_key_count":2`,
 		`"gateway_clients"`,
+		`"request_timeout_seconds":60`,
+		`"stream_timeout_seconds":600`,
+		`"read_header_timeout_seconds":10`,
+		`"read_timeout_seconds":0`,
+		`"write_timeout_seconds":0`,
+		`"idle_timeout_seconds":120`,
+		`"shutdown_timeout_seconds":10`,
+		`"max_request_body_bytes":1048576`,
 		`"rate_limit_requests_per_minute":120`,
 		`"rate_limit_requests_per_minute":60`,
 		`"provider_health_failure_threshold":2`,
@@ -664,6 +672,14 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	for _, unwanted := range []string{
 		"GatewayAPIKeyCount",
 		"GatewayClients",
+		"RequestTimeoutSeconds",
+		"StreamTimeoutSeconds",
+		"ReadHeaderTimeoutSeconds",
+		"ReadTimeoutSeconds",
+		"WriteTimeoutSeconds",
+		"IdleTimeoutSeconds",
+		"ShutdownTimeoutSeconds",
+		"MaxRequestBodyBytes",
 		"RateLimitRequestsPerMinute",
 		"ProviderHealthFailureThreshold",
 		"ProviderHealthCooldownSeconds",
@@ -680,6 +696,15 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	}
 	if len(report.GatewayClients) != 2 {
 		t.Fatalf("gateway clients = %#v", report.GatewayClients)
+	}
+	if report.RequestTimeoutSeconds != 60 || report.StreamTimeoutSeconds != 600 || report.ReadHeaderTimeoutSeconds != 10 {
+		t.Fatalf("timeout summary = request %d stream %d read header %d", report.RequestTimeoutSeconds, report.StreamTimeoutSeconds, report.ReadHeaderTimeoutSeconds)
+	}
+	if report.ReadTimeoutSeconds != 0 || report.WriteTimeoutSeconds != 0 {
+		t.Fatalf("io timeout summary = read %d write %d", report.ReadTimeoutSeconds, report.WriteTimeoutSeconds)
+	}
+	if report.IdleTimeoutSeconds != 120 || report.ShutdownTimeoutSeconds != 10 || report.MaxRequestBodyBytes != 1<<20 {
+		t.Fatalf("server summary = idle %d shutdown %d max body %d", report.IdleTimeoutSeconds, report.ShutdownTimeoutSeconds, report.MaxRequestBodyBytes)
 	}
 	if report.RateLimitRequestsPerMinute != 120 {
 		t.Fatalf("rate limit summary = %d", report.RateLimitRequestsPerMinute)

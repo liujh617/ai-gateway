@@ -87,6 +87,14 @@ type LogConfig struct {
 type CheckReport struct {
 	GatewayAPIKeyCount             int                    `json:"gateway_api_key_count"`
 	GatewayClients                 []GatewayClientSummary `json:"gateway_clients"`
+	RequestTimeoutSeconds          int                    `json:"request_timeout_seconds"`
+	StreamTimeoutSeconds           int                    `json:"stream_timeout_seconds"`
+	ReadHeaderTimeoutSeconds       int                    `json:"read_header_timeout_seconds"`
+	ReadTimeoutSeconds             int                    `json:"read_timeout_seconds"`
+	WriteTimeoutSeconds            int                    `json:"write_timeout_seconds"`
+	IdleTimeoutSeconds             int                    `json:"idle_timeout_seconds"`
+	ShutdownTimeoutSeconds         int                    `json:"shutdown_timeout_seconds"`
+	MaxRequestBodyBytes            int64                  `json:"max_request_body_bytes"`
 	RateLimitRequestsPerMinute     int                    `json:"rate_limit_requests_per_minute"`
 	ProviderHealthFailureThreshold int                    `json:"provider_health_failure_threshold"`
 	ProviderHealthCooldownSeconds  int                    `json:"provider_health_cooldown_seconds"`
@@ -157,6 +165,14 @@ func Check(path string) (*Config, CheckReport, error) {
 func (c *Config) CheckReport() CheckReport {
 	report := CheckReport{
 		GatewayAPIKeyCount:             len(c.GatewayAPIKeys()),
+		RequestTimeoutSeconds:          c.RequestTimeoutSeconds,
+		StreamTimeoutSeconds:           c.StreamTimeoutSeconds,
+		ReadHeaderTimeoutSeconds:       c.ReadHeaderTimeoutSeconds,
+		ReadTimeoutSeconds:             c.ReadTimeoutSeconds,
+		WriteTimeoutSeconds:            c.WriteTimeoutSeconds,
+		IdleTimeoutSeconds:             c.IdleTimeoutSeconds,
+		ShutdownTimeoutSeconds:         c.ShutdownTimeoutSeconds,
+		MaxRequestBodyBytes:            c.MaxRequestBodyBytes,
 		RateLimitRequestsPerMinute:     c.RateLimit.RequestsPerMinute,
 		ProviderHealthFailureThreshold: c.ProviderHealth.FailureThreshold,
 		ProviderHealthCooldownSeconds:  c.ProviderHealth.CooldownSeconds,
