@@ -3,6 +3,7 @@ package middleware
 import (
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -73,6 +74,7 @@ func (l *RateLimiter) Middleware(errors ErrorWriter) func(http.Handler) http.Han
 			if !l.allow(rateLimitKey(r), limit, time.Now()) {
 				SetLogError(r.Context(), "rate_limit_error", nil)
 				l.observeRejection(r)
+				w.Header().Set("Retry-After", strconv.Itoa(int(l.window/time.Second)))
 				errors.WriteError(w, compat.RateLimit("rate limit exceeded"))
 				return
 			}

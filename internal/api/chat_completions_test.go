@@ -386,6 +386,9 @@ func TestChatCompletionsRateLimit(t *testing.T) {
 	second := doJSON(handler, body, true)
 
 	assertError(t, second, http.StatusTooManyRequests, "rate_limit_error")
+	if got := second.Header().Get("Retry-After"); got != "60" {
+		t.Fatalf("Retry-After = %q, want 60", got)
+	}
 	assertMetricsContains(t, handler, `open_ai_gateway_rate_limit_rejections_total{path="/v1/chat/completions",client="default"} 1`)
 }
 
