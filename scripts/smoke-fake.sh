@@ -31,6 +31,11 @@ curl -fsSI "http://$addr/healthz" \
   | tr -d '\r' \
   | grep -qi '^X-Content-Type-Options: nosniff$'
 
+curl -fsSI "http://$addr/healthz" \
+  -H "X-Request-Id: smoke-request-1" \
+  | tr -d '\r' \
+  | grep -qi '^X-Request-Id: smoke-request-1$'
+
 curl -fsSI "http://$addr/metrics" \
   | tr -d '\r' \
   | grep -qi '^X-Content-Type-Options: nosniff$'
