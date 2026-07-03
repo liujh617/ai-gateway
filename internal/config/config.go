@@ -85,13 +85,15 @@ type LogConfig struct {
 }
 
 type CheckReport struct {
-	GatewayAPIKeyCount int                    `json:"gateway_api_key_count"`
-	GatewayClients     []GatewayClientSummary `json:"gateway_clients"`
-	ProviderCount      int                    `json:"provider_count"`
-	ModelCount         int                    `json:"model_count"`
-	Providers          []ProviderSummary      `json:"providers"`
-	Models             []ModelSummary         `json:"models"`
-	Warnings           []string               `json:"warnings"`
+	GatewayAPIKeyCount             int                    `json:"gateway_api_key_count"`
+	GatewayClients                 []GatewayClientSummary `json:"gateway_clients"`
+	ProviderHealthFailureThreshold int                    `json:"provider_health_failure_threshold"`
+	ProviderHealthCooldownSeconds  int                    `json:"provider_health_cooldown_seconds"`
+	ProviderCount                  int                    `json:"provider_count"`
+	ModelCount                     int                    `json:"model_count"`
+	Providers                      []ProviderSummary      `json:"providers"`
+	Models                         []ModelSummary         `json:"models"`
+	Warnings                       []string               `json:"warnings"`
 }
 
 type GatewayClientSummary struct {
@@ -153,9 +155,11 @@ func Check(path string) (*Config, CheckReport, error) {
 
 func (c *Config) CheckReport() CheckReport {
 	report := CheckReport{
-		GatewayAPIKeyCount: len(c.GatewayAPIKeys()),
-		ProviderCount:      len(c.Providers),
-		ModelCount:         len(c.Models),
+		GatewayAPIKeyCount:             len(c.GatewayAPIKeys()),
+		ProviderHealthFailureThreshold: c.ProviderHealth.FailureThreshold,
+		ProviderHealthCooldownSeconds:  c.ProviderHealth.CooldownSeconds,
+		ProviderCount:                  len(c.Providers),
+		ModelCount:                     len(c.Models),
 	}
 
 	for _, client := range c.GatewayAPIClients() {
