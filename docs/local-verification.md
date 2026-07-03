@@ -69,6 +69,18 @@ schema/config.schema.json
 make smoke
 ```
 
+限流 smoke test：
+
+```bash
+make smoke-rate-limit
+```
+
+DeepSeek smoke 的无 key 跳过路径：
+
+```bash
+make smoke-deepseek-skip
+```
+
 手工验证：
 
 启动网关：
@@ -180,5 +192,6 @@ curl -sS http://127.0.0.1:8080/v1/chat/completions \
 ```text
 Verified in WSL Ubuntu-24.04:
 - make verify
-- fake provider curl smoke test
+- make smoke
+- make smoke-rate-limit
 ```
