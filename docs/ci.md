@@ -33,7 +33,7 @@ make release-check
 
 Job:
 
-- `verify`: 设置 Go 1.22，运行 `make verify`、`make check-config-examples`、`make build` 和 `make release-check`。
+- `verify`: 设置 Go 1.22，运行 `make release-check`。
 - `docker`: 运行 `make docker-build`。
 
 ## Gitee Workflow

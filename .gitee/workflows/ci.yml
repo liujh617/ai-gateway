@@ -20,15 +20,6 @@ jobs:
           go-version: "1.22.x"
           cache: true
 
-      - name: Verify
-        run: make verify
-
-      - name: Check config examples
-        run: make check-config-examples
-
-      - name: Build binary
-        run: make build
-
       - name: Release check
         run: make release-check
 
