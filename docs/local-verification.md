@@ -103,6 +103,13 @@ Metrics：
 curl -sS http://127.0.0.1:8080/metrics
 ```
 
+Common metrics name check:
+```bash
+curl -sS http://127.0.0.1:8080/metrics | grep -E 'open_ai_gateway_(http_requests_total|tokens_total|token_cost_usd_total|rate_limit_rejections_total|provider_circuit_open_total|provider_fallbacks_total|provider_health_status)'
+```
+
+Rate limit, fallback, and circuit-open metric series appear only after the corresponding behavior has happened.
+
 模型列表：
 
 ```bash
