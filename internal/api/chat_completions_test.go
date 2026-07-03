@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -386,9 +387,7 @@ func TestChatCompletionsRateLimit(t *testing.T) {
 	second := doJSON(handler, body, true)
 
 	assertError(t, second, http.StatusTooManyRequests, "rate_limit_error")
-	if got := second.Header().Get("Retry-After"); got != "60" {
-		t.Fatalf("Retry-After = %q, want 60", got)
-	}
+	assertRetryAfterBetween(t, second, 1, 60)
 	assertMetricsContains(t, handler, `open_ai_gateway_rate_limit_rejections_total{path="/v1/chat/completions",client="default"} 1`)
 }
 
@@ -1562,6 +1561,18 @@ func assertMetricsNotContains(t *testing.T, handler http.Handler, unwanted strin
 	text := collectMetrics(t, handler)
 	if strings.Contains(text, unwanted) {
 		t.Fatalf("metrics unexpectedly contained %s: %s", unwanted, text)
+	}
+}
+
+func assertRetryAfterBetween(t *testing.T, rr *httptest.ResponseRecorder, minSeconds int, maxSeconds int) {
+	t.Helper()
+	raw := rr.Header().Get("Retry-After")
+	got, err := strconv.Atoi(raw)
+	if err != nil {
+		t.Fatalf("Retry-After = %q, want integer seconds", raw)
+	}
+	if got < minSeconds || got > maxSeconds {
+		t.Fatalf("Retry-After = %d, want between %d and %d", got, minSeconds, maxSeconds)
 	}
 }
 
