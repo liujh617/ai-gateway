@@ -16,6 +16,7 @@ type RateLimiter struct {
 	defaultLimit int
 	clientLimits map[string]int
 	window       time.Duration
+	now          func() time.Time
 	observer     RateLimitRejectionObserver
 
 	mu      sync.Mutex
@@ -48,6 +49,7 @@ func NewClientRateLimiter(defaultRequestsPerMinute int, clientLimits map[string]
 		defaultLimit: defaultRequestsPerMinute,
 		clientLimits: limits,
 		window:       time.Minute,
+		now:          time.Now,
 		buckets:      make(map[string]bucket),
 	}
 }
@@ -71,7 +73,7 @@ func (l *RateLimiter) Middleware(errors ErrorWriter) func(http.Handler) http.Han
 				next.ServeHTTP(w, r)
 				return
 			}
-			if allowed, retryAfter := l.allow(rateLimitKey(r), limit, time.Now()); !allowed {
+			if allowed, retryAfter := l.allow(rateLimitKey(r), limit, l.now()); !allowed {
 				SetLogError(r.Context(), "rate_limit_error", nil)
 				l.observeRejection(r)
 				w.Header().Set("Retry-After", retryAfterSeconds(retryAfter))

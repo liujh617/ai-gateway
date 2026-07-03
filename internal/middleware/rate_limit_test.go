@@ -94,6 +94,33 @@ func TestRateLimiterReturnsRetryAfterForRejectedRequest(t *testing.T) {
 	}
 }
 
+func TestRateLimiterMiddlewareReturnsRemainingRetryAfter(t *testing.T) {
+	limiter := NewRateLimiter(1)
+	now := time.Unix(120, 0)
+	limiter.now = func() time.Time {
+		return now
+	}
+	handler := Auth([]AuthCredential{
+		{Client: "alpha", APIKey: "alpha-key"},
+	}, testErrorWriter{})(limiter.Middleware(testErrorWriter{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})))
+
+	first := performLimitedRequest(handler, "alpha-key")
+	if first.Code != http.StatusNoContent {
+		t.Fatalf("first status = %d, body = %s", first.Code, first.Body.String())
+	}
+	now = now.Add(45 * time.Second)
+	second := performLimitedRequest(handler, "alpha-key")
+
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status = %d, body = %s", second.Code, second.Body.String())
+	}
+	if got := second.Header().Get("Retry-After"); got != "15" {
+		t.Fatalf("Retry-After = %q, want 15", got)
+	}
+}
+
 func performLimitedRequest(handler http.Handler, apiKey string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
 	req.Header.Set("Authorization", "Bearer "+apiKey)
