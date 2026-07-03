@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestRateLimiterUsesClientOverrides(t *testing.T) {
@@ -51,6 +52,28 @@ func TestRateLimiterClientOverrideCanDisableLimit(t *testing.T) {
 	secondBeta := performLimitedRequest(handler, "beta-key")
 	if secondBeta.Code != http.StatusTooManyRequests {
 		t.Fatalf("second beta status = %d, body = %s", secondBeta.Code, secondBeta.Body.String())
+	}
+}
+
+func TestRateLimiterPrunesExpiredBuckets(t *testing.T) {
+	limiter := NewRateLimiter(1)
+	now := time.Unix(120, 0)
+
+	limiter.buckets["old"] = bucket{start: now.Add(-2 * time.Minute), count: 1}
+	limiter.buckets["recent"] = bucket{start: now.Add(-30 * time.Second), count: 1}
+
+	if !limiter.allow("current", 1, now) {
+		t.Fatal("current request was not allowed")
+	}
+
+	if _, ok := limiter.buckets["old"]; ok {
+		t.Fatal("expired bucket was not pruned")
+	}
+	if _, ok := limiter.buckets["recent"]; !ok {
+		t.Fatal("recent bucket was pruned")
+	}
+	if _, ok := limiter.buckets["current"]; !ok {
+		t.Fatal("current bucket was not recorded")
 	}
 }
 

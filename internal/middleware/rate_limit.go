@@ -18,6 +18,8 @@ type RateLimiter struct {
 
 	mu      sync.Mutex
 	buckets map[string]bucket
+
+	lastCleanup time.Time
 }
 
 type bucket struct {
@@ -79,6 +81,8 @@ func (l *RateLimiter) allow(key string, limit int, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	l.pruneExpiredBuckets(now)
+
 	current := l.buckets[key]
 	if current.start.IsZero() || now.Sub(current.start) >= l.window {
 		l.buckets[key] = bucket{start: now, count: 1}
@@ -90,6 +94,18 @@ func (l *RateLimiter) allow(key string, limit int, now time.Time) bool {
 	current.count++
 	l.buckets[key] = current
 	return true
+}
+
+func (l *RateLimiter) pruneExpiredBuckets(now time.Time) {
+	if !l.lastCleanup.IsZero() && now.Sub(l.lastCleanup) < l.window {
+		return
+	}
+	for key, current := range l.buckets {
+		if now.Sub(current.start) >= l.window {
+			delete(l.buckets, key)
+		}
+	}
+	l.lastCleanup = now
 }
 
 func rateLimitKey(r *http.Request) string {
