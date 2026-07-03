@@ -62,7 +62,7 @@ func TestRateLimiterPrunesExpiredBuckets(t *testing.T) {
 	limiter.buckets["old"] = bucket{start: now.Add(-2 * time.Minute), count: 1}
 	limiter.buckets["recent"] = bucket{start: now.Add(-30 * time.Second), count: 1}
 
-	if !limiter.allow("current", 1, now) {
+	if allowed, _ := limiter.allow("current", 1, now); !allowed {
 		t.Fatal("current request was not allowed")
 	}
 
@@ -74,6 +74,23 @@ func TestRateLimiterPrunesExpiredBuckets(t *testing.T) {
 	}
 	if _, ok := limiter.buckets["current"]; !ok {
 		t.Fatal("current bucket was not recorded")
+	}
+}
+
+func TestRateLimiterReturnsRetryAfterForRejectedRequest(t *testing.T) {
+	limiter := NewRateLimiter(1)
+	start := time.Unix(120, 0)
+
+	if allowed, retryAfter := limiter.allow("client:alpha", 1, start); !allowed || retryAfter != 0 {
+		t.Fatalf("first request allowed = %t, retryAfter = %s", allowed, retryAfter)
+	}
+	allowed, retryAfter := limiter.allow("client:alpha", 1, start.Add(45*time.Second))
+
+	if allowed {
+		t.Fatal("second request was allowed")
+	}
+	if retryAfter != 15*time.Second {
+		t.Fatalf("retryAfter = %s, want 15s", retryAfter)
 	}
 }
 

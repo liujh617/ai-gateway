@@ -71,10 +71,10 @@ func (l *RateLimiter) Middleware(errors ErrorWriter) func(http.Handler) http.Han
 				next.ServeHTTP(w, r)
 				return
 			}
-			if !l.allow(rateLimitKey(r), limit, time.Now()) {
+			if allowed, retryAfter := l.allow(rateLimitKey(r), limit, time.Now()); !allowed {
 				SetLogError(r.Context(), "rate_limit_error", nil)
 				l.observeRejection(r)
-				w.Header().Set("Retry-After", strconv.Itoa(int(l.window/time.Second)))
+				w.Header().Set("Retry-After", retryAfterSeconds(retryAfter))
 				errors.WriteError(w, compat.RateLimit("rate limit exceeded"))
 				return
 			}
@@ -92,7 +92,7 @@ func (l *RateLimiter) limitFor(r *http.Request) int {
 	return l.defaultLimit
 }
 
-func (l *RateLimiter) allow(key string, limit int, now time.Time) bool {
+func (l *RateLimiter) allow(key string, limit int, now time.Time) (bool, time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -101,14 +101,14 @@ func (l *RateLimiter) allow(key string, limit int, now time.Time) bool {
 	current := l.buckets[key]
 	if current.start.IsZero() || now.Sub(current.start) >= l.window {
 		l.buckets[key] = bucket{start: now, count: 1}
-		return true
+		return true, 0
 	}
 	if current.count >= limit {
-		return false
+		return false, current.start.Add(l.window).Sub(now)
 	}
 	current.count++
 	l.buckets[key] = current
-	return true
+	return true, 0
 }
 
 func (l *RateLimiter) observeRejection(r *http.Request) {
@@ -120,6 +120,14 @@ func (l *RateLimiter) observeRejection(r *http.Request) {
 		client = "unconfigured"
 	}
 	l.observer.ObserveRateLimitRejection(r.URL.Path, client)
+}
+
+func retryAfterSeconds(duration time.Duration) string {
+	seconds := int((duration + time.Second - 1) / time.Second)
+	if seconds < 1 {
+		seconds = 1
+	}
+	return strconv.Itoa(seconds)
 }
 
 func (l *RateLimiter) pruneExpiredBuckets(now time.Time) {
