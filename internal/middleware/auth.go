@@ -26,12 +26,15 @@ func Auth(credentials []AuthCredential, errors ErrorWriter) func(http.Handler) h
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if routes.IsPublicPath(r.URL.Path) {
-				SetMetricsClient(r.Context(), "public")
+				client := "public"
+				SetLogClient(r.Context(), client)
+				SetMetricsClient(r.Context(), client)
 				next.ServeHTTP(w, r)
 				return
 			}
 			if len(credentials) == 0 {
 				client := "unconfigured"
+				SetLogClient(r.Context(), client)
 				SetMetricsClient(r.Context(), client)
 				r = r.WithContext(WithClient(r.Context(), client))
 				next.ServeHTTP(w, r)
@@ -40,7 +43,9 @@ func Auth(credentials []AuthCredential, errors ErrorWriter) func(http.Handler) h
 			client, ok := validBearerToken(r.Header.Get("Authorization"), credentials)
 			if !ok {
 				SetLogError(r.Context(), "authentication_error", nil)
-				SetMetricsClient(r.Context(), "unauthenticated")
+				client := "unauthenticated"
+				SetLogClient(r.Context(), client)
+				SetMetricsClient(r.Context(), client)
 				errors.WriteError(w, compat.Authentication("invalid authorization token"))
 				return
 			}

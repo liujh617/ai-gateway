@@ -80,6 +80,8 @@ Upstream Model Service
 - `error_type`
 - `error_code`
 
+Access log `client` uses the non-secret gateway client name. Public routes use `public`, authentication failures use `unauthenticated`, and disabled gateway auth uses `unconfigured`.
+
 Access log `path` fields keep known routes and collapse unknown routes to `/__unknown__`.
 
 Metrics endpoint:
