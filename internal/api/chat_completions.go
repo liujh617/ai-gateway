@@ -78,7 +78,7 @@ func (s *Server) createChatCompletionWithFallback(ctx context.Context, r *http.R
 			continue
 		}
 		if skippedFrom != "" {
-			s.observeProviderFallback(routes.ChatCompletionsPath, externalModel, skippedFrom, attempt.ProviderName)
+			s.observeProviderFallback(r.Context(), routes.ChatCompletionsPath, externalModel, skippedFrom, attempt.ProviderName)
 			skippedFrom = ""
 		}
 		attemptReq := req
@@ -100,7 +100,7 @@ func (s *Server) createChatCompletionWithFallback(ctx context.Context, r *http.R
 			return nil, err
 		}
 		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
-			s.observeProviderFallback(routes.ChatCompletionsPath, externalModel, attempt.ProviderName, nextProviderName)
+			s.observeProviderFallback(r.Context(), routes.ChatCompletionsPath, externalModel, attempt.ProviderName, nextProviderName)
 		}
 		s.logger.Warn("chat completion provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
 	}
@@ -177,7 +177,7 @@ func (s *Server) openChatCompletionStreamWithFallback(ctx context.Context, r *ht
 			continue
 		}
 		if skippedFrom != "" {
-			s.observeProviderFallback(routes.ChatCompletionsPath, externalModel, skippedFrom, attempt.ProviderName)
+			s.observeProviderFallback(r.Context(), routes.ChatCompletionsPath, externalModel, skippedFrom, attempt.ProviderName)
 			skippedFrom = ""
 		}
 		attemptReq := req
@@ -198,7 +198,7 @@ func (s *Server) openChatCompletionStreamWithFallback(ctx context.Context, r *ht
 			return nil, "", router.TokenPricing{}, err
 		}
 		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
-			s.observeProviderFallback(routes.ChatCompletionsPath, externalModel, attempt.ProviderName, nextProviderName)
+			s.observeProviderFallback(r.Context(), routes.ChatCompletionsPath, externalModel, attempt.ProviderName, nextProviderName)
 		}
 		s.logger.Warn("stream chat completion provider failed before response; trying fallback", "provider", attempt.ProviderName, "error", err)
 	}

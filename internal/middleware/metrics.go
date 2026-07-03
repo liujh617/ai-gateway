@@ -60,6 +60,7 @@ type fallbackMetricKey struct {
 	Model        string
 	FromProvider string
 	ToProvider   string
+	Client       string
 }
 
 func NewMetrics() *Metrics {
@@ -147,7 +148,7 @@ func (m *Metrics) ObserveTokenCostUSD(path, model, providerName, tokenType, clie
 	m.costs[key] += cost
 }
 
-func (m *Metrics) ObserveProviderFallback(path, model, fromProvider, toProvider string) {
+func (m *Metrics) ObserveProviderFallback(path, model, fromProvider, toProvider, client string) {
 	if m == nil || model == "" || fromProvider == "" || toProvider == "" {
 		return
 	}
@@ -159,6 +160,7 @@ func (m *Metrics) ObserveProviderFallback(path, model, fromProvider, toProvider 
 		Model:        model,
 		FromProvider: fromProvider,
 		ToProvider:   toProvider,
+		Client:       client,
 	}
 	m.fallbacks[key]++
 }
@@ -241,11 +243,12 @@ func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
 	fmt.Fprintln(w, "# TYPE open_ai_gateway_provider_fallbacks_total counter")
 	for _, item := range fallbackSnapshot {
 		fmt.Fprintf(w,
-			"open_ai_gateway_provider_fallbacks_total{path=%q,model=%q,from_provider=%q,to_provider=%q} %d\n",
+			"open_ai_gateway_provider_fallbacks_total{path=%q,model=%q,from_provider=%q,to_provider=%q,client=%q} %d\n",
 			item.Key.Path,
 			item.Key.Model,
 			item.Key.FromProvider,
 			item.Key.ToProvider,
+			item.Key.Client,
 			item.Value,
 		)
 	}
@@ -386,7 +389,10 @@ func (m *Metrics) fallbackSnapshot() []fallbackMetricSnapshotItem {
 		if cmp := strings.Compare(left.FromProvider, right.FromProvider); cmp != 0 {
 			return cmp < 0
 		}
-		return left.ToProvider < right.ToProvider
+		if cmp := strings.Compare(left.ToProvider, right.ToProvider); cmp != 0 {
+			return cmp < 0
+		}
+		return left.Client < right.Client
 	})
 	return items
 }

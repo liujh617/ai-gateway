@@ -224,6 +224,7 @@ Provider fallback 指标标签：
 - `model`
 - `from_provider`
 - `to_provider`
+- `client`
 
 Provider health 指标表示当前进程内 provider 熔断状态。每个 provider 暴露 `healthy` 和 `unhealthy` 两个状态标签，其中当前状态取值为 `1`，另一个状态取值为 `0`。
 

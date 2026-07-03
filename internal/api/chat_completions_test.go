@@ -120,7 +120,7 @@ func TestChatCompletionsStreamFallsBackOnOpenError(t *testing.T) {
 		t.Fatalf("missing DONE event: %s", text)
 	}
 
-	assertMetricsContains(t, handler, `open_ai_gateway_provider_fallbacks_total{path="/v1/chat/completions",model="test-model",from_provider="primary-provider",to_provider="backup-provider"} 1`)
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_fallbacks_total{path="/v1/chat/completions",model="test-model",from_provider="primary-provider",to_provider="backup-provider",client="default"} 1`)
 }
 
 func TestChatCompletionsInvalidJSON(t *testing.T) {
@@ -260,7 +260,7 @@ func TestChatCompletionsFallsBackOnProviderError(t *testing.T) {
 		t.Fatalf("fallback model = %q", fallback.chatReq.Model)
 	}
 
-	assertMetricsContains(t, handler, `open_ai_gateway_provider_fallbacks_total{path="/v1/chat/completions",model="test-model",from_provider="primary-provider",to_provider="backup-provider"} 1`)
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_fallbacks_total{path="/v1/chat/completions",model="test-model",from_provider="primary-provider",to_provider="backup-provider",client="default"} 1`)
 }
 
 func TestChatCompletionsFallbackUsesFallbackPricing(t *testing.T) {
@@ -585,6 +585,25 @@ func TestMetricsAndLogsIncludeClientLabelWithoutToken(t *testing.T) {
 			t.Fatalf("secret leaked: logs=%s metrics=%s", text, metrics)
 		}
 	}
+}
+
+func TestProviderFallbackMetricsIncludeClientLabel(t *testing.T) {
+	primary := fake.New()
+	primary.Err = errors.New("upstream failed")
+	handler := newCredentialFallbackTestHandler(primary, fake.New())
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	alpha := doJSONWithKey(handler, body, "alpha-secret")
+	if alpha.Code != http.StatusOK {
+		t.Fatalf("alpha status = %d, body = %s", alpha.Code, alpha.Body.String())
+	}
+	beta := doJSONWithKey(handler, body, "beta-secret")
+	if beta.Code != http.StatusOK {
+		t.Fatalf("beta status = %d, body = %s", beta.Code, beta.Body.String())
+	}
+
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_fallbacks_total{path="/v1/chat/completions",model="test-model",from_provider="primary-provider",to_provider="backup-provider",client="alpha"} 1`)
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_fallbacks_total{path="/v1/chat/completions",model="test-model",from_provider="primary-provider",to_provider="backup-provider",client="beta"} 1`)
 }
 
 func TestMetricsRecordsEmbeddingUsage(t *testing.T) {
@@ -1160,7 +1179,7 @@ func TestEmbeddingsFallsBackOnProviderError(t *testing.T) {
 		t.Fatalf("fallback model = %q", fallback.embeddingReq.Model)
 	}
 
-	assertMetricsContains(t, handler, `open_ai_gateway_provider_fallbacks_total{path="/v1/embeddings",model="test-model",from_provider="primary-provider",to_provider="backup-provider"} 1`)
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_fallbacks_total{path="/v1/embeddings",model="test-model",from_provider="primary-provider",to_provider="backup-provider",client="default"} 1`)
 }
 
 func TestEmbeddingsSkipsUnhealthyProvider(t *testing.T) {
@@ -1346,6 +1365,27 @@ func newCredentialTestHandler(p provider.Provider, logger *slog.Logger) http.Han
 		ProviderName:  "fake-provider",
 		Provider:      p,
 	}})
+	return api.NewServer(modelRouter, "", logger, api.Options{
+		Credentials: []middleware.AuthCredential{
+			{Client: "alpha", APIKey: "alpha-secret"},
+			{Client: "beta", APIKey: "beta-secret"},
+		},
+	}).Handler()
+}
+
+func newCredentialFallbackTestHandler(primary provider.Provider, fallback provider.Provider) http.Handler {
+	modelRouter := router.NewModelRouter([]router.ModelRoute{{
+		ExternalModel: "test-model",
+		UpstreamModel: "upstream-test-model",
+		ProviderName:  "primary-provider",
+		Provider:      primary,
+		Fallbacks: []router.ProviderRoute{{
+			UpstreamModel: "backup-test-model",
+			ProviderName:  "backup-provider",
+			Provider:      fallback,
+		}},
+	}})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return api.NewServer(modelRouter, "", logger, api.Options{
 		Credentials: []middleware.AuthCredential{
 			{Client: "alpha", APIKey: "alpha-secret"},

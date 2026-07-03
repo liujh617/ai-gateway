@@ -98,7 +98,7 @@ Metrics endpoint:
 - HTTP metrics include the non-secret gateway client label when available.
 - Token metrics use provider-reported `usage` only and are labeled by path, external model, provider, token type, and gateway client. Streaming chat completions record token metrics only when an upstream SSE chunk includes `usage`.
 - Cost metrics use provider-reported `usage` plus optional per-model or fallback pricing config, and are labeled by path, external model, provider, token type, and gateway client.
-- Provider fallback metrics are labeled by path, external model, source provider, and target provider.
+- Provider fallback metrics are labeled by path, external model, source provider, target provider, and gateway client.
 - Provider health metrics expose each provider's in-memory circuit breaker state.
 
 Runtime probes:

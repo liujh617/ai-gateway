@@ -69,7 +69,7 @@ func (s *Server) createEmbeddingWithFallback(ctx context.Context, r *http.Reques
 			continue
 		}
 		if skippedFrom != "" {
-			s.observeProviderFallback(routes.EmbeddingsPath, externalModel, skippedFrom, attempt.ProviderName)
+			s.observeProviderFallback(r.Context(), routes.EmbeddingsPath, externalModel, skippedFrom, attempt.ProviderName)
 			skippedFrom = ""
 		}
 		attemptReq := req
@@ -91,7 +91,7 @@ func (s *Server) createEmbeddingWithFallback(ctx context.Context, r *http.Reques
 			return nil, err
 		}
 		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
-			s.observeProviderFallback(routes.EmbeddingsPath, externalModel, attempt.ProviderName, nextProviderName)
+			s.observeProviderFallback(r.Context(), routes.EmbeddingsPath, externalModel, attempt.ProviderName, nextProviderName)
 		}
 		s.logger.Warn("embedding provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
 	}

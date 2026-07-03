@@ -40,11 +40,15 @@ func clientFromContext(ctx context.Context) string {
 	return middleware.ClientFromContext(ctx)
 }
 
-func (s *Server) observeProviderFallback(path, externalModel, fromProvider, toProvider string) {
+func (s *Server) observeProviderFallback(ctx context.Context, path, externalModel, fromProvider, toProvider string) {
 	if s.metrics == nil {
 		return
 	}
-	s.metrics.ObserveProviderFallback(path, externalModel, fromProvider, toProvider)
+	client := clientFromContext(ctx)
+	if client == "" {
+		client = "unconfigured"
+	}
+	s.metrics.ObserveProviderFallback(path, externalModel, fromProvider, toProvider, client)
 }
 
 func (s *Server) observeProviderHealth(providerName string) {
