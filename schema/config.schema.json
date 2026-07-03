@@ -24,7 +24,7 @@
     },
     "api_clients": {
       "type": "array",
-      "description": "Named gateway API keys for client Bearer auth and observability labels.",
+      "description": "Named gateway API keys for client Bearer auth, observability labels, model allowlists, and rate limit overrides.",
       "items": {
         "$ref": "#/$defs/api_client"
       }
@@ -104,6 +104,7 @@
         },
         "models": {
           "type": "array",
+          "description": "External model IDs visible to this gateway client. Empty or omitted means all models.",
           "items": {
             "type": "string",
             "minLength": 1
@@ -111,6 +112,7 @@
           "uniqueItems": true
         },
         "rate_limit": {
+          "description": "Per-client rate limit override. requests_per_minute=0 disables limiting for this client.",
           "$ref": "#/$defs/rate_limit"
         }
       },
@@ -132,10 +134,12 @@
     },
     "rate_limit": {
       "type": "object",
+      "description": "Simple in-memory fixed-window request rate limit.",
       "additionalProperties": false,
       "properties": {
         "requests_per_minute": {
           "type": "integer",
+          "description": "Allowed requests per minute. 0 disables rate limiting.",
           "minimum": 0
         }
       }
