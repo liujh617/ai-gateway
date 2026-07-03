@@ -52,4 +52,8 @@ curl -fsS "http://$addr/v1/embeddings" \
   -d '{"model":"test-model","input":"hello"}' \
   | grep -q '"object":"list"'
 
+metrics="$(curl -fsS "http://$addr/metrics")"
+grep -q 'open_ai_gateway_tokens_total' <<<"$metrics"
+grep -q 'open_ai_gateway_provider_health_status' <<<"$metrics"
+
 echo "smoke-ok"
