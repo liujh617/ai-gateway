@@ -125,12 +125,18 @@ type ProviderSummary struct {
 }
 
 type ModelSummary struct {
-	Name          string                `json:"name"`
-	Provider      string                `json:"provider"`
-	UpstreamModel string                `json:"upstream_model"`
-	Capabilities  []string              `json:"capabilities"`
-	Pricing       PricingConfig         `json:"pricing"`
-	Fallbacks     []ModelFallbackConfig `json:"fallbacks"`
+	Name          string                 `json:"name"`
+	Provider      string                 `json:"provider"`
+	UpstreamModel string                 `json:"upstream_model"`
+	Capabilities  []string               `json:"capabilities"`
+	Pricing       PricingConfig          `json:"pricing"`
+	Fallbacks     []ModelFallbackSummary `json:"fallbacks"`
+}
+
+type ModelFallbackSummary struct {
+	Provider      string        `json:"provider"`
+	UpstreamModel string        `json:"upstream_model"`
+	Pricing       PricingConfig `json:"pricing"`
 }
 
 func Load(path string) (*Config, error) {
@@ -226,10 +232,29 @@ func (c *Config) CheckReport() CheckReport {
 			UpstreamModel: upstreamModel,
 			Capabilities:  append([]string(nil), model.Capabilities...),
 			Pricing:       model.Pricing,
-			Fallbacks:     append([]ModelFallbackConfig(nil), model.Fallbacks...),
+			Fallbacks:     fallbackSummaries(name, model.Fallbacks),
 		})
 	}
 	return report
+}
+
+func fallbackSummaries(externalModel string, fallbacks []ModelFallbackConfig) []ModelFallbackSummary {
+	if len(fallbacks) == 0 {
+		return nil
+	}
+	out := make([]ModelFallbackSummary, 0, len(fallbacks))
+	for _, fallback := range fallbacks {
+		upstreamModel := fallback.UpstreamModel
+		if upstreamModel == "" {
+			upstreamModel = externalModel
+		}
+		out = append(out, ModelFallbackSummary{
+			Provider:      fallback.Provider,
+			UpstreamModel: upstreamModel,
+			Pricing:       fallback.Pricing,
+		})
+	}
+	return out
 }
 
 func copyIntPointer(value *int) *int {

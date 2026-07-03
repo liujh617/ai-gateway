@@ -629,7 +629,10 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 		"models": {
 			"gpt-4o-mini": {
 				"provider": "openai",
-				"capabilities": ["chat"]
+				"capabilities": ["chat"],
+				"fallbacks": [
+					{"provider": "openai"}
+				]
 			}
 		}
 	}`)
@@ -668,6 +671,7 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 		`"timeout_seconds":60`,
 		`"api_key_env_set":true`,
 		`"upstream_model":"gpt-4o-mini"`,
+		`"fallbacks":[{"provider":"openai","upstream_model":"gpt-4o-mini"`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("report missing %s: %s", want, text)
@@ -737,6 +741,9 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	}
 	if len(report.Providers) != 1 || !report.Providers[0].APIKeyEnvSet || report.Providers[0].TimeoutSeconds != 60 {
 		t.Fatalf("provider summary = %#v", report.Providers)
+	}
+	if len(report.Models) != 1 || len(report.Models[0].Fallbacks) != 1 || report.Models[0].Fallbacks[0].UpstreamModel != "gpt-4o-mini" {
+		t.Fatalf("model fallback summary = %#v", report.Models)
 	}
 }
 
