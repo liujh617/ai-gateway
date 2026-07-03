@@ -1,6 +1,24 @@
 {
   "addr": "127.0.0.1:8080",
   "api_key": "test-gateway-key",
+  "api_clients": [
+    {
+      "name": "default",
+      "api_key": "test-gateway-key",
+      "models": ["gpt-4o-mini", "text-embedding-3-small"],
+      "rate_limit": {
+        "requests_per_minute": 120
+      }
+    },
+    {
+      "name": "local-dev",
+      "api_key": "local-dev-gateway-key",
+      "models": ["local-qwen"],
+      "rate_limit": {
+        "requests_per_minute": 0
+      }
+    }
+  ],
   "request_timeout_seconds": 60,
   "stream_timeout_seconds": 600,
   "read_header_timeout_seconds": 10,
