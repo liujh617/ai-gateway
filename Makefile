@@ -41,7 +41,7 @@ smoke:
 smoke-deepseek:
 	bash scripts/smoke-deepseek.sh
 
-release-check: verify check-config-examples build smoke
+release-check: verify check-config check-config-examples build smoke
 
 docker-build:
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_TIME=$(BUILD_TIME) -t $(IMAGE) .
