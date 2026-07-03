@@ -647,6 +647,7 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 		t.Fatalf("report leaked secret: %s", text)
 	}
 	for _, want := range []string{
+		`"addr":"127.0.0.1:8080"`,
 		`"gateway_api_key_count":2`,
 		`"gateway_clients"`,
 		`"request_timeout_seconds":60`,
@@ -657,6 +658,8 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 		`"idle_timeout_seconds":120`,
 		`"shutdown_timeout_seconds":10`,
 		`"max_request_body_bytes":1048576`,
+		`"log_format":"text"`,
+		`"log_level":"info"`,
 		`"rate_limit_requests_per_minute":120`,
 		`"rate_limit_requests_per_minute":60`,
 		`"provider_health_failure_threshold":2`,
@@ -670,6 +673,7 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 		}
 	}
 	for _, unwanted := range []string{
+		"Addr",
 		"GatewayAPIKeyCount",
 		"GatewayClients",
 		"RequestTimeoutSeconds",
@@ -680,6 +684,8 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 		"IdleTimeoutSeconds",
 		"ShutdownTimeoutSeconds",
 		"MaxRequestBodyBytes",
+		"LogFormat",
+		"LogLevel",
 		"RateLimitRequestsPerMinute",
 		"ProviderHealthFailureThreshold",
 		"ProviderHealthCooldownSeconds",
@@ -694,6 +700,9 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	if report.GatewayAPIKeyCount != 2 {
 		t.Fatalf("gateway api key count = %d", report.GatewayAPIKeyCount)
 	}
+	if report.Addr != "127.0.0.1:8080" {
+		t.Fatalf("addr summary = %q", report.Addr)
+	}
 	if len(report.GatewayClients) != 2 {
 		t.Fatalf("gateway clients = %#v", report.GatewayClients)
 	}
@@ -705,6 +714,9 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	}
 	if report.IdleTimeoutSeconds != 120 || report.ShutdownTimeoutSeconds != 10 || report.MaxRequestBodyBytes != 1<<20 {
 		t.Fatalf("server summary = idle %d shutdown %d max body %d", report.IdleTimeoutSeconds, report.ShutdownTimeoutSeconds, report.MaxRequestBodyBytes)
+	}
+	if report.LogFormat != "text" || report.LogLevel != "info" {
+		t.Fatalf("log summary = format %q level %q", report.LogFormat, report.LogLevel)
 	}
 	if report.RateLimitRequestsPerMinute != 120 {
 		t.Fatalf("rate limit summary = %d", report.RateLimitRequestsPerMinute)

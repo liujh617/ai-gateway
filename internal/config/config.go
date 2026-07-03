@@ -85,6 +85,7 @@ type LogConfig struct {
 }
 
 type CheckReport struct {
+	Addr                           string                 `json:"addr"`
 	GatewayAPIKeyCount             int                    `json:"gateway_api_key_count"`
 	GatewayClients                 []GatewayClientSummary `json:"gateway_clients"`
 	RequestTimeoutSeconds          int                    `json:"request_timeout_seconds"`
@@ -95,6 +96,8 @@ type CheckReport struct {
 	IdleTimeoutSeconds             int                    `json:"idle_timeout_seconds"`
 	ShutdownTimeoutSeconds         int                    `json:"shutdown_timeout_seconds"`
 	MaxRequestBodyBytes            int64                  `json:"max_request_body_bytes"`
+	LogFormat                      string                 `json:"log_format"`
+	LogLevel                       string                 `json:"log_level"`
 	RateLimitRequestsPerMinute     int                    `json:"rate_limit_requests_per_minute"`
 	ProviderHealthFailureThreshold int                    `json:"provider_health_failure_threshold"`
 	ProviderHealthCooldownSeconds  int                    `json:"provider_health_cooldown_seconds"`
@@ -164,6 +167,7 @@ func Check(path string) (*Config, CheckReport, error) {
 
 func (c *Config) CheckReport() CheckReport {
 	report := CheckReport{
+		Addr:                           c.Addr,
 		GatewayAPIKeyCount:             len(c.GatewayAPIKeys()),
 		RequestTimeoutSeconds:          c.RequestTimeoutSeconds,
 		StreamTimeoutSeconds:           c.StreamTimeoutSeconds,
@@ -173,6 +177,8 @@ func (c *Config) CheckReport() CheckReport {
 		IdleTimeoutSeconds:             c.IdleTimeoutSeconds,
 		ShutdownTimeoutSeconds:         c.ShutdownTimeoutSeconds,
 		MaxRequestBodyBytes:            c.MaxRequestBodyBytes,
+		LogFormat:                      c.Log.Format,
+		LogLevel:                       c.Log.Level,
 		RateLimitRequestsPerMinute:     c.RateLimit.RequestsPerMinute,
 		ProviderHealthFailureThreshold: c.ProviderHealth.FailureThreshold,
 		ProviderHealthCooldownSeconds:  c.ProviderHealth.CooldownSeconds,
