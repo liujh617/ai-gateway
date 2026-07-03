@@ -31,6 +31,7 @@ make release-check VERSION=0.1.0
 - `make check-config-examples`
 - `make build VERSION=<version>`
 - `make smoke`
+- `make smoke-deepseek-skip`
 
 ## Changelog
 
