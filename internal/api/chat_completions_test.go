@@ -849,6 +849,18 @@ func TestChatCompletionsRejectsClientDisallowedModel(t *testing.T) {
 	}
 }
 
+func TestChatCompletionsStreamRejectsClientDisallowedModel(t *testing.T) {
+	handler, provider := newClientModelAccessTestHandler()
+	body := `{"model":"other-model","stream":true,"messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSONWithKey(handler, body, "alpha-secret")
+
+	assertError(t, rr, http.StatusNotFound, "invalid_request_error")
+	if calls := provider.ChatCalls(); calls != 0 {
+		t.Fatalf("provider chat calls = %d", calls)
+	}
+}
+
 func TestEmbeddingsRejectsClientDisallowedModel(t *testing.T) {
 	handler, provider := newClientModelAccessTestHandler()
 	body := `{"model":"other-model","input":"hello"}`
