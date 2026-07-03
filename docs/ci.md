@@ -7,19 +7,21 @@
 CI 的核心验证与本地 WSL `Ubuntu-24.04` 保持一致：
 
 ```bash
-make verify
-make check-config-examples
-make build
+make release-check
 ```
 
-其中 `make verify` 包含：
+其中 `make release-check` 包含：
 
 - `gofmt -w cmd internal`
 - `go test ./...`
 - `go test -race ./...`
 - `go vet ./...`
+- `make check-config`
+- `make check-config-examples`
+- `make build`
+- `make smoke`
 
-`make check-config-examples` 会校验仓库内示例配置可被当前配置加载器接受，并执行一次配置自检。
+`make check-config` 会验证默认运行配置，`make check-config-examples` 会校验仓库内示例配置可被当前配置加载器接受，并执行一次配置自检。`make smoke` 使用 fake provider 启动本地服务，验证核心 HTTP 契约。
 
 ## GitHub Actions
 
@@ -31,7 +33,7 @@ make build
 
 Job:
 
-- `verify`: 设置 Go 1.22，运行 `make verify`、`make check-config-examples` 和 `make build`。
+- `verify`: 设置 Go 1.22，运行 `make verify`、`make check-config-examples`、`make build` 和 `make release-check`。
 - `docker`: 运行 `make docker-build`。
 
 ## Gitee Workflow
@@ -49,4 +51,4 @@ Job:
 - CI 不使用真实 upstream API key。
 - CI 不运行真实 provider 集成测试。
 - Docker build 需要 runner 能访问基础镜像。
-- 本地 smoke test 仍通过 `make smoke` 执行，不默认放入 CI，避免端口占用导致偶发失败。
+- `make smoke` 使用 fake provider 和本地端口，只覆盖无需真实 API key 的运行时契约。
