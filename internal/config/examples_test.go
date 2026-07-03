@@ -1,6 +1,8 @@
 package config_test
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -17,5 +19,16 @@ func TestExampleConfigsLoad(t *testing.T) {
 				t.Fatalf("Load(%s): %v", path, err)
 			}
 		})
+	}
+}
+
+func TestConfigSchemaIsValidJSON(t *testing.T) {
+	path := filepath.Join("..", "..", "schema", "config.schema.json")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%s): %v", path, err)
+	}
+	if !json.Valid(payload) {
+		t.Fatalf("%s is not valid JSON", path)
 	}
 }
