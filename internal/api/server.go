@@ -57,6 +57,9 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 	if opts.Metrics == nil {
 		opts.Metrics = middleware.NewMetrics()
 	}
+	if opts.RateLimiter != nil {
+		opts.RateLimiter.SetRejectionObserver(opts.Metrics)
+	}
 	credentials := append([]middleware.AuthCredential(nil), opts.Credentials...)
 	if len(credentials) == 0 && apiKey != "" {
 		credentials = []middleware.AuthCredential{{

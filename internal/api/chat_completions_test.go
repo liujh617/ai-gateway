@@ -386,6 +386,7 @@ func TestChatCompletionsRateLimit(t *testing.T) {
 	second := doJSON(handler, body, true)
 
 	assertError(t, second, http.StatusTooManyRequests, "rate_limit_error")
+	assertMetricsContains(t, handler, `open_ai_gateway_rate_limit_rejections_total{path="/v1/chat/completions",client="default"} 1`)
 }
 
 func TestHealthzBypassesRateLimit(t *testing.T) {

@@ -15,6 +15,7 @@ type RateLimiter struct {
 	defaultLimit int
 	clientLimits map[string]int
 	window       time.Duration
+	observer     RateLimitRejectionObserver
 
 	mu      sync.Mutex
 	buckets map[string]bucket
@@ -25,6 +26,10 @@ type RateLimiter struct {
 type bucket struct {
 	start time.Time
 	count int
+}
+
+type RateLimitRejectionObserver interface {
+	ObserveRateLimitRejection(path, client string)
 }
 
 func NewRateLimiter(requestsPerMinute int) *RateLimiter {
@@ -46,6 +51,13 @@ func NewClientRateLimiter(defaultRequestsPerMinute int, clientLimits map[string]
 	}
 }
 
+func (l *RateLimiter) SetRejectionObserver(observer RateLimitRejectionObserver) {
+	if l == nil {
+		return
+	}
+	l.observer = observer
+}
+
 func (l *RateLimiter) Middleware(errors ErrorWriter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -60,6 +72,7 @@ func (l *RateLimiter) Middleware(errors ErrorWriter) func(http.Handler) http.Han
 			}
 			if !l.allow(rateLimitKey(r), limit, time.Now()) {
 				SetLogError(r.Context(), "rate_limit_error", nil)
+				l.observeRejection(r)
 				errors.WriteError(w, compat.RateLimit("rate limit exceeded"))
 				return
 			}
@@ -94,6 +107,17 @@ func (l *RateLimiter) allow(key string, limit int, now time.Time) bool {
 	current.count++
 	l.buckets[key] = current
 	return true
+}
+
+func (l *RateLimiter) observeRejection(r *http.Request) {
+	if l.observer == nil {
+		return
+	}
+	client := ClientFromContext(r.Context())
+	if client == "" {
+		client = "unconfigured"
+	}
+	l.observer.ObserveRateLimitRejection(r.URL.Path, client)
 }
 
 func (l *RateLimiter) pruneExpiredBuckets(now time.Time) {

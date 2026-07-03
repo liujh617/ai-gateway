@@ -13,12 +13,13 @@ import (
 )
 
 type Metrics struct {
-	mu        sync.Mutex
-	requests  map[metricKey]requestMetric
-	tokens    map[tokenMetricKey]int64
-	costs     map[costMetricKey]float64
-	fallbacks map[fallbackMetricKey]int64
-	health    map[string]bool
+	mu                  sync.Mutex
+	requests            map[metricKey]requestMetric
+	tokens              map[tokenMetricKey]int64
+	costs               map[costMetricKey]float64
+	rateLimitRejections map[rateLimitRejectionMetricKey]int64
+	fallbacks           map[fallbackMetricKey]int64
+	health              map[string]bool
 }
 
 type metricsFieldsKey struct{}
@@ -55,6 +56,11 @@ type costMetricKey struct {
 	Client   string
 }
 
+type rateLimitRejectionMetricKey struct {
+	Path   string
+	Client string
+}
+
 type fallbackMetricKey struct {
 	Path         string
 	Model        string
@@ -65,11 +71,12 @@ type fallbackMetricKey struct {
 
 func NewMetrics() *Metrics {
 	return &Metrics{
-		requests:  make(map[metricKey]requestMetric),
-		tokens:    make(map[tokenMetricKey]int64),
-		costs:     make(map[costMetricKey]float64),
-		fallbacks: make(map[fallbackMetricKey]int64),
-		health:    make(map[string]bool),
+		requests:            make(map[metricKey]requestMetric),
+		tokens:              make(map[tokenMetricKey]int64),
+		costs:               make(map[costMetricKey]float64),
+		rateLimitRejections: make(map[rateLimitRejectionMetricKey]int64),
+		fallbacks:           make(map[fallbackMetricKey]int64),
+		health:              make(map[string]bool),
 	}
 }
 
@@ -146,6 +153,23 @@ func (m *Metrics) ObserveTokenCostUSD(path, model, providerName, tokenType, clie
 		Client:   client,
 	}
 	m.costs[key] += cost
+}
+
+func (m *Metrics) ObserveRateLimitRejection(path, client string) {
+	if m == nil {
+		return
+	}
+	if client == "" {
+		client = "unconfigured"
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	key := rateLimitRejectionMetricKey{
+		Path:   routes.NormalizePath(path),
+		Client: client,
+	}
+	m.rateLimitRejections[key]++
 }
 
 func (m *Metrics) ObserveProviderFallback(path, model, fromProvider, toProvider, client string) {
@@ -233,6 +257,18 @@ func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
 			item.Key.Model,
 			item.Key.Provider,
 			item.Key.Type,
+			item.Key.Client,
+			item.Value,
+		)
+	}
+
+	rateLimitRejectionSnapshot := m.rateLimitRejectionSnapshot()
+	fmt.Fprintln(w, "# HELP open_ai_gateway_rate_limit_rejections_total Total gateway rate limit rejections.")
+	fmt.Fprintln(w, "# TYPE open_ai_gateway_rate_limit_rejections_total counter")
+	for _, item := range rateLimitRejectionSnapshot {
+		fmt.Fprintf(w,
+			"open_ai_gateway_rate_limit_rejections_total{path=%q,client=%q} %d\n",
+			item.Key.Path,
 			item.Key.Client,
 			item.Value,
 		)
@@ -367,6 +403,30 @@ func (m *Metrics) costSnapshot() []costMetricSnapshotItem {
 type fallbackMetricSnapshotItem struct {
 	Key   fallbackMetricKey
 	Value int64
+}
+
+type rateLimitRejectionMetricSnapshotItem struct {
+	Key   rateLimitRejectionMetricKey
+	Value int64
+}
+
+func (m *Metrics) rateLimitRejectionSnapshot() []rateLimitRejectionMetricSnapshotItem {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	items := make([]rateLimitRejectionMetricSnapshotItem, 0, len(m.rateLimitRejections))
+	for key, value := range m.rateLimitRejections {
+		items = append(items, rateLimitRejectionMetricSnapshotItem{Key: key, Value: value})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		left := items[i].Key
+		right := items[j].Key
+		if cmp := strings.Compare(left.Path, right.Path); cmp != 0 {
+			return cmp < 0
+		}
+		return left.Client < right.Client
+	})
+	return items
 }
 
 func (m *Metrics) fallbackSnapshot() []fallbackMetricSnapshotItem {
