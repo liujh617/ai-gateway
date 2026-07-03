@@ -108,7 +108,7 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 - `max_request_body_bytes`: 请求体大小上限，默认 `1048576`；`0` 表示关闭限制。
 - `log.format`: 日志格式，支持 `text` 或 `json`。
 - `log.level`: 日志级别，支持 `debug`、`info`、`warn`、`error`。
-- `rate_limit.requests_per_minute`: 按 gateway client 的简单内存限流，`0` 表示关闭；`api_clients[].rate_limit.requests_per_minute` 可覆盖单个 client，显式 `0` 表示该 client 关闭限流。
+- `rate_limit.requests_per_minute`: 按 gateway client 的简单内存限流，`0` 表示关闭；`api_clients[].rate_limit.requests_per_minute` 可覆盖单个 client，显式 `0` 表示该 client 关闭限流。超限返回 `429 rate_limit_error`，并包含 `Retry-After: 60`。
 - `provider_health.failure_threshold`: provider 连续可 fallback 错误达到该次数后短暂熔断，默认 `2`。
 - `provider_health.cooldown_seconds`: provider 熔断后的冷却时间，默认 `30`。
 - `models.<external>.pricing.prompt_usd_per_1m_tokens`: 可选 prompt token 单价，用于成本指标，单位 USD / 1M tokens。
@@ -141,7 +141,7 @@ curl -sS http://127.0.0.1:8080/healthz
 - chat completions streaming
 - 单模型主 provider 配置和可选 fallback provider
 - Bearer token 鉴权
-- 基础日志、request id、HTTP metrics、provider-reported token metrics（含带 `usage` 的流式响应）、可选 token cost metrics、provider fallback metrics、provider health metrics、provider circuit breaker、超时和错误响应
+- 基础日志、request id、HTTP metrics、provider-reported token metrics（含带 `usage` 的流式响应）、可选 token cost metrics、rate limit rejection metrics、provider fallback metrics、provider health metrics、provider circuit breaker、超时和错误响应
 
 不在第一阶段实现：
 
