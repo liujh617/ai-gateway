@@ -55,5 +55,6 @@ curl -fsS "http://$addr/v1/embeddings" \
 metrics="$(curl -fsS "http://$addr/metrics")"
 grep -q 'open_ai_gateway_tokens_total' <<<"$metrics"
 grep -q 'open_ai_gateway_provider_health_status' <<<"$metrics"
+grep -q 'client="default"' <<<"$metrics"
 
 echo "smoke-ok"
