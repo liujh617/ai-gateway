@@ -665,6 +665,7 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 		`"provider_health_failure_threshold":2`,
 		`"provider_health_cooldown_seconds":30`,
 		`"provider_count":1`,
+		`"timeout_seconds":60`,
 		`"api_key_env_set":true`,
 		`"upstream_model":"gpt-4o-mini"`,
 	} {
@@ -690,6 +691,7 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 		"ProviderHealthFailureThreshold",
 		"ProviderHealthCooldownSeconds",
 		"ProviderCount",
+		"TimeoutSeconds",
 		"APIKeyEnvSet",
 		"UpstreamModel",
 	} {
@@ -733,7 +735,7 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	if report.GatewayClients[1].Name != "beta" || len(report.GatewayClients[1].Models) != 0 || report.GatewayClients[1].RateLimitRequestsPerMinute != nil {
 		t.Fatalf("beta summary = %#v", report.GatewayClients[1])
 	}
-	if len(report.Providers) != 1 || !report.Providers[0].APIKeyEnvSet {
+	if len(report.Providers) != 1 || !report.Providers[0].APIKeyEnvSet || report.Providers[0].TimeoutSeconds != 60 {
 		t.Fatalf("provider summary = %#v", report.Providers)
 	}
 }

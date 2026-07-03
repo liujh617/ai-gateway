@@ -115,12 +115,13 @@ type GatewayClientSummary struct {
 }
 
 type ProviderSummary struct {
-	Name         string `json:"name"`
-	Type         string `json:"type"`
-	BaseURL      string `json:"base_url"`
-	APIKeySet    bool   `json:"api_key_set"`
-	APIKeyEnv    string `json:"api_key_env"`
-	APIKeyEnvSet bool   `json:"api_key_env_set"`
+	Name           string `json:"name"`
+	Type           string `json:"type"`
+	BaseURL        string `json:"base_url"`
+	TimeoutSeconds int    `json:"timeout_seconds"`
+	APIKeySet      bool   `json:"api_key_set"`
+	APIKeyEnv      string `json:"api_key_env"`
+	APIKeyEnvSet   bool   `json:"api_key_env_set"`
 }
 
 type ModelSummary struct {
@@ -197,11 +198,12 @@ func (c *Config) CheckReport() CheckReport {
 	for _, name := range c.ProviderNames() {
 		provider := c.Providers[name]
 		summary := ProviderSummary{
-			Name:      name,
-			Type:      provider.Type,
-			BaseURL:   provider.BaseURL,
-			APIKeySet: provider.APIKey != "",
-			APIKeyEnv: provider.APIKeyEnv,
+			Name:           name,
+			Type:           provider.Type,
+			BaseURL:        provider.BaseURL,
+			TimeoutSeconds: provider.TimeoutSeconds,
+			APIKeySet:      provider.APIKey != "",
+			APIKeyEnv:      provider.APIKeyEnv,
 		}
 		if provider.APIKeyEnv != "" {
 			_, summary.APIKeyEnvSet = os.LookupEnv(provider.APIKeyEnv)
