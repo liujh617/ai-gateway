@@ -994,6 +994,31 @@ func TestListModelsRejectsTrailingJSONResponse(t *testing.T) {
 	}
 }
 
+func TestListModelsMapsUpstreamError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		io.WriteString(w, `{"error":{"message":"model endpoint missing","type":"invalid_request_error","code":"not_found"}}`)
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.ListModels(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	compatErr, ok := err.(*compat.Error)
+	if !ok {
+		t.Fatalf("error type = %T", err)
+	}
+	if compatErr.Status != http.StatusNotFound || compatErr.Type != "invalid_request_error" || compatErr.Message != "model endpoint missing" {
+		t.Fatalf("mapped error = %+v", compatErr)
+	}
+	if compatErr.Code == nil || *compatErr.Code != "not_found" {
+		t.Fatalf("code = %v", compatErr.Code)
+	}
+}
+
 func TestCreateChatCompletionRejectsTrailingJSONResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
