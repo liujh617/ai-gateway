@@ -27,6 +27,18 @@ curl -fsS "http://$addr/readyz" | grep -q '"status":"ready"'
 
 curl -fsS "http://$addr/version" | grep -q '"version"'
 
+curl -fsSI "http://$addr/healthz" \
+  | tr -d '\r' \
+  | grep -qi '^X-Content-Type-Options: nosniff$'
+
+curl -fsSI "http://$addr/metrics" \
+  | tr -d '\r' \
+  | grep -qi '^X-Content-Type-Options: nosniff$'
+
+curl -sS -D - -o /dev/null "http://$addr/v1/models" \
+  | tr -d '\r' \
+  | grep -qi '^X-Content-Type-Options: nosniff$'
+
 curl -fsS "http://$addr/metrics" \
   | grep -q 'open_ai_gateway_http_requests_total'
 
