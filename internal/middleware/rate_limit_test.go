@@ -121,10 +121,51 @@ func TestRateLimiterMiddlewareReturnsRemainingRetryAfter(t *testing.T) {
 	}
 }
 
+func TestRateLimiterUsesUnconfiguredClientWhenAuthIsDisabled(t *testing.T) {
+	limiter := NewRateLimiter(1)
+	observer := &recordingRateLimitObserver{}
+	limiter.SetRejectionObserver(observer)
+	handler := Auth(nil, testErrorWriter{})(limiter.Middleware(testErrorWriter{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})))
+
+	first := performLimitedRequestFromRemote(handler, "", "192.0.2.1:1234")
+	if first.Code != http.StatusNoContent {
+		t.Fatalf("first status = %d, body = %s", first.Code, first.Body.String())
+	}
+	second := performLimitedRequestFromRemote(handler, "", "192.0.2.2:1234")
+
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status = %d, body = %s", second.Code, second.Body.String())
+	}
+	if observer.path != "/v1/models" || observer.client != "unconfigured" {
+		t.Fatalf("observed rejection = path %q client %q", observer.path, observer.client)
+	}
+}
+
 func performLimitedRequest(handler http.Handler, apiKey string) *httptest.ResponseRecorder {
+	return performLimitedRequestFromRemote(handler, apiKey, "")
+}
+
+func performLimitedRequestFromRemote(handler http.Handler, apiKey string, remoteAddr string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
-	req.Header.Set("Authorization", "Bearer "+apiKey)
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+	if remoteAddr != "" {
+		req.RemoteAddr = remoteAddr
+	}
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	return rr
+}
+
+type recordingRateLimitObserver struct {
+	path   string
+	client string
+}
+
+func (o *recordingRateLimitObserver) ObserveRateLimitRejection(path, client string) {
+	o.path = path
+	o.client = client
 }
