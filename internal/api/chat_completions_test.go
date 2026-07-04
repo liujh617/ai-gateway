@@ -235,6 +235,24 @@ func TestChatCompletionsMissingMessages(t *testing.T) {
 	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
 }
 
+func TestChatCompletionsMissingMessageRole(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	body := `{"model":"test-model","messages":[{"content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
+}
+
+func TestChatCompletionsMissingMessageContent(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	body := `{"model":"test-model","messages":[{"role":"user","content":"   "}]}`
+
+	rr := doJSON(handler, body, true)
+
+	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
+}
+
 func TestChatCompletionsUnauthorized(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
