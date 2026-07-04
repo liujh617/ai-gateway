@@ -898,6 +898,43 @@ func TestCreateChatCompletionAcceptsJSONResponseWithCharset(t *testing.T) {
 	}
 }
 
+func TestListModelsAcceptsJSONResponseWithCharset(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		io.WriteString(w, `{"object":"list","data":[{"id":"upstream-model","object":"model","created":0,"owned_by":"upstream"}]}`)
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	models, err := p.ListModels(context.Background())
+	if err != nil {
+		t.Fatalf("ListModels: %v", err)
+	}
+	if len(models) != 1 || models[0].ID != "upstream-model" {
+		t.Fatalf("models = %+v", models)
+	}
+}
+
+func TestCreateEmbeddingAcceptsJSONResponseWithCharset(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		io.WriteString(w, `{"object":"list","model":"upstream-embedding-model","data":[{"object":"embedding","index":0,"embedding":[0.1,0.2]}],"usage":{"prompt_tokens":1,"total_tokens":1}}`)
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	resp, err := p.CreateEmbedding(context.Background(), compat.EmbeddingRequest{
+		Model: "upstream-embedding-model",
+		Input: json.RawMessage(`"hello"`),
+	})
+	if err != nil {
+		t.Fatalf("CreateEmbedding: %v", err)
+	}
+	if resp.Model != "upstream-embedding-model" {
+		t.Fatalf("response model = %q", resp.Model)
+	}
+}
+
 func TestCreateChatCompletionRejectsNonJSONContentType(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
