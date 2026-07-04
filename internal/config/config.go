@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sort"
@@ -154,6 +155,13 @@ func Load(path string) (*Config, error) {
 	decoder := json.NewDecoder(file)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&cfg); err != nil {
+		return nil, fmt.Errorf("decode config: %w", err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("decode config: config must contain a single JSON value")
+		}
 		return nil, fmt.Errorf("decode config: %w", err)
 	}
 	cfg.applyDefaults()

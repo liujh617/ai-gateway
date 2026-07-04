@@ -41,6 +41,31 @@ func TestLoadDefaultConfig(t *testing.T) {
 	}
 }
 
+func TestLoadConfigRejectsTrailingJSON(t *testing.T) {
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_key": "gateway-key",
+		"providers": {
+			"fake": {
+				"type": "fake"
+			}
+		},
+		"models": {
+			"test-model": {
+				"provider": "fake"
+			}
+		}
+	}{}`)
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected trailing JSON error")
+	}
+	if !strings.Contains(err.Error(), "single JSON value") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestLoadConfigValidatesUnknownProvider(t *testing.T) {
 	path := writeConfig(t, `{
 		"addr": "127.0.0.1:8080",
