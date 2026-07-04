@@ -850,6 +850,37 @@ func TestCreateChatCompletionRejectsOversizedResponse(t *testing.T) {
 	}
 }
 
+func TestListModelsRejectsOversizedResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, strings.Repeat(" ", 11<<20))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.ListModels(context.Background())
+	if err == nil {
+		t.Fatal("expected oversized or invalid response error")
+	}
+}
+
+func TestCreateEmbeddingRejectsOversizedResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, strings.Repeat(" ", 11<<20))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.CreateEmbedding(context.Background(), compat.EmbeddingRequest{
+		Model: "upstream-embedding-model",
+		Input: json.RawMessage(`"hello"`),
+	})
+	if err == nil {
+		t.Fatal("expected oversized or invalid response error")
+	}
+}
+
 func TestCreateChatCompletionAcceptsJSONResponseWithCharset(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
