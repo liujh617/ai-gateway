@@ -408,7 +408,7 @@ data: [DONE]
 
 客户端只感知对外模型名。gateway client 可以通过 `api_clients[].models` 配置可见模型白名单；未配置或为空时可访问全部模型。访问不在白名单中的模型时，网关返回与模型不存在一致的 `404 invalid_request_error`。
 
-当前实现使用 JSON 配置：
+当前实现使用 JSON 配置。配置文件必须只包含一个 JSON 值；合法配置后继续拼接第二个 JSON 值或其他非空 token 时，配置加载失败。
 
 ```json
 {
