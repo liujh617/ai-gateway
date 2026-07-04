@@ -772,6 +772,38 @@ func TestChatCompletionsStreamUsesStreamTimeout(t *testing.T) {
 	}
 }
 
+func TestChatCompletionsStreamTimeoutMarksProviderFailure(t *testing.T) {
+	fallback := &countingProvider{}
+	handler := newFallbackTestHandlerWithOptions(&delayedStreamProvider{}, fallback, api.Options{
+		StreamTimeout: 5 * time.Millisecond,
+		ProviderHealthOptions: api.ProviderHealthOptions{
+			FailureThreshold: 1,
+			Cooldown:         time.Minute,
+		},
+	})
+	body := `{"model":"test-model","stream":true,"messages":[{"role":"user","content":"hello"}]}`
+
+	first := doJSON(handler, body, true)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status = %d, body = %s", first.Code, first.Body.String())
+	}
+	if strings.Contains(first.Body.String(), "data: [DONE]\n\n") {
+		t.Fatalf("first stream unexpectedly completed: %s", first.Body.String())
+	}
+
+	second := doJSON(handler, body, true)
+	if second.Code != http.StatusOK {
+		t.Fatalf("second status = %d, body = %s", second.Code, second.Body.String())
+	}
+	if !strings.Contains(second.Body.String(), "data: [DONE]\n\n") {
+		t.Fatalf("second stream did not use fallback: %s", second.Body.String())
+	}
+	if calls := fallback.ChatCalls(); calls != 1 {
+		t.Fatalf("fallback stream calls = %d, want 1", calls)
+	}
+	assertMetricsContains(t, handler, `open_ai_gateway_provider_circuit_open_total{path="/v1/chat/completions",model="test-model",provider="primary-provider",client="default"} 1`)
+}
+
 func TestChatCompletionsClientCancelClosesStream(t *testing.T) {
 	p := newBlockingProvider()
 	handler := newTestHandler(p)

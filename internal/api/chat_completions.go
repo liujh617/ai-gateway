@@ -144,7 +144,12 @@ func (s *Server) streamChatCompletion(w http.ResponseWriter, r *http.Request, ro
 				flusher.Flush()
 				return
 			}
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+			if errors.Is(err, context.DeadlineExceeded) {
+				s.providerHealth.MarkFailure(providerName)
+				s.observeProviderHealth(providerName)
 				return
 			}
 			if canFallbackProviderError(err) {
