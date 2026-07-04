@@ -464,7 +464,7 @@ models:
 
 未声明 `capabilities` 时默认同时支持 `chat` 和 `embeddings`，用于兼容早期配置。请求使用不支持该能力的模型时，返回 `404 invalid_request_error`。
 
-模型可以通过 `fallbacks` 声明备用 provider。主 provider 在非流式请求或流式建连阶段返回 `429`、`5xx`、timeout 或非兼容错误时，网关会按配置顺序尝试备用 provider。`400`、`401`、`404` 等客户端或鉴权类错误不会触发 fallback。流式响应一旦开始向客户端发送事件，后续读取错误不会再切换 provider，避免混合两个上游的 SSE 响应。
+模型可以通过 `fallbacks` 声明备用 provider。主 provider 在非流式请求或流式建连阶段返回 `429`、`5xx`、timeout 或非兼容错误时，网关会按配置顺序尝试备用 provider。`400`、`401`、`404` 等客户端或鉴权类错误不会触发 fallback。流式响应一旦开始向客户端发送事件，后续读取错误不会再切换 provider，避免混合两个上游的 SSE 响应；如果读取阶段因 timeout 结束，会记录 provider failure，用于后续请求的 circuit breaker 判断。
 
 模型和 fallback 可以通过 `pricing` 配置 token 单价，用于生成成本指标。价格单位为 USD / 1M tokens。不配置或价格为 `0` 时不会产生对应成本样本。fallback 可以配置不同价格，以匹配实际命中的 provider 或 upstream model。
 
@@ -493,7 +493,7 @@ models:
 }
 ```
 
-网关维护进程内 provider health 状态。provider 连续出现可 fallback 错误达到 `provider_health.failure_threshold` 后，会在 `provider_health.cooldown_seconds` 内被视为 unhealthy；后续请求会跳过 unhealthy provider，直接尝试可用 fallback。冷却时间结束后，provider 会被再次尝试；成功响应会立即恢复 healthy。若某个模型的所有尝试 provider 都处于 unhealthy，网关返回 `503 server_error`，错误消息为 `provider unavailable`。
+网关维护进程内 provider health 状态。provider 连续出现可 fallback 错误达到 `provider_health.failure_threshold` 后，会在 `provider_health.cooldown_seconds` 内被视为 unhealthy；后续请求会跳过 unhealthy provider，直接尝试可用 fallback。流式读取阶段的 timeout 也会计入 provider failure，但只影响后续请求，不会在当前 SSE 响应中切换 provider。冷却时间结束后，provider 会被再次尝试；成功响应会立即恢复 healthy。若某个模型的所有尝试 provider 都处于 unhealthy，网关返回 `503 server_error`，错误消息为 `provider unavailable`。
 
 默认 provider health 配置：
 

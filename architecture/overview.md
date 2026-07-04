@@ -133,7 +133,7 @@ Compat Mapper 是外部 API 契约的主要守门员。
 - 携带每个 provider 尝试对应的可选 token pricing。
 - 返回明确的 model not found 或 unauthorized 错误。
 
-当前实现使用静态配置路由，并支持在非流式请求或流式建连阶段按顺序尝试 fallback provider。provider 连续出现可 fallback 错误后会短暂熔断，后续请求会跳过 unhealthy provider，冷却结束后再次尝试。后续可以扩展 weighted routing 和灰度策略。
+当前实现使用静态配置路由，并支持在非流式请求或流式建连阶段按顺序尝试 fallback provider。provider 连续出现可 fallback 错误后会短暂熔断，后续请求会跳过 unhealthy provider，冷却结束后再次尝试。流式响应开始后的读取阶段 timeout 不会切换 provider，但会计入 provider failure，影响后续请求。后续可以扩展 weighted routing 和灰度策略。
 
 ### Provider Adapter
 
