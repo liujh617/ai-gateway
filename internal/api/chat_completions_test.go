@@ -1182,6 +1182,15 @@ func TestEmbeddingsMissingInput(t *testing.T) {
 	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
 }
 
+func TestEmbeddingsEmptyInput(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	body := `{"model":"test-model","input":"   "}`
+
+	rr := doEmbeddingsJSON(handler, body, true)
+
+	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
+}
+
 func TestEmbeddingsRequiresJSONContentType(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	body := `{"model":"test-model","input":"hello"}`
