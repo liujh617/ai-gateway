@@ -523,6 +523,18 @@ func TestEnvironmentAPIKeysOverride(t *testing.T) {
 	}
 }
 
+func TestEnvironmentAPIKeysRejectsEmptyEntry(t *testing.T) {
+	t.Setenv("GATEWAY_API_KEYS", "env-key-1,,env-key-2")
+
+	_, err := config.Load("")
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "api_keys") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestLoadConfigValidatesServerTimeouts(t *testing.T) {
 	path := writeConfig(t, `{
 		"addr": "127.0.0.1:8080",

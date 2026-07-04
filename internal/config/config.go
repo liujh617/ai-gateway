@@ -142,7 +142,11 @@ type ModelFallbackSummary struct {
 
 func Load(path string) (*Config, error) {
 	if path == "" {
-		return Default(), nil
+		cfg := Default()
+		if err := cfg.Validate(); err != nil {
+			return nil, err
+		}
+		return cfg, nil
 	}
 
 	file, err := os.Open(path)
@@ -664,10 +668,7 @@ func splitAPIKeys(value string) []string {
 	parts := strings.Split(value, ",")
 	keys := make([]string, 0, len(parts))
 	for _, part := range parts {
-		key := strings.TrimSpace(part)
-		if key != "" {
-			keys = append(keys, key)
-		}
+		keys = append(keys, strings.TrimSpace(part))
 	}
 	return keys
 }
