@@ -20,7 +20,7 @@ https://gateway.example.com/v1
 Authorization: Bearer <gateway-api-key>
 ```
 
-网关可以配置单个 `api_key`、多个 `api_keys`，或带非敏感名称的 `api_clients`。当 `api_clients` 非空时，任一 client 的 token 都可以通过鉴权，并使用 client `name` 作为日志、metrics 和限流标签；client 可通过 `models` 配置可见模型白名单，未配置或为空时可访问全部模型。`api_key` 和 `api_keys` 继续保留用于兼容早期配置，默认 client 标签分别为 `default` 和 `key_1`、`key_2` 等。`GATEWAY_API_KEY` 可以覆盖单个 key，`GATEWAY_API_KEYS` 可以用逗号分隔的多个 key 覆盖列表。配置自检、日志和 metrics 不得输出实际 gateway API key。
+网关可以配置单个 `api_key`、多个 `api_keys`，或带非敏感名称的 `api_clients`。当 `api_clients` 非空时，任一 client 的 token 都可以通过鉴权，并使用 client `name` 作为日志、metrics 和限流标签；client 可通过 `models` 配置可见模型白名单，未配置或为空时可访问全部模型。`api_key` 和 `api_keys` 继续保留用于兼容早期配置，默认 client 标签分别为 `default` 和 `key_1`、`key_2` 等。`GATEWAY_API_KEY` 可以覆盖单个 key，`GATEWAY_API_KEYS` 可以用逗号分隔的多个 key 覆盖列表；空片段会被视为配置错误。配置自检、日志和 metrics 不得输出实际 gateway API key。
 
 缺少、无效或无权限访问模型时，返回 OpenAI-compatible error response。
 
