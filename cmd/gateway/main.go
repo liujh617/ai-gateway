@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"open-ai-gateway/internal/api"
+	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/config"
 	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/provider"
@@ -50,6 +51,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	auditRecorder, err := buildAuditRecorder(cfg)
+	if err != nil {
+		logger.Error("failed to configure audit", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := auditRecorder.Close(); err != nil {
+			logger.Debug("failed to close audit recorder", "error", err)
+		}
+	}()
+
 	apiServer := api.NewServer(modelRouter, cfg.APIKey, logger, api.Options{
 		RequestTimeout: cfg.RequestTimeout(),
 		StreamTimeout:  cfg.StreamTimeout(),
@@ -61,6 +73,7 @@ func main() {
 			Cooldown:         cfg.ProviderHealthCooldown(),
 		},
 		MaxBodyBytes: cfg.MaxRequestBodyBytes,
+		Audit:        auditRecorder,
 	})
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,
@@ -85,6 +98,8 @@ func main() {
 		"max_request_body_bytes", cfg.MaxRequestBodyBytes,
 		"log_format", cfg.Log.Format,
 		"log_level", cfg.Log.Level,
+		"audit_enabled", cfg.Audit.Enabled,
+		"audit_path", cfg.Audit.Path,
 		"rate_limit_requests_per_minute", cfg.RateLimit.RequestsPerMinute,
 		"client_rate_limit_overrides", len(gatewayClientRateLimits(cfg)),
 		"client_model_overrides", len(gatewayClientModels(cfg)),
@@ -112,6 +127,13 @@ func runConfigCheck(w io.Writer, path string) error {
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(report)
+}
+
+func buildAuditRecorder(cfg *config.Config) (audit.Recorder, error) {
+	if !cfg.Audit.Enabled {
+		return audit.NoopRecorder{}, nil
+	}
+	return audit.NewJSONLRecorder(cfg.Audit.Path)
 }
 
 func newLogger(cfg config.LogConfig) *slog.Logger {

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/router"
@@ -24,6 +25,7 @@ type Server struct {
 	providerHealth *providerHealth
 	clientModels   map[string]map[string]bool
 	maxBodyBytes   int64
+	audit          audit.Recorder
 }
 
 type Options struct {
@@ -35,6 +37,7 @@ type Options struct {
 	Credentials           []middleware.AuthCredential
 	ClientModels          map[string][]string
 	MaxBodyBytes          int64
+	Audit                 audit.Recorder
 }
 
 func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logger, options ...Options) *Server {
@@ -56,6 +59,9 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 	}
 	if opts.Metrics == nil {
 		opts.Metrics = middleware.NewMetrics()
+	}
+	if opts.Audit == nil {
+		opts.Audit = audit.NoopRecorder{}
 	}
 	if opts.RateLimiter != nil {
 		opts.RateLimiter.SetRejectionObserver(opts.Metrics)
@@ -83,6 +89,7 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 		providerHealth: providerHealth,
 		clientModels:   copyClientModels(opts.ClientModels),
 		maxBodyBytes:   opts.MaxBodyBytes,
+		audit:          opts.Audit,
 	}
 }
 
