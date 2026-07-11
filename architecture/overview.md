@@ -166,6 +166,7 @@ Provider Adapter 不应直接依赖 HTTP handler。
 
 - `internal/provider/fake`: 开发和测试用 fake provider。
 - `internal/provider/openai`: OpenAI-compatible HTTP provider，转发 `/chat/completions`，支持非流式和 SSE 流式响应，并对上游成功响应和 JSON 错误响应执行大小边界及单 JSON 校验。
+- `internal/provider/azureopenai`: Azure OpenAI provider，转发 Azure deployment 形式的 chat completions、streaming chat completions 和 embeddings。
 
 ### Config
 

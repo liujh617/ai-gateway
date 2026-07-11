@@ -441,6 +441,15 @@ data: [DONE]
 }
 ```
 
+`azure-openai` provider 使用 Azure deployment endpoint：
+
+```text
+POST <base_url>/openai/deployments/<deployment>/chat/completions?api-version=<api_version>
+POST <base_url>/openai/deployments/<deployment>/embeddings?api-version=<api_version>
+```
+
+Azure provider 使用 `api-key` header 发送上游 API key。`providers.<name>.api_version` 是必填的 Azure OpenAI `api-version` query 值。`models.<external>.upstream_model` 对 Azure 表示 deployment name；为空时仍按 external model name 回退。
+
 早期 ADR 中的 YAML 示例属于目标形态。当前实现使用 JSON 配置，避免在第一版引入额外配置解析依赖。
 
 目标 YAML 形态：

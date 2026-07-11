@@ -80,6 +80,8 @@ curl -N http://127.0.0.1:8080/v1/chat/completions \
 
 DeepSeek 和 Trae 本地代理示例见 [config.deepseek.example.json](config.deepseek.example.json) 与 [Trae + DeepSeek Local Proxy](docs/trae-deepseek.md)。
 
+Azure OpenAI 示例见 [config.azure-openai.example.json](config.azure-openai.example.json)。
+
 启动真实 provider：
 
 ```powershell
@@ -91,10 +93,11 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 - `api_key`: 网关客户端 Bearer token，保留用于单 key 和早期配置；不能为空或包含首尾空白。
 - `api_keys`: 网关客户端 Bearer token 列表；非空时任一 token 都可通过鉴权。通过 `GATEWAY_API_KEYS` 覆盖时使用逗号分隔，空片段会被视为配置错误。
 - `api_clients`: 带非敏感 `name` 的网关客户端 Bearer token 列表；`name` 会进入日志和 metrics 的 `client` 标签，`api_key` 不会输出；可用 `models` 限制该 client 可见模型，可用 `rate_limit.requests_per_minute` 覆盖该 client 的限流。
-- `providers.<name>.type`: 当前支持 `fake` 和 `openai-compatible`。
+- `providers.<name>.type`: 当前支持 `fake`、`openai-compatible` 和 `azure-openai`。
 - `providers.<name>.base_url`: OpenAI-compatible base URL，例如 `https://api.openai.com/v1`。
 - `providers.<name>.api_key_env`: 上游 API key 所在环境变量名。
 - `providers.<name>.api_key`: 上游 API key 明文值，仅建议本地开发使用。
+- `providers.<name>.api_version`: Azure OpenAI `api-version` query 值；仅 `azure-openai` 必填。
 - `providers.<name>`、`models.<external>` 名称和 provider 引用不能为空或包含首尾空白。
 - `models.<external>.provider`: 对外模型路由到哪个 provider。
 - `models.<external>.upstream_model`: 转发给上游的真实模型名。
