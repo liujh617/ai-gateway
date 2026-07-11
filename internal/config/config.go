@@ -383,6 +383,9 @@ func (c *Config) Validate() error {
 		if strings.TrimSpace(name) == "" {
 			return fmt.Errorf("provider name is required")
 		}
+		if name != strings.TrimSpace(name) {
+			return fmt.Errorf("provider name must not contain leading or trailing whitespace")
+		}
 		switch provider.Type {
 		case "fake":
 		case "openai-compatible":
@@ -403,6 +406,9 @@ func (c *Config) Validate() error {
 	for externalModel, model := range c.Models {
 		if strings.TrimSpace(externalModel) == "" {
 			return fmt.Errorf("model name is required")
+		}
+		if externalModel != strings.TrimSpace(externalModel) {
+			return fmt.Errorf("model name must not contain leading or trailing whitespace")
 		}
 		if strings.TrimSpace(model.Provider) == "" {
 			return fmt.Errorf("model %q provider is required", externalModel)
