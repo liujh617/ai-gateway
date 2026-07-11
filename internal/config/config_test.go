@@ -304,6 +304,38 @@ func TestLoadConfigAcceptsGatewayAPIClients(t *testing.T) {
 	}
 }
 
+func TestLoadConfigRejectsInvalidGatewayAPIKey(t *testing.T) {
+	for name, rawKey := range map[string]string{
+		"empty": `"   "`,
+		"space": `" gateway-key "`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := writeConfig(t, `{
+				"addr": "127.0.0.1:8080",
+				"api_key": `+rawKey+`,
+				"providers": {
+					"fake": {
+						"type": "fake"
+					}
+				},
+				"models": {
+					"test-model": {
+						"provider": "fake"
+					}
+				}
+			}`)
+
+			_, err := config.Load(path)
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if !strings.Contains(err.Error(), "api_key") {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
 func TestLoadConfigRejectsInvalidGatewayAPIKeys(t *testing.T) {
 	for name, rawKeys := range map[string]string{
 		"empty":     `["client-key", ""]`,

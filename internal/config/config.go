@@ -317,6 +317,9 @@ func (c *Config) Validate() error {
 	if strings.TrimSpace(c.Addr) == "" {
 		return fmt.Errorf("addr is required")
 	}
+	if err := validateGatewayAPIKey(c.APIKey); err != nil {
+		return err
+	}
 	if err := validateGatewayAPIKeys(c.APIKeys); err != nil {
 		return err
 	}
@@ -590,6 +593,19 @@ func (c *Config) GatewayAPIClients() []GatewayClientConfig {
 		Name:   "default",
 		APIKey: c.APIKey,
 	}}
+}
+
+func validateGatewayAPIKey(key string) error {
+	if key == "" {
+		return nil
+	}
+	if strings.TrimSpace(key) == "" {
+		return fmt.Errorf("api_key must be non-empty")
+	}
+	if key != strings.TrimSpace(key) {
+		return fmt.Errorf("api_key must not contain leading or trailing whitespace")
+	}
+	return nil
 }
 
 func validateGatewayAPIKeys(keys []string) error {
