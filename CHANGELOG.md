@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+## 0.1.1 - 2026-07-11
+
+### Added
+
+- Azure OpenAI provider with deployment endpoints for chat completions, streaming chat completions, and embeddings.
+- Azure OpenAI example configuration and JSON Schema support.
+
+### Changed
+
+- Extracted shared provider HTTP response, error, timeout, and SSE parsing helpers.
+
 ## 0.1.0 - 2026-07-11
 
 ### Added
