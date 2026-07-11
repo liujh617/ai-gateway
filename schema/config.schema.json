@@ -188,7 +188,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["fake", "openai-compatible"]
+          "enum": ["fake", "openai-compatible", "azure-openai"]
         },
         "base_url": {
           "type": "string",
@@ -199,6 +199,10 @@
         },
         "api_key_env": {
           "type": "string"
+        },
+        "api_version": {
+          "type": "string",
+          "description": "Azure OpenAI api-version query value. Required for azure-openai providers."
         },
         "timeout_seconds": {
           "type": "integer",

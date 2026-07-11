@@ -14,6 +14,7 @@ func TestExampleConfigsLoad(t *testing.T) {
 		filepath.Join("..", "..", "config.example.json"),
 		filepath.Join("..", "..", "config.local.example.json"),
 		filepath.Join("..", "..", "config.deepseek.example.json"),
+		filepath.Join("..", "..", "config.azure-openai.example.json"),
 	} {
 		t.Run(path, func(t *testing.T) {
 			if _, err := config.Load(path); err != nil {
