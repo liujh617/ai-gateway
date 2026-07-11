@@ -1,27 +1,19 @@
 package openai
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"mime"
-	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/provider"
+	"open-ai-gateway/internal/provider/httpx"
 	"open-ai-gateway/internal/requestctx"
 	"open-ai-gateway/internal/upstreamurl"
 	"open-ai-gateway/internal/version"
 )
-
-const maxResponseBodyBytes = 10 << 20
 
 type Provider struct {
 	baseURL string
@@ -55,19 +47,19 @@ func (p *Provider) ListModels(ctx context.Context) ([]compat.Model, error) {
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return nil, transportError(err)
+		return nil, httpx.TransportError(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, upstreamError(resp)
+		return nil, httpx.UpstreamError(resp)
 	}
-	if err := requireJSONResponse(resp); err != nil {
+	if err := httpx.RequireJSONResponse(resp); err != nil {
 		return nil, err
 	}
 
 	var out compat.ModelListResponse
-	if err := decodeLimited(resp.Body, &out); err != nil {
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
 		return nil, err
 	}
 	return out.Data, nil
@@ -88,19 +80,19 @@ func (p *Provider) CreateChatCompletion(ctx context.Context, req compat.ChatComp
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
-		return nil, transportError(err)
+		return nil, httpx.TransportError(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, upstreamError(resp)
+		return nil, httpx.UpstreamError(resp)
 	}
-	if err := requireJSONResponse(resp); err != nil {
+	if err := httpx.RequireJSONResponse(resp); err != nil {
 		return nil, err
 	}
 
 	var out compat.ChatCompletionResponse
-	if err := decodeLimited(resp.Body, &out); err != nil {
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -122,21 +114,18 @@ func (p *Provider) StreamChatCompletion(ctx context.Context, req compat.ChatComp
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
-		return nil, transportError(err)
+		return nil, httpx.TransportError(err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
-		return nil, upstreamError(resp)
+		return nil, httpx.UpstreamError(resp)
 	}
-	if err := requireEventStreamResponse(resp); err != nil {
+	if err := httpx.RequireEventStreamResponse(resp); err != nil {
 		resp.Body.Close()
 		return nil, err
 	}
 
-	return &stream{
-		body:   resp.Body,
-		reader: bufio.NewReader(resp.Body),
-	}, nil
+	return httpx.NewChatCompletionStream(resp.Body), nil
 }
 
 func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
@@ -153,19 +142,19 @@ func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequ
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
-		return nil, transportError(err)
+		return nil, httpx.TransportError(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, upstreamError(resp)
+		return nil, httpx.UpstreamError(resp)
 	}
-	if err := requireJSONResponse(resp); err != nil {
+	if err := httpx.RequireJSONResponse(resp); err != nil {
 		return nil, err
 	}
 
 	var out compat.EmbeddingResponse
-	if err := decodeLimited(resp.Body, &out); err != nil {
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -189,219 +178,4 @@ func (p *Provider) setHeaders(req *http.Request) {
 func (p *Provider) setJSONHeaders(req *http.Request) {
 	p.setHeaders(req)
 	req.Header.Set("Content-Type", "application/json")
-}
-
-type stream struct {
-	body          io.ReadCloser
-	reader        *bufio.Reader
-	seenFirstLine bool
-	skipNextLF    bool
-}
-
-func (s *stream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) {
-	for {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-
-		payload, err := s.nextPayload()
-		if err != nil {
-			return nil, err
-		}
-		if payload == "" {
-			continue
-		}
-		if payload == "[DONE]" {
-			return nil, io.EOF
-		}
-
-		var chunk compat.ChatCompletionChunk
-		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
-			return nil, err
-		}
-		return &chunk, nil
-	}
-}
-
-func (s *stream) nextPayload() (string, error) {
-	var data []string
-	eventBytes := 0
-	for {
-		line, err := s.readSSELine()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				if line == "" {
-					if len(data) == 0 {
-						return "", io.EOF
-					}
-				}
-				return "", errors.New("upstream SSE event ended without blank line")
-			} else {
-				return "", err
-			}
-		}
-
-		line = strings.TrimRight(line, "\r\n")
-		if !s.seenFirstLine {
-			s.seenFirstLine = true
-			line = strings.TrimPrefix(line, "\ufeff")
-		}
-		if line == "" {
-			eventBytes = 0
-			if len(data) == 0 {
-				continue
-			}
-			return strings.Join(data, "\n"), nil
-		}
-		eventBytes += len(line) + 1
-		if eventBytes > maxResponseBodyBytes {
-			return "", fmt.Errorf("upstream SSE event exceeds %d bytes", maxResponseBodyBytes)
-		}
-		if strings.HasPrefix(line, ":") {
-			continue
-		}
-		field, value, _ := strings.Cut(line, ":")
-		if strings.HasPrefix(value, " ") {
-			value = strings.TrimPrefix(value, " ")
-		}
-		switch field {
-		case "data":
-			data = append(data, value)
-		case "event", "id", "retry":
-			continue
-		default:
-			continue
-		}
-	}
-}
-
-func (s *stream) readSSELine() (string, error) {
-	var line strings.Builder
-	for {
-		b, err := s.reader.ReadByte()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				if line.Len() == 0 {
-					return "", io.EOF
-				}
-				return line.String(), io.EOF
-			}
-			return "", transportError(err)
-		}
-		if s.skipNextLF {
-			s.skipNextLF = false
-			if b == '\n' {
-				continue
-			}
-		}
-		if line.Len()+1 > maxResponseBodyBytes+1 {
-			return "", fmt.Errorf("upstream SSE line exceeds %d bytes", maxResponseBodyBytes)
-		}
-		line.WriteByte(b)
-		if b == '\n' {
-			return line.String(), nil
-		}
-		if b == '\r' {
-			s.skipNextLF = true
-			return line.String(), nil
-		}
-	}
-}
-
-func (s *stream) Close() error {
-	return s.body.Close()
-}
-
-func decodeLimited(r io.Reader, out any) error {
-	limited := &io.LimitedReader{R: r, N: maxResponseBodyBytes + 1}
-	decoder := json.NewDecoder(limited)
-	if err := decoder.Decode(out); err != nil {
-		return err
-	}
-	if limited.N <= 0 {
-		return fmt.Errorf("upstream response body exceeds %d bytes", maxResponseBodyBytes)
-	}
-	var extra json.RawMessage
-	if err := decoder.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return errors.New("upstream response body must contain a single JSON value")
-		}
-		return err
-	}
-	if limited.N <= 0 {
-		return fmt.Errorf("upstream response body exceeds %d bytes", maxResponseBodyBytes)
-	}
-	return nil
-}
-
-func requireJSONResponse(resp *http.Response) error {
-	if !responseContentTypeIs(resp, "application/json") {
-		return fmt.Errorf("upstream response Content-Type must be application/json")
-	}
-	return nil
-}
-
-func requireEventStreamResponse(resp *http.Response) error {
-	if !responseContentTypeIs(resp, "text/event-stream") {
-		return fmt.Errorf("upstream response Content-Type must be text/event-stream")
-	}
-	return nil
-}
-
-func responseContentTypeIs(resp *http.Response, want string) bool {
-	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
-	mediaType, _, err := mime.ParseMediaType(contentType)
-	return err == nil && strings.EqualFold(mediaType, want)
-}
-
-func transportError(err error) error {
-	var netErr net.Error
-	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) {
-		return fmt.Errorf("upstream request timeout: %w", context.DeadlineExceeded)
-	}
-	return err
-}
-
-func upstreamError(resp *http.Response) error {
-	var upstream compat.ErrorResponse
-	if responseContentTypeIs(resp, "application/json") {
-		var decoded compat.ErrorResponse
-		if err := decodeLimited(resp.Body, &decoded); err == nil {
-			upstream = decoded
-		}
-	}
-
-	message := http.StatusText(resp.StatusCode)
-	if upstream.Error.Message != "" {
-		message = upstream.Error.Message
-	}
-
-	errorType := upstream.Error.Type
-	if errorType == "" {
-		errorType = defaultErrorType(resp.StatusCode)
-	}
-	status := resp.StatusCode
-	if resp.StatusCode >= 500 && resp.StatusCode != http.StatusGatewayTimeout {
-		status = http.StatusBadGateway
-	}
-	return &compat.Error{
-		Status:  status,
-		Message: message,
-		Type:    errorType,
-		Param:   upstream.Error.Param,
-		Code:    upstream.Error.Code,
-	}
-}
-
-func defaultErrorType(status int) string {
-	switch status {
-	case http.StatusUnauthorized, http.StatusForbidden:
-		return "authentication_error"
-	case http.StatusTooManyRequests:
-		return "rate_limit_error"
-	case http.StatusBadRequest, http.StatusNotFound:
-		return "invalid_request_error"
-	default:
-		return "server_error"
-	}
 }
