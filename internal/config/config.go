@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,7 +34,8 @@ type Config struct {
 	Providers                map[string]ProviderConfig `json:"providers"`
 	Models                   map[string]ModelConfig    `json:"models"`
 
-	auditEnabledEnvInvalid bool
+	auditEnabledEnvInvalid      bool
+	auditMaxFileBytesEnvInvalid bool
 }
 
 type ProviderConfig struct {
@@ -89,8 +91,9 @@ type LogConfig struct {
 }
 
 type AuditConfig struct {
-	Enabled bool   `json:"enabled"`
-	Path    string `json:"path"`
+	Enabled      bool   `json:"enabled"`
+	Path         string `json:"path"`
+	MaxFileBytes int64  `json:"max_file_bytes"`
 }
 
 type CheckReport struct {
@@ -109,6 +112,7 @@ type CheckReport struct {
 	LogLevel                       string                 `json:"log_level"`
 	AuditEnabled                   bool                   `json:"audit_enabled"`
 	AuditPath                      string                 `json:"audit_path"`
+	AuditMaxFileBytes              int64                  `json:"audit_max_file_bytes"`
 	RateLimitRequestsPerMinute     int                    `json:"rate_limit_requests_per_minute"`
 	ProviderHealthFailureThreshold int                    `json:"provider_health_failure_threshold"`
 	ProviderHealthCooldownSeconds  int                    `json:"provider_health_cooldown_seconds"`
@@ -210,6 +214,7 @@ func (c *Config) CheckReport() CheckReport {
 		LogLevel:                       c.Log.Level,
 		AuditEnabled:                   c.Audit.Enabled,
 		AuditPath:                      c.Audit.Path,
+		AuditMaxFileBytes:              c.Audit.MaxFileBytes,
 		RateLimitRequestsPerMinute:     c.RateLimit.RequestsPerMinute,
 		ProviderHealthFailureThreshold: c.ProviderHealth.FailureThreshold,
 		ProviderHealthCooldownSeconds:  c.ProviderHealth.CooldownSeconds,
@@ -386,11 +391,17 @@ func (c *Config) Validate() error {
 	if c.auditEnabledEnvInvalid {
 		return fmt.Errorf("GATEWAY_AUDIT_ENABLED must be true or false")
 	}
+	if c.auditMaxFileBytesEnvInvalid {
+		return fmt.Errorf("GATEWAY_AUDIT_MAX_FILE_BYTES must be a non-negative integer")
+	}
 	if strings.TrimSpace(c.Audit.Path) == "" {
 		return fmt.Errorf("audit.path must be non-empty")
 	}
 	if c.Audit.Path != strings.TrimSpace(c.Audit.Path) {
 		return fmt.Errorf("audit.path must not contain leading or trailing whitespace")
+	}
+	if c.Audit.MaxFileBytes < 0 {
+		return fmt.Errorf("audit.max_file_bytes must be non-negative")
 	}
 	switch c.Log.Format {
 	case "text", "json":
@@ -559,6 +570,14 @@ func (c *Config) applyDefaults() {
 	}
 	if env := os.Getenv("GATEWAY_AUDIT_PATH"); env != "" {
 		c.Audit.Path = env
+	}
+	if env := os.Getenv("GATEWAY_AUDIT_MAX_FILE_BYTES"); env != "" {
+		maxFileBytes, err := parseNonNegativeInt64Env(env)
+		if err != nil {
+			c.auditMaxFileBytesEnvInvalid = true
+		} else {
+			c.Audit.MaxFileBytes = maxFileBytes
+		}
 	}
 	if c.ProviderHealth.FailureThreshold == 0 {
 		c.ProviderHealth.FailureThreshold = 2
@@ -748,6 +767,17 @@ func parseBoolEnv(value string) (bool, bool) {
 	default:
 		return false, false
 	}
+}
+
+func parseNonNegativeInt64Env(value string) (int64, error) {
+	parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	if parsed < 0 {
+		return 0, fmt.Errorf("must be non-negative")
+	}
+	return parsed, nil
 }
 
 func (c *Config) RequestTimeout() time.Duration {

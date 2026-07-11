@@ -45,6 +45,9 @@ func TestLoadDefaultConfig(t *testing.T) {
 	if cfg.Audit.Path != "audit/agent-trace.jsonl" {
 		t.Fatalf("audit path = %q", cfg.Audit.Path)
 	}
+	if cfg.Audit.MaxFileBytes != 0 {
+		t.Fatalf("audit max file bytes = %d", cfg.Audit.MaxFileBytes)
+	}
 }
 
 func TestLoadConfigAcceptsAuditConfig(t *testing.T) {
@@ -53,7 +56,8 @@ func TestLoadConfigAcceptsAuditConfig(t *testing.T) {
 		"api_key": "gateway-key",
 		"audit": {
 			"enabled": true,
-			"path": "audit/custom-agent-trace.jsonl"
+			"path": "audit/custom-agent-trace.jsonl",
+			"max_file_bytes": 1048576
 		},
 		"providers": {
 			"fake": {
@@ -76,6 +80,9 @@ func TestLoadConfigAcceptsAuditConfig(t *testing.T) {
 	}
 	if cfg.Audit.Path != "audit/custom-agent-trace.jsonl" {
 		t.Fatalf("audit path = %q", cfg.Audit.Path)
+	}
+	if cfg.Audit.MaxFileBytes != 1048576 {
+		t.Fatalf("audit max file bytes = %d", cfg.Audit.MaxFileBytes)
 	}
 }
 
@@ -659,6 +666,7 @@ func TestEnvironmentAPIKeysRejectsEmptyEntry(t *testing.T) {
 func TestEnvironmentAuditOverrides(t *testing.T) {
 	t.Setenv("GATEWAY_AUDIT_ENABLED", "true")
 	t.Setenv("GATEWAY_AUDIT_PATH", "audit/env-agent-trace.jsonl")
+	t.Setenv("GATEWAY_AUDIT_MAX_FILE_BYTES", "2048")
 
 	cfg, err := config.Load("")
 	if err != nil {
@@ -670,6 +678,9 @@ func TestEnvironmentAuditOverrides(t *testing.T) {
 	if cfg.Audit.Path != "audit/env-agent-trace.jsonl" {
 		t.Fatalf("audit path = %q", cfg.Audit.Path)
 	}
+	if cfg.Audit.MaxFileBytes != 2048 {
+		t.Fatalf("audit max file bytes = %d", cfg.Audit.MaxFileBytes)
+	}
 }
 
 func TestEnvironmentAuditEnabledRejectsInvalidValue(t *testing.T) {
@@ -680,6 +691,18 @@ func TestEnvironmentAuditEnabledRejectsInvalidValue(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 	if !strings.Contains(err.Error(), "GATEWAY_AUDIT_ENABLED") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestEnvironmentAuditMaxFileBytesRejectsInvalidValue(t *testing.T) {
+	t.Setenv("GATEWAY_AUDIT_MAX_FILE_BYTES", "nope")
+
+	_, err := config.Load("")
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "GATEWAY_AUDIT_MAX_FILE_BYTES") {
 		t.Fatalf("error = %v", err)
 	}
 }
@@ -851,6 +874,7 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 		`"log_level":"info"`,
 		`"audit_enabled":false`,
 		`"audit_path":"audit/agent-trace.jsonl"`,
+		`"audit_max_file_bytes":0`,
 		`"rate_limit_requests_per_minute":120`,
 		`"rate_limit_requests_per_minute":60`,
 		`"provider_health_failure_threshold":2`,
@@ -881,6 +905,7 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 		"LogLevel",
 		"AuditEnabled",
 		"AuditPath",
+		"AuditMaxFileBytes",
 		"RateLimitRequestsPerMinute",
 		"ProviderHealthFailureThreshold",
 		"ProviderHealthCooldownSeconds",
@@ -914,8 +939,8 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	if report.LogFormat != "text" || report.LogLevel != "info" {
 		t.Fatalf("log summary = format %q level %q", report.LogFormat, report.LogLevel)
 	}
-	if report.AuditEnabled || report.AuditPath != "audit/agent-trace.jsonl" {
-		t.Fatalf("audit summary = enabled %t path %q", report.AuditEnabled, report.AuditPath)
+	if report.AuditEnabled || report.AuditPath != "audit/agent-trace.jsonl" || report.AuditMaxFileBytes != 0 {
+		t.Fatalf("audit summary = enabled %t path %q max file bytes %d", report.AuditEnabled, report.AuditPath, report.AuditMaxFileBytes)
 	}
 	if report.RateLimitRequestsPerMinute != 120 {
 		t.Fatalf("rate limit summary = %d", report.RateLimitRequestsPerMinute)

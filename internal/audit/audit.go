@@ -54,13 +54,24 @@ func (NoopRecorder) Close() error {
 }
 
 type JSONLRecorder struct {
-	mu     sync.Mutex
-	file   *os.File
-	logger *slog.Logger
-	now    func() time.Time
+	mu           sync.Mutex
+	path         string
+	file         *os.File
+	currentBytes int64
+	maxFileBytes int64
+	logger       *slog.Logger
+	now          func() time.Time
+}
+
+type JSONLRecorderOptions struct {
+	MaxFileBytes int64
 }
 
 func NewJSONLRecorder(path string) (*JSONLRecorder, error) {
+	return NewJSONLRecorderWithOptions(path, JSONLRecorderOptions{})
+}
+
+func NewJSONLRecorderWithOptions(path string, options JSONLRecorderOptions) (*JSONLRecorder, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
@@ -68,10 +79,18 @@ func NewJSONLRecorder(path string) (*JSONLRecorder, error) {
 	if err != nil {
 		return nil, err
 	}
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
 	return &JSONLRecorder{
-		file:   file,
-		logger: slog.Default(),
-		now:    time.Now,
+		path:         path,
+		file:         file,
+		currentBytes: info.Size(),
+		maxFileBytes: options.MaxFileBytes,
+		logger:       slog.Default(),
+		now:          time.Now,
 	}, nil
 }
 
@@ -89,9 +108,39 @@ func (r *JSONLRecorder) Record(ctx context.Context, event Event) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, err := r.file.Write(append(payload, '\n')); err != nil {
-		r.logger.Debug("failed to write audit event", "error", err)
+	line := append(payload, '\n')
+	if err := r.rotateIfNeededLocked(int64(len(line))); err != nil {
+		r.logger.Debug("failed to rotate audit file", "error", err)
 	}
+	n, err := r.file.Write(line)
+	if err != nil {
+		r.logger.Debug("failed to write audit event", "error", err)
+		return
+	}
+	r.currentBytes += int64(n)
+}
+
+func (r *JSONLRecorder) rotateIfNeededLocked(nextBytes int64) error {
+	if r.maxFileBytes <= 0 || r.currentBytes == 0 || r.currentBytes+nextBytes <= r.maxFileBytes {
+		return nil
+	}
+	if err := r.file.Close(); err != nil {
+		return err
+	}
+	rotatedPath := r.path + ".1"
+	if err := os.Remove(rotatedPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Rename(r.path, rotatedPath); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(r.path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	r.file = file
+	r.currentBytes = 0
+	return nil
 }
 
 func (r *JSONLRecorder) Close() error {

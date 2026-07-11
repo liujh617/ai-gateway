@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,6 +86,46 @@ func TestJSONLRecorderWriteFailureDoesNotPanic(t *testing.T) {
 	}
 
 	rec.Record(context.Background(), audit.Event{Event: audit.EventRequest, Body: json.RawMessage(`{"ok":true}`)})
+}
+
+func TestJSONLRecorderRotatesWhenMaxFileBytesExceeded(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent.jsonl")
+	rec, err := audit.NewJSONLRecorderWithOptions(path, audit.JSONLRecorderOptions{MaxFileBytes: 180})
+	if err != nil {
+		t.Fatalf("NewJSONLRecorderWithOptions: %v", err)
+	}
+	defer rec.Close()
+
+	rec.Record(context.Background(), audit.Event{
+		Timestamp: time.Date(2026, 7, 11, 1, 2, 3, 0, time.UTC),
+		Event:     audit.EventRequest,
+		RequestID: "req_1",
+		Body:      json.RawMessage(`{"message":"first event should rotate out"}`),
+	})
+	rec.Record(context.Background(), audit.Event{
+		Timestamp: time.Date(2026, 7, 11, 1, 2, 4, 0, time.UTC),
+		Event:     audit.EventResponse,
+		RequestID: "req_2",
+		Body:      json.RawMessage(`{"message":"second event should stay current"}`),
+	})
+	if err := rec.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	current, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read current audit file: %v", err)
+	}
+	rotated, err := os.ReadFile(path + ".1")
+	if err != nil {
+		t.Fatalf("read rotated audit file: %v", err)
+	}
+	if !strings.Contains(string(rotated), `"request_id":"req_1"`) {
+		t.Fatalf("rotated file = %s", rotated)
+	}
+	if !strings.Contains(string(current), `"request_id":"req_2"`) {
+		t.Fatalf("current file = %s", current)
+	}
 }
 
 func TestTraceIDFromRequest(t *testing.T) {

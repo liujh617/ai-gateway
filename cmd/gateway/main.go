@@ -211,7 +211,9 @@ func buildAuditRecorder(cfg *config.Config) (audit.Recorder, error) {
 	if !cfg.Audit.Enabled {
 		return audit.NoopRecorder{}, nil
 	}
-	return audit.NewJSONLRecorder(cfg.Audit.Path)
+	return audit.NewJSONLRecorderWithOptions(cfg.Audit.Path, audit.JSONLRecorderOptions{
+		MaxFileBytes: cfg.Audit.MaxFileBytes,
+	})
 }
 
 func newLogger(cfg config.LogConfig) *slog.Logger {

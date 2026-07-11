@@ -16,7 +16,7 @@ coverage.html
 
 # Logs and temporary files
 *.log
-audit/
+/audit/
 tmp/
 temp/
 

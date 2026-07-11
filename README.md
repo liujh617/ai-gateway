@@ -112,6 +112,7 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 - `log.level`: 日志级别，支持 `debug`、`info`、`warn`、`error`。
 - `audit.enabled`: 本地 agent 研究审计开关，默认 `false`。
 - `audit.path`: JSONL 审计文件路径，默认 `audit/agent-trace.jsonl`。
+- `audit.max_file_bytes`: 单个审计文件大小上限，默认 `0` 表示不轮转；超过后当前文件会轮转为 `<path>.1`。
 - `rate_limit.requests_per_minute`: 按 gateway client 的简单内存限流，`0` 表示关闭；`api_clients[].rate_limit.requests_per_minute` 可覆盖单个 client，显式 `0` 表示该 client 关闭限流。超限返回 `429 rate_limit_error`，并包含按当前窗口剩余秒数设置的 `Retry-After`。
 - `provider_health.failure_threshold`: provider 连续可 fallback 错误达到该次数后短暂熔断，默认 `2`。
 - `provider_health.cooldown_seconds`: provider 熔断后的冷却时间，默认 `30`。

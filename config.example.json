@@ -33,7 +33,8 @@
   },
   "audit": {
     "enabled": false,
-    "path": "audit/agent-trace.jsonl"
+    "path": "audit/agent-trace.jsonl",
+    "max_file_bytes": 0
   },
   "rate_limit": {
     "requests_per_minute": 120
