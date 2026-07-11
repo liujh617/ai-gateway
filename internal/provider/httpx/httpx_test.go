@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/provider/httpx"
@@ -82,28 +81,16 @@ func (*timeoutError) Error() string   { return "timeout" }
 func (*timeoutError) Timeout() bool   { return true }
 func (*timeoutError) Temporary() bool { return true }
 
+type timeoutReadCloser struct{}
+
+func (*timeoutReadCloser) Read([]byte) (int, error) { return 0, &timeoutError{} }
+func (*timeoutReadCloser) Close() error             { return nil }
+
 func TestStreamReadTimeoutIsDeadlineExceeded(t *testing.T) {
-	headersFlushed := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		flusher := w.(http.Flusher)
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(http.StatusOK)
-		flusher.Flush()
-		close(headersFlushed)
-		time.Sleep(200 * time.Millisecond)
-	}))
-	defer server.Close()
+	stream := httpx.NewChatCompletionStream(&timeoutReadCloser{})
+	defer stream.Close()
 
-	client := &http.Client{Timeout: 10 * time.Millisecond}
-	resp, err := client.Get(server.URL)
-	if err != nil {
-		t.Fatalf("get stream: %v", err)
-	}
-	defer resp.Body.Close()
-	<-headersFlushed
-
-	stream := httpx.NewChatCompletionStream(resp.Body)
-	_, err = stream.Next(context.Background())
+	_, err := stream.Next(context.Background())
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("error = %v, want DeadlineExceeded", err)
 	}

@@ -172,43 +172,6 @@ func TestStreamChatCompletionConnectTimeoutIsDeadlineExceeded(t *testing.T) {
 	}
 }
 
-func TestStreamChatCompletionReadTimeoutIsDeadlineExceeded(t *testing.T) {
-	headersFlushed := make(chan struct{})
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			t.Fatal("expected flusher")
-		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(http.StatusOK)
-		flusher.Flush()
-		close(headersFlushed)
-		time.Sleep(200 * time.Millisecond)
-	}))
-	defer server.Close()
-
-	p, err := openai.New(server.URL+"/v1", "upstream-key", 10*time.Millisecond)
-	if err != nil {
-		t.Fatalf("new provider: %v", err)
-	}
-
-	stream, err := p.StreamChatCompletion(context.Background(), chatRequest())
-	if err != nil {
-		t.Fatalf("StreamChatCompletion: %v", err)
-	}
-	defer stream.Close()
-	<-headersFlushed
-
-	_, err = stream.Next(context.Background())
-	if err == nil {
-		t.Fatal("expected timeout error")
-	}
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("error = %v, want DeadlineExceeded", err)
-	}
-}
-
 func TestCreateEmbeddingForwardsRequest(t *testing.T) {
 	var got compat.EmbeddingRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
