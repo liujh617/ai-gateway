@@ -18,8 +18,44 @@ type ChatCompletionRequest struct {
 }
 
 type ChatMessage struct {
-	Role    string          `json:"role"`
-	Content json.RawMessage `json:"content"`
+	Role    string                     `json:"role"`
+	Content json.RawMessage            `json:"content"`
+	Extra   map[string]json.RawMessage `json:"-"`
+}
+
+func (m *ChatMessage) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if v, ok := raw["role"]; ok {
+		if err := json.Unmarshal(v, &m.Role); err != nil {
+			return err
+		}
+		delete(raw, "role")
+	}
+	if v, ok := raw["content"]; ok {
+		m.Content = v
+		delete(raw, "content")
+	}
+	if len(raw) > 0 {
+		m.Extra = raw
+	}
+	return nil
+}
+
+func (m ChatMessage) MarshalJSON() ([]byte, error) {
+	fields := make(map[string]json.RawMessage, len(m.Extra)+2)
+	for k, v := range m.Extra {
+		fields[k] = cloneRawMessage(v)
+	}
+	roleBytes, err := json.Marshal(m.Role)
+	if err != nil {
+		return nil, err
+	}
+	fields["role"] = roleBytes
+	fields["content"] = m.Content
+	return json.Marshal(fields)
 }
 
 type chatCompletionRequestJSON struct {
@@ -131,13 +167,18 @@ func (r ChatCompletionRequest) Validate() *Error {
 
 func hasProcessableContent(raw json.RawMessage) bool {
 	trimmed := strings.TrimSpace(string(raw))
-	if trimmed == "" || trimmed == "null" {
+	// Reject missing or empty content; accept null (valid for tool messages / assistant with tool_calls).
+	if trimmed == "" {
 		return false
 	}
-	var s string
-	if err := json.Unmarshal(raw, &s); err == nil {
-		return strings.TrimSpace(s) != ""
+	if trimmed == "null" {
+		return true
 	}
+	// Accept array-type content (multimodal / content parts).
+	if strings.HasPrefix(trimmed, "[") {
+		return true
+	}
+	// Accept string content, even if empty (upstream validates).
 	return true
 }
 
@@ -178,8 +219,54 @@ type ChatCompletionChunkChoice struct {
 }
 
 type ChatMessageDelta struct {
-	Role    string `json:"role,omitempty"`
-	Content string `json:"content,omitempty"`
+	Role    string                     `json:"role,omitempty"`
+	Content string                     `json:"content,omitempty"`
+	Extra   map[string]json.RawMessage `json:"-"`
+}
+
+func (d *ChatMessageDelta) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if v, ok := raw["role"]; ok {
+		if err := json.Unmarshal(v, &d.Role); err != nil {
+			return err
+		}
+		delete(raw, "role")
+	}
+	if v, ok := raw["content"]; ok {
+		if err := json.Unmarshal(v, &d.Content); err != nil {
+			return err
+		}
+		delete(raw, "content")
+	}
+	if len(raw) > 0 {
+		d.Extra = raw
+	}
+	return nil
+}
+
+func (d ChatMessageDelta) MarshalJSON() ([]byte, error) {
+	fields := make(map[string]json.RawMessage, len(d.Extra)+2)
+	for k, v := range d.Extra {
+		fields[k] = cloneRawMessage(v)
+	}
+	if d.Role != "" {
+		roleBytes, err := json.Marshal(d.Role)
+		if err != nil {
+			return nil, err
+		}
+		fields["role"] = roleBytes
+	}
+	if d.Content != "" {
+		contentBytes, err := json.Marshal(d.Content)
+		if err != nil {
+			return nil, err
+		}
+		fields["content"] = contentBytes
+	}
+	return json.Marshal(fields)
 }
 
 type Model struct {

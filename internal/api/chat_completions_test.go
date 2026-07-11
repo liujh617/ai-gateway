@@ -348,7 +348,8 @@ func TestChatCompletionsMissingMessageRole(t *testing.T) {
 
 func TestChatCompletionsMissingMessageContent(t *testing.T) {
 	handler := newTestHandler(fake.New())
-	body := `{"model":"test-model","messages":[{"role":"user","content":"   "}]}`
+	// content field completely missing (not even empty string)
+	body := `{"model":"test-model","messages":[{"role":"user"}]}`
 
 	rr := doJSON(handler, body, true)
 
