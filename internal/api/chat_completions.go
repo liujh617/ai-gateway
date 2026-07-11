@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 
+	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/provider"
@@ -44,6 +45,9 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	externalModel := req.Model
+	requestEvent := s.auditBaseEvent(r, audit.EventRequest, routes.ChatCompletionsPath, externalModel)
+	requestEvent.Body = rawBody(req)
+	s.audit.Record(r.Context(), requestEvent)
 
 	if req.Stream {
 		s.streamChatCompletion(w, r, route, externalModel, req)
@@ -53,18 +57,24 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
 
-	resp, err := s.createChatCompletionWithFallback(ctx, r, route, externalModel, req)
+	resp, providerName, upstreamModel, err := s.createChatCompletionWithFallback(ctx, r, route, externalModel, req)
 	if err != nil {
 		s.writeError(w, r, providerError(err))
 		return
 	}
 	resp.Model = externalModel
+	responseEvent := s.auditBaseEvent(r, audit.EventResponse, routes.ChatCompletionsPath, externalModel)
+	responseEvent.Provider = providerName
+	responseEvent.UpstreamModel = upstreamModel
+	responseEvent.Status = http.StatusOK
+	responseEvent.Body = rawBody(resp)
+	s.audit.Record(r.Context(), responseEvent)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-func (s *Server) createChatCompletionWithFallback(ctx context.Context, r *http.Request, route router.ModelRoute, externalModel string, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+func (s *Server) createChatCompletionWithFallback(ctx context.Context, r *http.Request, route router.ModelRoute, externalModel string, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, string, string, error) {
 	var lastErr error
 	var skippedFrom string
 	attempts := route.Attempts()
@@ -90,7 +100,7 @@ func (s *Server) createChatCompletionWithFallback(ctx context.Context, r *http.R
 			s.providerHealth.MarkSuccess(attempt.ProviderName)
 			s.observeProviderHealth(attempt.ProviderName)
 			s.observeUsage(routes.ChatCompletionsPath, externalModel, attempt.ProviderName, clientFromContext(r.Context()), resp.Usage, attempt.Pricing)
-			return resp, nil
+			return resp, attempt.ProviderName, attempt.UpstreamModel, nil
 		}
 		lastErr = err
 		if canFallbackProviderError(err) {
@@ -98,7 +108,7 @@ func (s *Server) createChatCompletionWithFallback(ctx context.Context, r *http.R
 			s.observeProviderHealth(attempt.ProviderName)
 		}
 		if index == len(attempts)-1 || !canFallbackProviderError(err) {
-			return nil, err
+			return nil, "", "", err
 		}
 		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
 			s.observeProviderFallback(r.Context(), routes.ChatCompletionsPath, externalModel, attempt.ProviderName, nextProviderName)
@@ -106,9 +116,9 @@ func (s *Server) createChatCompletionWithFallback(ctx context.Context, r *http.R
 		s.logger.Warn("chat completion provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
 	}
 	if skippedFrom != "" {
-		return nil, providerUnavailableError()
+		return nil, "", "", providerUnavailableError()
 	}
-	return nil, lastErr
+	return nil, "", "", lastErr
 }
 
 func (s *Server) streamChatCompletion(w http.ResponseWriter, r *http.Request, route router.ModelRoute, externalModel string, req compat.ChatCompletionRequest) {

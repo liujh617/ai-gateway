@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"open-ai-gateway/internal/api"
+	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/provider"
@@ -46,6 +47,45 @@ func TestChatCompletionsNonStreamOK(t *testing.T) {
 	}
 	if len(got.Choices) != 1 || got.Choices[0].Message.Role != "assistant" {
 		t.Fatalf("unexpected choices: %+v", got.Choices)
+	}
+}
+
+func TestAuditChatCompletionsNonStream(t *testing.T) {
+	rec := &memoryAuditRecorder{}
+	handler := newTestHandlerWithOptions(fake.New(), api.Options{Audit: rec})
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(audit.TraceIDHeader, "trace-agent-1")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	events := rec.Events()
+	if len(events) != 2 {
+		t.Fatalf("events = %#v", events)
+	}
+	if events[0].Event != audit.EventRequest || events[0].TraceID != "trace-agent-1" || events[0].Path != "/v1/chat/completions" {
+		t.Fatalf("request audit = %#v", events[0])
+	}
+	if events[0].ExternalModel != "test-model" || events[0].Client != "default" {
+		t.Fatalf("request audit labels = %#v", events[0])
+	}
+	if !strings.Contains(string(events[0].Body), `"messages"`) {
+		t.Fatalf("request body = %s", events[0].Body)
+	}
+	if events[1].Event != audit.EventResponse || events[1].Status != http.StatusOK {
+		t.Fatalf("response audit = %#v", events[1])
+	}
+	if events[1].Provider != "fake-provider" || events[1].UpstreamModel != "upstream-test-model" {
+		t.Fatalf("response route labels = %#v", events[1])
+	}
+	if !strings.Contains(string(events[1].Body), `"choices"`) {
+		t.Fatalf("response body = %s", events[1].Body)
 	}
 }
 
@@ -1471,6 +1511,27 @@ func TestAccessLogStreamStatus(t *testing.T) {
 
 func newTestHandler(p provider.Provider) http.Handler {
 	return newTestHandlerWithOptions(p, api.Options{})
+}
+
+type memoryAuditRecorder struct {
+	mu     sync.Mutex
+	events []audit.Event
+}
+
+func (r *memoryAuditRecorder) Record(ctx context.Context, event audit.Event) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, event)
+}
+
+func (r *memoryAuditRecorder) Close() error {
+	return nil
+}
+
+func (r *memoryAuditRecorder) Events() []audit.Event {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]audit.Event(nil), r.events...)
 }
 
 func newTestHandlerWithOptions(p provider.Provider, opts api.Options) http.Handler {

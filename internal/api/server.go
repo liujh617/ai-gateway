@@ -9,6 +9,7 @@ import (
 	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
+	"open-ai-gateway/internal/requestctx"
 	"open-ai-gateway/internal/router"
 	"open-ai-gateway/internal/routes"
 	"open-ai-gateway/internal/version"
@@ -142,6 +143,25 @@ func (s *Server) WriteError(w http.ResponseWriter, err *compat.Error) {
 func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err *compat.Error) {
 	middleware.SetLogError(r.Context(), err.Type, err.Code)
 	s.WriteError(w, err)
+}
+
+func (s *Server) auditBaseEvent(r *http.Request, event string, path string, externalModel string) audit.Event {
+	return audit.Event{
+		Event:         event,
+		RequestID:     requestctx.RequestID(r.Context()),
+		TraceID:       audit.TraceIDFromRequest(r),
+		Path:          path,
+		Client:        clientFromContext(r.Context()),
+		ExternalModel: externalModel,
+	}
+}
+
+func rawBody(value any) json.RawMessage {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	return payload
 }
 
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
