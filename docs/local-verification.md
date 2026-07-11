@@ -81,6 +81,14 @@ DeepSeek smoke 的无 key 跳过路径：
 make smoke-deepseek-skip
 ```
 
+Azure OpenAI 本地 fake upstream smoke：
+
+```bash
+make smoke-azure
+```
+
+该命令不需要 Azure 凭据，也不会访问外网。它会通过真实 gateway 进程验证非流式 chat、SSE chat 和 embeddings。
+
 手工验证：
 
 启动网关：
