@@ -95,6 +95,7 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 - `providers.<name>.base_url`: OpenAI-compatible base URL，例如 `https://api.openai.com/v1`。
 - `providers.<name>.api_key_env`: 上游 API key 所在环境变量名。
 - `providers.<name>.api_key`: 上游 API key 明文值，仅建议本地开发使用。
+- `providers.<name>` 和 `models.<external>` 名称不能为空或包含首尾空白。
 - `models.<external>.provider`: 对外模型路由到哪个 provider。
 - `models.<external>.upstream_model`: 转发给上游的真实模型名。
 - `models.<external>.capabilities`: 模型能力，支持 `chat`、`embeddings`；未配置时默认都支持。
