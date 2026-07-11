@@ -39,6 +39,44 @@ func TestLoadDefaultConfig(t *testing.T) {
 	if cfg.Log.Format != "text" || cfg.Log.Level != "info" {
 		t.Fatalf("log config = %#v", cfg.Log)
 	}
+	if cfg.Audit.Enabled {
+		t.Fatal("audit should be disabled by default")
+	}
+	if cfg.Audit.Path != "audit/agent-trace.jsonl" {
+		t.Fatalf("audit path = %q", cfg.Audit.Path)
+	}
+}
+
+func TestLoadConfigAcceptsAuditConfig(t *testing.T) {
+	path := writeConfig(t, `{
+		"addr": "127.0.0.1:8080",
+		"api_key": "gateway-key",
+		"audit": {
+			"enabled": true,
+			"path": "audit/custom-agent-trace.jsonl"
+		},
+		"providers": {
+			"fake": {
+				"type": "fake"
+			}
+		},
+		"models": {
+			"test-model": {
+				"provider": "fake"
+			}
+		}
+	}`)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Audit.Enabled {
+		t.Fatal("audit should be enabled")
+	}
+	if cfg.Audit.Path != "audit/custom-agent-trace.jsonl" {
+		t.Fatalf("audit path = %q", cfg.Audit.Path)
+	}
 }
 
 func TestLoadConfigRejectsTrailingJSON(t *testing.T) {
@@ -618,6 +656,34 @@ func TestEnvironmentAPIKeysRejectsEmptyEntry(t *testing.T) {
 	}
 }
 
+func TestEnvironmentAuditOverrides(t *testing.T) {
+	t.Setenv("GATEWAY_AUDIT_ENABLED", "true")
+	t.Setenv("GATEWAY_AUDIT_PATH", "audit/env-agent-trace.jsonl")
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("Load default: %v", err)
+	}
+	if !cfg.Audit.Enabled {
+		t.Fatal("audit should be enabled")
+	}
+	if cfg.Audit.Path != "audit/env-agent-trace.jsonl" {
+		t.Fatalf("audit path = %q", cfg.Audit.Path)
+	}
+}
+
+func TestEnvironmentAuditEnabledRejectsInvalidValue(t *testing.T) {
+	t.Setenv("GATEWAY_AUDIT_ENABLED", "definitely")
+
+	_, err := config.Load("")
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "GATEWAY_AUDIT_ENABLED") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestLoadConfigValidatesServerTimeouts(t *testing.T) {
 	path := writeConfig(t, `{
 		"addr": "127.0.0.1:8080",
@@ -783,6 +849,8 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 		`"max_request_body_bytes":1048576`,
 		`"log_format":"text"`,
 		`"log_level":"info"`,
+		`"audit_enabled":false`,
+		`"audit_path":"audit/agent-trace.jsonl"`,
 		`"rate_limit_requests_per_minute":120`,
 		`"rate_limit_requests_per_minute":60`,
 		`"provider_health_failure_threshold":2`,
@@ -811,6 +879,8 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 		"MaxRequestBodyBytes",
 		"LogFormat",
 		"LogLevel",
+		"AuditEnabled",
+		"AuditPath",
 		"RateLimitRequestsPerMinute",
 		"ProviderHealthFailureThreshold",
 		"ProviderHealthCooldownSeconds",
@@ -843,6 +913,9 @@ func TestCheckReportDoesNotExposeAPIKey(t *testing.T) {
 	}
 	if report.LogFormat != "text" || report.LogLevel != "info" {
 		t.Fatalf("log summary = format %q level %q", report.LogFormat, report.LogLevel)
+	}
+	if report.AuditEnabled || report.AuditPath != "audit/agent-trace.jsonl" {
+		t.Fatalf("audit summary = enabled %t path %q", report.AuditEnabled, report.AuditPath)
 	}
 	if report.RateLimitRequestsPerMinute != 120 {
 		t.Fatalf("rate limit summary = %d", report.RateLimitRequestsPerMinute)

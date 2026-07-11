@@ -27,10 +27,13 @@ type Config struct {
 	ShutdownTimeoutSeconds   int                       `json:"shutdown_timeout_seconds"`
 	MaxRequestBodyBytes      int64                     `json:"max_request_body_bytes"`
 	Log                      LogConfig                 `json:"log"`
+	Audit                    AuditConfig               `json:"audit"`
 	RateLimit                RateLimitConfig           `json:"rate_limit"`
 	ProviderHealth           ProviderHealthConfig      `json:"provider_health"`
 	Providers                map[string]ProviderConfig `json:"providers"`
 	Models                   map[string]ModelConfig    `json:"models"`
+
+	auditEnabledEnvInvalid bool
 }
 
 type ProviderConfig struct {
@@ -85,6 +88,11 @@ type LogConfig struct {
 	Level  string `json:"level"`
 }
 
+type AuditConfig struct {
+	Enabled bool   `json:"enabled"`
+	Path    string `json:"path"`
+}
+
 type CheckReport struct {
 	Addr                           string                 `json:"addr"`
 	GatewayAPIKeyCount             int                    `json:"gateway_api_key_count"`
@@ -99,6 +107,8 @@ type CheckReport struct {
 	MaxRequestBodyBytes            int64                  `json:"max_request_body_bytes"`
 	LogFormat                      string                 `json:"log_format"`
 	LogLevel                       string                 `json:"log_level"`
+	AuditEnabled                   bool                   `json:"audit_enabled"`
+	AuditPath                      string                 `json:"audit_path"`
 	RateLimitRequestsPerMinute     int                    `json:"rate_limit_requests_per_minute"`
 	ProviderHealthFailureThreshold int                    `json:"provider_health_failure_threshold"`
 	ProviderHealthCooldownSeconds  int                    `json:"provider_health_cooldown_seconds"`
@@ -198,6 +208,8 @@ func (c *Config) CheckReport() CheckReport {
 		MaxRequestBodyBytes:            c.MaxRequestBodyBytes,
 		LogFormat:                      c.Log.Format,
 		LogLevel:                       c.Log.Level,
+		AuditEnabled:                   c.Audit.Enabled,
+		AuditPath:                      c.Audit.Path,
 		RateLimitRequestsPerMinute:     c.RateLimit.RequestsPerMinute,
 		ProviderHealthFailureThreshold: c.ProviderHealth.FailureThreshold,
 		ProviderHealthCooldownSeconds:  c.ProviderHealth.CooldownSeconds,
@@ -293,6 +305,9 @@ func Default() *Config {
 			Format: "text",
 			Level:  "info",
 		},
+		Audit: AuditConfig{
+			Path: "audit/agent-trace.jsonl",
+		},
 		Providers: map[string]ProviderConfig{
 			"fake": {
 				Type: "fake",
@@ -367,6 +382,15 @@ func (c *Config) Validate() error {
 	}
 	if c.ProviderHealth.CooldownSeconds < 0 {
 		return fmt.Errorf("provider_health.cooldown_seconds must be non-negative")
+	}
+	if c.auditEnabledEnvInvalid {
+		return fmt.Errorf("GATEWAY_AUDIT_ENABLED must be true or false")
+	}
+	if strings.TrimSpace(c.Audit.Path) == "" {
+		return fmt.Errorf("audit.path must be non-empty")
+	}
+	if c.Audit.Path != strings.TrimSpace(c.Audit.Path) {
+		return fmt.Errorf("audit.path must not contain leading or trailing whitespace")
 	}
 	switch c.Log.Format {
 	case "text", "json":
@@ -521,6 +545,20 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Log.Level == "" {
 		c.Log.Level = "info"
+	}
+	if c.Audit.Path == "" {
+		c.Audit.Path = "audit/agent-trace.jsonl"
+	}
+	if env := os.Getenv("GATEWAY_AUDIT_ENABLED"); env != "" {
+		enabled, ok := parseBoolEnv(env)
+		if !ok {
+			c.auditEnabledEnvInvalid = true
+		} else {
+			c.Audit.Enabled = enabled
+		}
+	}
+	if env := os.Getenv("GATEWAY_AUDIT_PATH"); env != "" {
+		c.Audit.Path = env
 	}
 	if c.ProviderHealth.FailureThreshold == 0 {
 		c.ProviderHealth.FailureThreshold = 2
@@ -699,6 +737,17 @@ func splitAPIKeys(value string) []string {
 		keys = append(keys, strings.TrimSpace(part))
 	}
 	return keys
+}
+
+func parseBoolEnv(value string) (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true", "1", "yes", "on":
+		return true, true
+	case "false", "0", "no", "off":
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 func (c *Config) RequestTimeout() time.Duration {

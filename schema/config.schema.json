@@ -64,6 +64,9 @@
     "log": {
       "$ref": "#/$defs/log"
     },
+    "audit": {
+      "$ref": "#/$defs/audit"
+    },
     "rate_limit": {
       "$ref": "#/$defs/rate_limit"
     },
@@ -129,6 +132,22 @@
         "level": {
           "type": "string",
           "enum": ["debug", "info", "warn", "error"]
+        }
+      }
+    },
+    "audit": {
+      "type": "object",
+      "description": "Local JSONL audit capture for agent research. Disabled by default and may record full request and response bodies when enabled.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "default": "audit/agent-trace.jsonl"
         }
       }
     },
