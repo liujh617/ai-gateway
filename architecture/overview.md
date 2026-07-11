@@ -41,6 +41,7 @@ Upstream Model Service
 - 解析请求 body。
 - 根据 `stream` 字段选择 JSON 或 SSE 响应。
 - 写入 OpenAI-compatible response。
+- 在显式启用本地 audit 模式时写入请求、响应、stream chunk 和模型请求错误事件。
 
 不负责：
 
@@ -179,10 +180,17 @@ Provider Adapter 不应直接依赖 HTTP handler。
 - 加载模型和 fallback 的可选 token pricing。
 - 加载超时配置。
 - 加载 provider health / circuit breaker 配置。
+- 加载本地 agent audit JSONL 配置，默认关闭。
 - 通过共享的 upstream URL 校验逻辑，校验 OpenAI-compatible provider `base_url` 只使用 `http` 或 `https`，且不包含 query 或 fragment。
 
 当前实现使用 JSON 配置文件，并通过 `GATEWAY_CONFIG` 指定路径。配置文件按单一 JSON 值严格解析，避免 trailing JSON 被静默忽略。无配置时使用 fake provider 默认配置。
-配置自检以 snake_case JSON 字段输出 listen addr、gateway client、server runtime、log、rate limit、provider health、provider 和 model 摘要；gateway client 摘要只包含非敏感名称、模型白名单和限流覆盖，不输出 API key。
+配置自检以 snake_case JSON 字段输出 listen addr、gateway client、server runtime、log、audit、rate limit、provider health、provider 和 model 摘要；gateway client 摘要只包含非敏感名称、模型白名单和限流覆盖，不输出 API key。
+
+### Audit
+
+本地 agent audit 是 API 层能力，由 `internal/audit` 提供 JSONL recorder。它只在 `audit.enabled=true` 时启用，默认使用 `audit.NoopRecorder`。审计事件包含 request id、`X-Agent-Trace-Id`、client、external model、provider、upstream model、status 和 JSON body；非流式 chat、embeddings、流式 chat chunk/done 以及模型请求错误都会写入事件。
+
+Audit 不属于 provider adapter，也不参与上游鉴权。它不会记录 `Authorization` header、gateway API key 或上游 API key，但会记录完整 prompt、completion、tool schema、embedding input 和 embedding vector，因此仅用于本地研究和受控目录。
 
 ## 请求流程
 

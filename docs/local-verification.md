@@ -156,6 +156,25 @@ curl -sS http://127.0.0.1:8080/v1/embeddings \
   -d '{"model":"test-model","input":"hello"}'
 ```
 
+## Agent 审计 JSONL 验证
+
+审计模式默认关闭。启用后会把完整请求体、响应体、流式 chunk、错误响应和 embedding 数据写入本地 JSONL 文件，仅用于本机研究自己的第三方 agent 流量。
+
+```bash
+GATEWAY_AUDIT_ENABLED=1 GATEWAY_AUDIT_PATH=tmp/agent-audit.jsonl make smoke
+tail -n 5 tmp/agent-audit.jsonl
+```
+
+也可以在手工请求中加入 trace header：
+
+```bash
+curl -sS http://127.0.0.1:8080/v1/chat/completions \
+  -H "Authorization: Bearer test-gateway-key" \
+  -H "Content-Type: application/json" \
+  -H "X-Agent-Trace-Id: local-agent-run-1" \
+  -d '{"model":"test-model","messages":[{"role":"user","content":"hello"}]}'
+```
+
 ## OpenAI-compatible 本地上游
 
 复制示例配置：

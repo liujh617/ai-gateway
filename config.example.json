@@ -31,6 +31,10 @@
     "format": "json",
     "level": "info"
   },
+  "audit": {
+    "enabled": false,
+    "path": "audit/agent-trace.jsonl"
+  },
   "rate_limit": {
     "requests_per_minute": 120
   },

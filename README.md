@@ -110,6 +110,8 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 - `max_request_body_bytes`: 请求体大小上限，默认 `1048576`；`0` 表示关闭限制。
 - `log.format`: 日志格式，支持 `text` 或 `json`。
 - `log.level`: 日志级别，支持 `debug`、`info`、`warn`、`error`。
+- `audit.enabled`: 本地 agent 研究审计开关，默认 `false`。
+- `audit.path`: JSONL 审计文件路径，默认 `audit/agent-trace.jsonl`。
 - `rate_limit.requests_per_minute`: 按 gateway client 的简单内存限流，`0` 表示关闭；`api_clients[].rate_limit.requests_per_minute` 可覆盖单个 client，显式 `0` 表示该 client 关闭限流。超限返回 `429 rate_limit_error`，并包含按当前窗口剩余秒数设置的 `Retry-After`。
 - `provider_health.failure_threshold`: provider 连续可 fallback 错误达到该次数后短暂熔断，默认 `2`。
 - `provider_health.cooldown_seconds`: provider 熔断后的冷却时间，默认 `30`。
@@ -126,6 +128,12 @@ GATEWAY_CONFIG=config.example.json make check-config
 自检输出会用 snake_case JSON 字段显示 listen addr、gateway client、server runtime、log、rate limit、provider health、provider/model 摘要和 warning；provider 摘要包含 `timeout_seconds` 和 API key 是否配置等非敏感状态，model/fallback 摘要会显示有效 `upstream_model`，不会输出 API key 明文。
 
 配置 JSON Schema 见 [schema/config.schema.json](schema/config.schema.json)。
+
+## Agent 审计 JSONL
+
+`audit` 是默认关闭的本地研究模式，用于观察第三方 agent 调用网关时的上下文、提示词、工具参数和模型响应。启用后会写入完整请求体、完整响应体、流式 chunk、错误响应、request id、`X-Agent-Trace-Id`、client、external model、provider 和 upstream model。
+
+该文件可能包含 prompt、completion、tool schema、embedding input 和 embedding vector。仅建议在本机、受控目录和自己的研究流量中启用；不要把审计文件提交到仓库，也不要用于生产默认日志。
 
 健康检查：
 
