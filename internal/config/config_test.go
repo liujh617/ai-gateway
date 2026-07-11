@@ -433,6 +433,34 @@ func TestLoadConfigRejectsProviderAndModelNamesWithWhitespace(t *testing.T) {
 	}
 }
 
+func TestLoadConfigRejectsProviderReferencesWithWhitespace(t *testing.T) {
+	for name, body := range map[string]string{
+		"model-provider":    `"models": {"test-model": {"provider": " fake "}}`,
+		"fallback-provider": `"models": {"test-model": {"provider": "fake", "fallbacks": [{"provider": " fake "}]}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := writeConfig(t, `{
+				"addr": "127.0.0.1:8080",
+				"api_key": "gateway-key",
+				"providers": {
+					"fake": {
+						"type": "fake"
+					}
+				},
+				`+body+`
+			}`)
+
+			_, err := config.Load(path)
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if !strings.Contains(err.Error(), "whitespace") {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
 func TestLoadConfigAcceptsModelFallbacks(t *testing.T) {
 	path := writeConfig(t, `{
 		"addr": "127.0.0.1:8080",

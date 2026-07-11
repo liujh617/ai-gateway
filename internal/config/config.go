@@ -413,6 +413,9 @@ func (c *Config) Validate() error {
 		if strings.TrimSpace(model.Provider) == "" {
 			return fmt.Errorf("model %q provider is required", externalModel)
 		}
+		if model.Provider != strings.TrimSpace(model.Provider) {
+			return fmt.Errorf("model %q provider must not contain leading or trailing whitespace", externalModel)
+		}
 		if _, ok := c.Providers[model.Provider]; !ok {
 			return fmt.Errorf("model %q references unknown provider %q", externalModel, model.Provider)
 		}
@@ -429,6 +432,9 @@ func (c *Config) Validate() error {
 		for index, fallback := range model.Fallbacks {
 			if strings.TrimSpace(fallback.Provider) == "" {
 				return fmt.Errorf("model %q fallback %d provider is required", externalModel, index)
+			}
+			if fallback.Provider != strings.TrimSpace(fallback.Provider) {
+				return fmt.Errorf("model %q fallback %d provider must not contain leading or trailing whitespace", externalModel, index)
 			}
 			if _, ok := c.Providers[fallback.Provider]; !ok {
 				return fmt.Errorf("model %q fallback %d references unknown provider %q", externalModel, index, fallback.Provider)
