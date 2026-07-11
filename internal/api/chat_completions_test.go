@@ -113,6 +113,45 @@ func TestChatCompletionsStreamOK(t *testing.T) {
 	}
 }
 
+func TestAuditChatCompletionsStream(t *testing.T) {
+	rec := &memoryAuditRecorder{}
+	handler := newTestHandlerWithOptions(fake.New(), api.Options{Audit: rec})
+	body := `{"model":"test-model","stream":true,"messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	events := rec.Events()
+	var requestSeen, chunkSeen, doneSeen bool
+	for _, event := range events {
+		switch event.Event {
+		case audit.EventRequest:
+			requestSeen = true
+			if !strings.Contains(string(event.Body), `"stream":true`) {
+				t.Fatalf("request body = %s", event.Body)
+			}
+		case audit.EventStreamChunk:
+			chunkSeen = true
+			if event.Provider != "fake-provider" || event.UpstreamModel != "upstream-test-model" {
+				t.Fatalf("chunk route labels = %#v", event)
+			}
+			if !strings.Contains(string(event.Body), `"choices"`) {
+				t.Fatalf("chunk body = %s", event.Body)
+			}
+		case audit.EventStreamDone:
+			doneSeen = true
+			if event.Status != http.StatusOK || event.Provider != "fake-provider" {
+				t.Fatalf("done audit = %#v", event)
+			}
+		}
+	}
+	if !requestSeen || !chunkSeen || !doneSeen {
+		t.Fatalf("events = %#v", events)
+	}
+}
+
 func TestChatCompletionsStreamRecordsUsageMetrics(t *testing.T) {
 	handler := newPricingTestHandler(&usageStreamProvider{}, router.TokenPricing{
 		PromptUSDPer1MTokens:     1000000,
