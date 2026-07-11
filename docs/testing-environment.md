@@ -1,5 +1,17 @@
 # Testing Environment
 
+## Shell 脚本换行符
+
+仓库通过根目录 `.gitattributes` 强制所有 `*.sh` 使用 LF。Windows Git 即使启用了
+`core.autocrlf=true`，也不应把 shell 脚本 checkout 为 CRLF；无需修改用户的全局 Git 配置。
+
+检查命令：
+
+```bash
+make check-line-endings
+make test-line-endings
+```
+
 本项目的标准测试与验证环境定义为 WSL 中的 `Ubuntu-24.04`。
 
 ## 标准环境

@@ -7,7 +7,13 @@ COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X open-ai-gateway/internal/version.Version=$(VERSION) -X open-ai-gateway/internal/version.Commit=$(COMMIT) -X open-ai-gateway/internal/version.BuildTime=$(BUILD_TIME)
 
-.PHONY: fmt test race vet verify build run check-config check-config-examples smoke smoke-rate-limit smoke-azure smoke-deepseek smoke-deepseek-skip release-check docker-build docker-run
+.PHONY: fmt check-line-endings test-line-endings test race vet verify build run check-config check-config-examples smoke smoke-rate-limit smoke-azure smoke-deepseek smoke-deepseek-skip release-check docker-build docker-run
+
+check-line-endings:
+	bash scripts/check-line-endings.sh
+
+test-line-endings:
+	bash scripts/check-line-endings-test.sh
 
 fmt:
 	$(GO)fmt -w cmd internal
@@ -21,7 +27,7 @@ race:
 vet:
 	$(GO) vet ./...
 
-verify: fmt test race vet
+verify: check-line-endings test-line-endings fmt test race vet
 
 build:
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/open-ai-gateway ./cmd/gateway

@@ -63,6 +63,17 @@ if bad_output="$(cd "$tmpdir" && bash "$checker" 2>&1)"; then
 fi
 grep -q '^bad.sh: shell script must use LF line endings$' <<<"$bad_output"
 
+mkdir "$tmpdir/bin"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$tmpdir/bin/git"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$tmpdir/bin/git.exe"
+chmod +x "$tmpdir/bin/git" "$tmpdir/bin/git.exe"
+
+if git_error_output="$(cd "$tmpdir" && PATH="$tmpdir/bin:$PATH" bash "$checker" 2>&1)"; then
+  echo "check-line-endings ignored git ls-files failure" >&2
+  exit 1
+fi
+grep -q '^unable to list tracked shell scripts$' <<<"$git_error_output"
+
 echo "line-endings-test-ok"
 ```
 
@@ -86,13 +97,29 @@ Expected: FAIL，错误包含 `scripts/check-line-endings.sh: No such file or di
 #!/usr/bin/env bash
 set -euo pipefail
 
+files="$(mktemp)"
+errors="$(mktemp)"
+cleanup() {
+  rm -f "$files" "$errors"
+}
+trap cleanup EXIT
+
+if git ls-files -z -- '*.sh' >"$files" 2>"$errors"; then
+  :
+elif command -v git.exe >/dev/null 2>&1 && git.exe ls-files -z -- '*.sh' >"$files" 2>"$errors"; then
+  :
+else
+  echo "unable to list tracked shell scripts" >&2
+  exit 1
+fi
+
 failed=0
 while IFS= read -r -d '' file; do
   if LC_ALL=C grep -q $'\r' "$file"; then
     echo "$file: shell script must use LF line endings" >&2
     failed=1
   fi
-done < <(git ls-files -z -- '*.sh')
+done <"$files"
 
 if [ "$failed" -ne 0 ]; then
   exit 1
