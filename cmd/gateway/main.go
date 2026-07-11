@@ -20,6 +20,7 @@ import (
 	"open-ai-gateway/internal/config"
 	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/provider"
+	"open-ai-gateway/internal/provider/azureopenai"
 	"open-ai-gateway/internal/provider/fake"
 	"open-ai-gateway/internal/provider/openai"
 	"open-ai-gateway/internal/router"
@@ -275,6 +276,12 @@ func buildRouter(cfg *config.Config) (*router.ModelRouter, error) {
 			providers[name] = fake.New()
 		case "openai-compatible":
 			provider, err := openai.New(providerConfig.BaseURL, providerConfig.ResolvedAPIKey(), providerConfig.Timeout())
+			if err != nil {
+				return nil, fmt.Errorf("provider %q: %w", name, err)
+			}
+			providers[name] = provider
+		case "azure-openai":
+			provider, err := azureopenai.New(providerConfig.BaseURL, providerConfig.ResolvedAPIKey(), providerConfig.APIVersion, providerConfig.Timeout())
 			if err != nil {
 				return nil, fmt.Errorf("provider %q: %w", name, err)
 			}

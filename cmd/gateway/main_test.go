@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"open-ai-gateway/internal/audit"
+	"open-ai-gateway/internal/config"
 )
 
 func TestRunAuditInspectSummarizesEventsWithoutBody(t *testing.T) {
@@ -72,5 +73,30 @@ func TestRunAuditInspectSummarizesEventsWithoutBody(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Fatalf("inspect missing %s: %s", want, text)
 		}
+	}
+}
+
+func TestBuildRouterAcceptsAzureOpenAIProvider(t *testing.T) {
+	cfg := config.Default()
+	cfg.Providers = map[string]config.ProviderConfig{
+		"azure": {
+			Type:       "azure-openai",
+			BaseURL:    "https://example.openai.azure.com",
+			APIKey:     "azure-key",
+			APIVersion: "2024-02-15-preview",
+		},
+	}
+	cfg.Models = map[string]config.ModelConfig{
+		"gpt-4o-mini": {
+			Provider:      "azure",
+			UpstreamModel: "chat-deployment",
+			Capabilities:  []string{"chat"},
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if _, err := buildRouter(cfg); err != nil {
+		t.Fatalf("buildRouter: %v", err)
 	}
 }

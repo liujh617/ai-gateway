@@ -43,6 +43,7 @@ type ProviderConfig struct {
 	BaseURL        string `json:"base_url"`
 	APIKey         string `json:"api_key"`
 	APIKeyEnv      string `json:"api_key_env"`
+	APIVersion     string `json:"api_version"`
 	TimeoutSeconds int    `json:"timeout_seconds"`
 }
 
@@ -137,6 +138,7 @@ type ProviderSummary struct {
 	APIKeySet      bool   `json:"api_key_set"`
 	APIKeyEnv      string `json:"api_key_env"`
 	APIKeyEnvSet   bool   `json:"api_key_env_set"`
+	APIVersion     string `json:"api_version,omitempty"`
 }
 
 type ModelSummary struct {
@@ -239,6 +241,7 @@ func (c *Config) CheckReport() CheckReport {
 			TimeoutSeconds: provider.TimeoutSeconds,
 			APIKeySet:      provider.APIKey != "",
 			APIKeyEnv:      provider.APIKeyEnv,
+			APIVersion:     provider.APIVersion,
 		}
 		if provider.APIKeyEnv != "" {
 			_, summary.APIKeyEnvSet = os.LookupEnv(provider.APIKeyEnv)
@@ -429,6 +432,19 @@ func (c *Config) Validate() error {
 			}
 			if provider.APIKey == "" && provider.APIKeyEnv == "" {
 				return fmt.Errorf("provider %q requires api_key or api_key_env", name)
+			}
+		case "azure-openai":
+			if _, err := upstreamurl.NormalizeHTTPBaseURL(provider.BaseURL); err != nil {
+				return fmt.Errorf("provider %q %w", name, err)
+			}
+			if provider.APIKey == "" && provider.APIKeyEnv == "" {
+				return fmt.Errorf("provider %q requires api_key or api_key_env", name)
+			}
+			if strings.TrimSpace(provider.APIVersion) == "" {
+				return fmt.Errorf("provider %q api_version is required", name)
+			}
+			if provider.APIVersion != strings.TrimSpace(provider.APIVersion) {
+				return fmt.Errorf("provider %q api_version must not contain leading or trailing whitespace", name)
 			}
 		default:
 			return fmt.Errorf("provider %q has unsupported type %q", name, provider.Type)

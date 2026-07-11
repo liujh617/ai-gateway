@@ -50,6 +50,55 @@ func TestLoadDefaultConfig(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsAzureOpenAIProvider(t *testing.T) {
+	cfg := config.Default()
+	cfg.Providers = map[string]config.ProviderConfig{
+		"azure": {
+			Type:       "azure-openai",
+			BaseURL:    "https://example.openai.azure.com",
+			APIKeyEnv:  "AZURE_OPENAI_API_KEY",
+			APIVersion: "2024-02-15-preview",
+		},
+	}
+	cfg.Models = map[string]config.ModelConfig{
+		"gpt-4o-mini": {
+			Provider:      "azure",
+			UpstreamModel: "chat-deployment",
+			Capabilities:  []string{"chat"},
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	report := cfg.CheckReport()
+	if len(report.Providers) != 1 || report.Providers[0].APIVersion != "2024-02-15-preview" {
+		t.Fatalf("providers = %+v", report.Providers)
+	}
+}
+
+func TestValidateRejectsAzureOpenAIProviderWithoutAPIVersion(t *testing.T) {
+	cfg := config.Default()
+	cfg.Providers = map[string]config.ProviderConfig{
+		"azure": {
+			Type:      "azure-openai",
+			BaseURL:   "https://example.openai.azure.com",
+			APIKeyEnv: "AZURE_OPENAI_API_KEY",
+		},
+	}
+	cfg.Models = map[string]config.ModelConfig{
+		"gpt-4o-mini": {
+			Provider: "azure",
+		},
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected api_version error")
+	}
+	if !strings.Contains(err.Error(), "api_version") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestLoadConfigAcceptsAuditConfig(t *testing.T) {
 	path := writeConfig(t, `{
 		"addr": "127.0.0.1:8080",
