@@ -74,6 +74,19 @@ func TestNoopRecorderDoesNotCreateFile(t *testing.T) {
 	}
 }
 
+func TestJSONLRecorderWriteFailureDoesNotPanic(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent.jsonl")
+	rec, err := audit.NewJSONLRecorder(path)
+	if err != nil {
+		t.Fatalf("NewJSONLRecorder: %v", err)
+	}
+	if err := rec.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	rec.Record(context.Background(), audit.Event{Event: audit.EventRequest, Body: json.RawMessage(`{"ok":true}`)})
+}
+
 func TestTraceIDFromRequest(t *testing.T) {
 	req := httptest.NewRequest("POST", "/v1/chat/completions", nil)
 	req = req.WithContext(requestctx.WithRequestID(req.Context(), "req_fallback"))

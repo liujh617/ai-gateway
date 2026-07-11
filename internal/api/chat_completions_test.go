@@ -314,6 +314,29 @@ func TestChatCompletionsMissingMessages(t *testing.T) {
 	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
 }
 
+func TestAuditChatCompletionsValidationError(t *testing.T) {
+	rec := &memoryAuditRecorder{}
+	handler := newTestHandlerWithOptions(fake.New(), api.Options{Audit: rec})
+	body := `{"model":"test-model"}`
+
+	rr := doJSON(handler, body, true)
+
+	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
+	events := rec.Events()
+	if len(events) != 1 {
+		t.Fatalf("events = %#v", events)
+	}
+	if events[0].Event != audit.EventError || events[0].Status != http.StatusBadRequest {
+		t.Fatalf("error audit = %#v", events[0])
+	}
+	if events[0].Path != "/v1/chat/completions" || events[0].ExternalModel != "test-model" {
+		t.Fatalf("error audit labels = %#v", events[0])
+	}
+	if !strings.Contains(string(events[0].Body), `"error"`) {
+		t.Fatalf("error body = %s", events[0].Body)
+	}
+}
+
 func TestChatCompletionsMissingMessageRole(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	body := `{"model":"test-model","messages":[{"content":"hello"}]}`

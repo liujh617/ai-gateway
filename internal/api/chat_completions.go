@@ -28,19 +28,19 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	middleware.SetLogStream(r.Context(), req.Stream)
 	if err := req.Validate(); err != nil {
-		s.writeError(w, r, err)
+		s.writeAuditedError(w, r, routes.ChatCompletionsPath, req.Model, err)
 		return
 	}
 	if !s.modelAllowedForRequest(r, req.Model) {
 		middleware.SetLogRoute(r.Context(), req.Model, "", "")
-		s.writeError(w, r, compat.ModelNotFound(req.Model))
+		s.writeAuditedError(w, r, routes.ChatCompletionsPath, req.Model, compat.ModelNotFound(req.Model))
 		return
 	}
 
 	route, resolveErr := s.router.ResolveFor(req.Model, "chat")
 	if resolveErr != nil {
 		middleware.SetLogRoute(r.Context(), req.Model, "", "")
-		s.writeError(w, r, resolveErr)
+		s.writeAuditedError(w, r, routes.ChatCompletionsPath, req.Model, resolveErr)
 		return
 	}
 
@@ -59,7 +59,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	resp, providerName, upstreamModel, err := s.createChatCompletionWithFallback(ctx, r, route, externalModel, req)
 	if err != nil {
-		s.writeError(w, r, providerError(err))
+		s.writeAuditedError(w, r, routes.ChatCompletionsPath, externalModel, providerError(err))
 		return
 	}
 	resp.Model = externalModel
@@ -133,7 +133,7 @@ func (s *Server) streamChatCompletion(w http.ResponseWriter, r *http.Request, ro
 
 	stream, providerName, upstreamModel, pricing, err := s.openChatCompletionStreamWithFallback(ctx, r, route, externalModel, req)
 	if err != nil {
-		s.writeError(w, r, providerError(err))
+		s.writeAuditedError(w, r, routes.ChatCompletionsPath, externalModel, providerError(err))
 		return
 	}
 	defer func() {

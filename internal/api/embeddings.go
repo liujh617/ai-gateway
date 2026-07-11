@@ -24,19 +24,19 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	}
 	middleware.SetLogStream(r.Context(), false)
 	if err := req.Validate(); err != nil {
-		s.writeError(w, r, err)
+		s.writeAuditedError(w, r, routes.EmbeddingsPath, req.Model, err)
 		return
 	}
 	if !s.modelAllowedForRequest(r, req.Model) {
 		middleware.SetLogRoute(r.Context(), req.Model, "", "")
-		s.writeError(w, r, compat.ModelNotFound(req.Model))
+		s.writeAuditedError(w, r, routes.EmbeddingsPath, req.Model, compat.ModelNotFound(req.Model))
 		return
 	}
 
 	route, resolveErr := s.router.ResolveFor(req.Model, "embeddings")
 	if resolveErr != nil {
 		middleware.SetLogRoute(r.Context(), req.Model, "", "")
-		s.writeError(w, r, resolveErr)
+		s.writeAuditedError(w, r, routes.EmbeddingsPath, req.Model, resolveErr)
 		return
 	}
 
@@ -50,7 +50,7 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 
 	resp, providerName, upstreamModel, err := s.createEmbeddingWithFallback(ctx, r, route, externalModel, req)
 	if err != nil {
-		s.writeError(w, r, providerError(err))
+		s.writeAuditedError(w, r, routes.EmbeddingsPath, externalModel, providerError(err))
 		return
 	}
 	resp.Model = externalModel

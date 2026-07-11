@@ -145,6 +145,14 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err *compat.
 	s.WriteError(w, err)
 }
 
+func (s *Server) writeAuditedError(w http.ResponseWriter, r *http.Request, path string, externalModel string, err *compat.Error) {
+	s.writeError(w, r, err)
+	event := s.auditBaseEvent(r, audit.EventError, path, externalModel)
+	event.Status = err.Status
+	event.Body = rawBody(compat.ErrorResponseFor(err))
+	s.audit.Record(r.Context(), event)
+}
+
 func (s *Server) auditBaseEvent(r *http.Request, event string, path string, externalModel string) audit.Event {
 	return audit.Event{
 		Event:         event,
