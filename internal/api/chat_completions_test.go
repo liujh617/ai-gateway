@@ -1245,6 +1245,41 @@ func TestEmbeddingsOK(t *testing.T) {
 	}
 }
 
+func TestAuditEmbeddings(t *testing.T) {
+	rec := &memoryAuditRecorder{}
+	handler := newTestHandlerWithOptions(fake.New(), api.Options{Audit: rec})
+	body := `{"model":"test-model","input":"hello"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/embeddings", bytes.NewBufferString(body))
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	events := rec.Events()
+	if len(events) != 2 {
+		t.Fatalf("events = %#v", events)
+	}
+	if events[0].Event != audit.EventRequest || events[0].Path != "/v1/embeddings" {
+		t.Fatalf("request audit = %#v", events[0])
+	}
+	if !strings.Contains(string(events[0].Body), `"input"`) {
+		t.Fatalf("request body = %s", events[0].Body)
+	}
+	if events[1].Event != audit.EventResponse || events[1].Status != http.StatusOK {
+		t.Fatalf("response audit = %#v", events[1])
+	}
+	if events[1].Provider != "fake-provider" || events[1].UpstreamModel != "upstream-test-model" {
+		t.Fatalf("response route labels = %#v", events[1])
+	}
+	if !strings.Contains(string(events[1].Body), `"embedding"`) {
+		t.Fatalf("response body = %s", events[1].Body)
+	}
+}
+
 func TestEmbeddingsMissingInput(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	body := `{"model":"test-model"}`

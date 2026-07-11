@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/router"
@@ -40,22 +41,31 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	externalModel := req.Model
+	requestEvent := s.auditBaseEvent(r, audit.EventRequest, routes.EmbeddingsPath, externalModel)
+	requestEvent.Body = rawBody(req)
+	s.audit.Record(r.Context(), requestEvent)
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
 	defer cancel()
 
-	resp, err := s.createEmbeddingWithFallback(ctx, r, route, externalModel, req)
+	resp, providerName, upstreamModel, err := s.createEmbeddingWithFallback(ctx, r, route, externalModel, req)
 	if err != nil {
 		s.writeError(w, r, providerError(err))
 		return
 	}
 	resp.Model = externalModel
+	responseEvent := s.auditBaseEvent(r, audit.EventResponse, routes.EmbeddingsPath, externalModel)
+	responseEvent.Provider = providerName
+	responseEvent.UpstreamModel = upstreamModel
+	responseEvent.Status = http.StatusOK
+	responseEvent.Body = rawBody(resp)
+	s.audit.Record(r.Context(), responseEvent)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-func (s *Server) createEmbeddingWithFallback(ctx context.Context, r *http.Request, route router.ModelRoute, externalModel string, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+func (s *Server) createEmbeddingWithFallback(ctx context.Context, r *http.Request, route router.ModelRoute, externalModel string, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, string, string, error) {
 	var lastErr error
 	var skippedFrom string
 	attempts := route.Attempts()
@@ -81,7 +91,7 @@ func (s *Server) createEmbeddingWithFallback(ctx context.Context, r *http.Reques
 			s.providerHealth.MarkSuccess(attempt.ProviderName)
 			s.observeProviderHealth(attempt.ProviderName)
 			s.observeUsage(routes.EmbeddingsPath, externalModel, attempt.ProviderName, clientFromContext(r.Context()), resp.Usage, attempt.Pricing)
-			return resp, nil
+			return resp, attempt.ProviderName, attempt.UpstreamModel, nil
 		}
 		lastErr = err
 		if canFallbackProviderError(err) {
@@ -89,7 +99,7 @@ func (s *Server) createEmbeddingWithFallback(ctx context.Context, r *http.Reques
 			s.observeProviderHealth(attempt.ProviderName)
 		}
 		if index == len(attempts)-1 || !canFallbackProviderError(err) {
-			return nil, err
+			return nil, "", "", err
 		}
 		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
 			s.observeProviderFallback(r.Context(), routes.EmbeddingsPath, externalModel, attempt.ProviderName, nextProviderName)
@@ -97,7 +107,7 @@ func (s *Server) createEmbeddingWithFallback(ctx context.Context, r *http.Reques
 		s.logger.Warn("embedding provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
 	}
 	if skippedFrom != "" {
-		return nil, providerUnavailableError()
+		return nil, "", "", providerUnavailableError()
 	}
-	return nil, lastErr
+	return nil, "", "", lastErr
 }
