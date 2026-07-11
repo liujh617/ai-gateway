@@ -19,6 +19,7 @@ coverage.html
 /audit/
 tmp/
 temp/
+.worktrees/
 
 # Editor and OS files
 .idea/
