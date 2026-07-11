@@ -165,6 +165,12 @@ GATEWAY_AUDIT_ENABLED=1 GATEWAY_AUDIT_PATH=tmp/agent-audit.jsonl make smoke
 tail -n 5 tmp/agent-audit.jsonl
 ```
 
+查看不含完整 body 的摘要：
+
+```bash
+go run ./cmd/gateway audit-inspect tmp/agent-audit.jsonl
+```
+
 也可以在手工请求中加入 trace header：
 
 ```bash

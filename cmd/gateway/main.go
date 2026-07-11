@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -28,6 +29,14 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if shouldInspectAudit(os.Args) {
+		if err := runAuditInspect(os.Stdout, auditInspectPath(os.Args)); err != nil {
+			logger.Error("audit inspect failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	configPath := os.Getenv("GATEWAY_CONFIG")
 	cfg, err := config.Load(configPath)
@@ -119,6 +128,20 @@ func shouldCheckConfig(args []string, env string) bool {
 	return len(args) > 1 && args[1] == "check-config"
 }
 
+func shouldInspectAudit(args []string) bool {
+	return len(args) > 1 && args[1] == "audit-inspect"
+}
+
+func auditInspectPath(args []string) string {
+	if len(args) > 2 && strings.TrimSpace(args[2]) != "" {
+		return args[2]
+	}
+	if env := os.Getenv("GATEWAY_AUDIT_PATH"); env != "" {
+		return env
+	}
+	return "audit/agent-trace.jsonl"
+}
+
 func runConfigCheck(w io.Writer, path string) error {
 	_, report, err := config.Check(path)
 	if err != nil {
@@ -127,6 +150,61 @@ func runConfigCheck(w io.Writer, path string) error {
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(report)
+}
+
+type auditInspectSummary struct {
+	Timestamp     time.Time `json:"timestamp"`
+	Event         string    `json:"event"`
+	RequestID     string    `json:"request_id,omitempty"`
+	TraceID       string    `json:"trace_id,omitempty"`
+	Path          string    `json:"path,omitempty"`
+	Client        string    `json:"client,omitempty"`
+	ExternalModel string    `json:"external_model,omitempty"`
+	Provider      string    `json:"provider,omitempty"`
+	UpstreamModel string    `json:"upstream_model,omitempty"`
+	Status        int       `json:"status,omitempty"`
+	DurationMS    int64     `json:"duration_ms,omitempty"`
+	BodyBytes     int       `json:"body_bytes,omitempty"`
+	Error         string    `json:"error,omitempty"`
+}
+
+func runAuditInspect(w io.Writer, path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("open audit file: %w", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	encoder := json.NewEncoder(w)
+	for line := 1; scanner.Scan(); line++ {
+		var event audit.Event
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			return fmt.Errorf("decode audit line %d: %w", line, err)
+		}
+		summary := auditInspectSummary{
+			Timestamp:     event.Timestamp,
+			Event:         event.Event,
+			RequestID:     event.RequestID,
+			TraceID:       event.TraceID,
+			Path:          event.Path,
+			Client:        event.Client,
+			ExternalModel: event.ExternalModel,
+			Provider:      event.Provider,
+			UpstreamModel: event.UpstreamModel,
+			Status:        event.Status,
+			DurationMS:    event.DurationMS,
+			BodyBytes:     len(event.Body),
+			Error:         event.Error,
+		}
+		if err := encoder.Encode(summary); err != nil {
+			return fmt.Errorf("write audit summary: %w", err)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read audit file: %w", err)
+	}
+	return nil
 }
 
 func buildAuditRecorder(cfg *config.Config) (audit.Recorder, error) {
