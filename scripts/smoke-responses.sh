@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-addr="${GATEWAY_ADDR:-127.0.0.1:18083}"
+addr="${GATEWAY_RESPONSES_SMOKE_ADDR:-127.0.0.1:18084}"
 api_key="${GATEWAY_API_KEY:-test-gateway-key}"
 log="${TMPDIR:-/tmp}/open-ai-gateway-responses-smoke.log"
 
