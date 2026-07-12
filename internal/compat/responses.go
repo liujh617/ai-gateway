@@ -9,12 +9,15 @@ import (
 )
 
 type ResponseRequest struct {
-	Model        string
-	Input        json.RawMessage
-	Instructions string
-	Stream       bool
-	Store        *bool
-	Extra        map[string]json.RawMessage
+	Model             string
+	Input             json.RawMessage
+	Instructions      string
+	Stream            bool
+	Store             *bool
+	Tools             json.RawMessage
+	ToolChoice        json.RawMessage
+	ParallelToolCalls *bool
+	Extra             map[string]json.RawMessage
 }
 
 func (r *ResponseRequest) UnmarshalJSON(data []byte) error {
@@ -52,6 +55,22 @@ func (r *ResponseRequest) UnmarshalJSON(data []byte) error {
 		r.Store = &store
 		delete(fields, "store")
 	}
+	if raw, ok := fields["tools"]; ok {
+		r.Tools = cloneRawMessage(raw)
+		delete(fields, "tools")
+	}
+	if raw, ok := fields["tool_choice"]; ok {
+		r.ToolChoice = cloneRawMessage(raw)
+		delete(fields, "tool_choice")
+	}
+	if raw, ok := fields["parallel_tool_calls"]; ok {
+		var value bool
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return err
+		}
+		r.ParallelToolCalls = &value
+		delete(fields, "parallel_tool_calls")
+	}
 	if len(fields) > 0 {
 		r.Extra = fields
 	}
@@ -74,6 +93,16 @@ func (r ResponseRequest) MarshalJSON() ([]byte, error) {
 	if r.Store != nil {
 		store, _ := json.Marshal(*r.Store)
 		fields["store"] = store
+	}
+	if len(r.Tools) > 0 {
+		fields["tools"] = cloneRawMessage(r.Tools)
+	}
+	if len(r.ToolChoice) > 0 {
+		fields["tool_choice"] = cloneRawMessage(r.ToolChoice)
+	}
+	if r.ParallelToolCalls != nil {
+		value, _ := json.Marshal(*r.ParallelToolCalls)
+		fields["parallel_tool_calls"] = value
 	}
 	for key, value := range r.Extra {
 		fields[key] = cloneRawMessage(value)
@@ -106,6 +135,10 @@ func (r ResponseRequest) ChatRequest() (ChatCompletionRequest, *Error) {
 	if err := r.Validate(); err != nil {
 		return ChatCompletionRequest{}, err
 	}
+	extra, _, toolErr := r.chatToolFields()
+	if toolErr != nil {
+		return ChatCompletionRequest{}, toolErr
+	}
 	messages := make([]ChatMessage, 0, 2)
 	if r.Instructions != "" {
 		content, _ := json.Marshal(r.Instructions)
@@ -118,13 +151,45 @@ func (r ResponseRequest) ChatRequest() (ChatCompletionRequest, *Error) {
 		}
 		content, _ := json.Marshal(input)
 		messages = append(messages, ChatMessage{Role: "user", Content: content})
-		return ChatCompletionRequest{Model: r.Model, Messages: messages, Stream: r.Stream}, nil
+		return ChatCompletionRequest{Model: r.Model, Messages: messages, Stream: r.Stream, Extra: extra}, nil
 	}
-	var items []responseInputMessage
+	var items []json.RawMessage
 	if err := json.Unmarshal(r.Input, &items); err != nil || len(items) == 0 {
 		return ChatCompletionRequest{}, InvalidRequest("input must be text or a non-empty message array", "input")
 	}
-	for i, item := range items {
+	seenCalls := map[string]bool{}
+	seenOutputs := map[string]bool{}
+	for i, raw := range items {
+		var header struct {
+			Type string `json:"type"`
+		}
+		_ = json.Unmarshal(raw, &header)
+		if header.Type == "function_call" {
+			var item responseFunctionCallInput
+			if json.Unmarshal(raw, &item) != nil || strings.TrimSpace(item.CallID) == "" || strings.TrimSpace(item.Name) == "" || !validJSONString(item.Arguments) || (item.Status != "" && item.Status != "completed") || seenCalls[item.CallID] {
+				return ChatCompletionRequest{}, InvalidRequest(fmt.Sprintf("invalid function_call at input index %d", i), "input")
+			}
+			seenCalls[item.CallID] = true
+			call := map[string]any{"id": item.CallID, "type": "function", "function": map[string]any{"name": item.Name, "arguments": item.Arguments}}
+			calls, _ := json.Marshal([]any{call})
+			messages = append(messages, ChatMessage{Role: "assistant", Content: json.RawMessage("null"), Extra: map[string]json.RawMessage{"tool_calls": calls}})
+			continue
+		}
+		if header.Type == "function_call_output" {
+			var item responseFunctionCallOutputInput
+			if json.Unmarshal(raw, &item) != nil || !seenCalls[item.CallID] || seenOutputs[item.CallID] || item.Output == nil {
+				return ChatCompletionRequest{}, InvalidRequest(fmt.Sprintf("invalid function_call_output at input index %d", i), "input")
+			}
+			seenOutputs[item.CallID] = true
+			callID, _ := json.Marshal(item.CallID)
+			output, _ := json.Marshal(*item.Output)
+			messages = append(messages, ChatMessage{Role: "tool", Content: output, Extra: map[string]json.RawMessage{"tool_call_id": callID}})
+			continue
+		}
+		var item responseInputMessage
+		if err := json.Unmarshal(raw, &item); err != nil {
+			return ChatCompletionRequest{}, InvalidRequest(fmt.Sprintf("invalid input item at index %d", i), "input")
+		}
 		role := strings.TrimSpace(item.Role)
 		if role != "user" && role != "assistant" && role != "system" && role != "developer" {
 			return ChatCompletionRequest{}, InvalidRequest(fmt.Sprintf("invalid input role at index %d", i), "input")
@@ -136,7 +201,88 @@ func (r ResponseRequest) ChatRequest() (ChatCompletionRequest, *Error) {
 		content, _ := json.Marshal(text)
 		messages = append(messages, ChatMessage{Role: role, Content: content})
 	}
-	return ChatCompletionRequest{Model: r.Model, Messages: messages, Stream: r.Stream}, nil
+	return ChatCompletionRequest{Model: r.Model, Messages: messages, Stream: r.Stream, Extra: extra}, nil
+}
+
+type responseFunctionTool struct {
+	Type        string          `json:"type"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Parameters  json.RawMessage `json:"parameters"`
+	Strict      *bool           `json:"strict"`
+}
+type responseFunctionCallInput struct {
+	Type      string `json:"type"`
+	ID        string `json:"id"`
+	CallID    string `json:"call_id"`
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+	Status    string `json:"status"`
+}
+type responseFunctionCallOutputInput struct {
+	Type   string  `json:"type"`
+	CallID string  `json:"call_id"`
+	Output *string `json:"output"`
+}
+
+func (r ResponseRequest) chatToolFields() (map[string]json.RawMessage, map[string]bool, *Error) {
+	extra := map[string]json.RawMessage{}
+	names := map[string]bool{}
+	if len(r.Tools) > 0 {
+		var tools []responseFunctionTool
+		if json.Unmarshal(r.Tools, &tools) != nil || len(tools) == 0 {
+			return nil, nil, InvalidRequest("tools must be a non-empty array", "tools")
+		}
+		chatTools := make([]any, 0, len(tools))
+		for _, tool := range tools {
+			name := strings.TrimSpace(tool.Name)
+			var parameters map[string]any
+			if tool.Type != "function" || name == "" || name != tool.Name || names[name] || json.Unmarshal(tool.Parameters, &parameters) != nil {
+				return nil, nil, InvalidRequest("invalid function tool", "tools")
+			}
+			names[name] = true
+			strict := true
+			if tool.Strict != nil {
+				strict = *tool.Strict
+			}
+			function := map[string]any{"name": name, "parameters": parameters, "strict": strict}
+			if tool.Description != "" {
+				function["description"] = tool.Description
+			}
+			chatTools = append(chatTools, map[string]any{"type": "function", "function": function})
+		}
+		extra["tools"], _ = json.Marshal(chatTools)
+	}
+	if len(r.ToolChoice) > 0 {
+		var choice string
+		if json.Unmarshal(r.ToolChoice, &choice) == nil {
+			if choice != "auto" && choice != "none" && choice != "required" {
+				return nil, nil, InvalidRequest("unsupported tool_choice", "tool_choice")
+			}
+			if len(names) == 0 && choice != "none" {
+				return nil, nil, InvalidRequest("tool_choice requires tools", "tool_choice")
+			}
+			extra["tool_choice"] = cloneRawMessage(r.ToolChoice)
+		} else {
+			var forced struct{ Type, Name string }
+			if json.Unmarshal(r.ToolChoice, &forced) != nil || forced.Type != "function" || !names[forced.Name] {
+				return nil, nil, InvalidRequest("unsupported tool_choice", "tool_choice")
+			}
+			extra["tool_choice"], _ = json.Marshal(map[string]any{"type": "function", "function": map[string]string{"name": forced.Name}})
+		}
+	}
+	if r.ParallelToolCalls != nil {
+		extra["parallel_tool_calls"], _ = json.Marshal(*r.ParallelToolCalls)
+	}
+	if len(extra) == 0 {
+		extra = nil
+	}
+	return extra, names, nil
+}
+
+func validJSONString(value string) bool {
+	var raw any
+	return json.Unmarshal([]byte(value), &raw) == nil
 }
 
 type responseInputMessage struct {

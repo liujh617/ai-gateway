@@ -2,6 +2,7 @@ package compat
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -53,6 +54,68 @@ func TestResponseRequestRejectsUnsupportedFields(t *testing.T) {
 		}
 		if _, compatErr := req.ChatRequest(); compatErr == nil || compatErr.Status != 400 || compatErr.Type != "invalid_request_error" {
 			t.Fatalf("expected invalid_request_error for %s, got %#v", body, compatErr)
+		}
+	}
+}
+
+func TestResponseRequestConvertsFunctionTools(t *testing.T) {
+	body := `{"model":"m","input":"weather","tools":[{"type":"function","name":"get_weather","description":"Get weather","parameters":{"type":"object"}}],"tool_choice":{"type":"function","name":"get_weather"},"parallel_tool_calls":false}`
+	var req ResponseRequest
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
+		t.Fatal(err)
+	}
+	chat, compatErr := req.ChatRequest()
+	if compatErr != nil {
+		t.Fatal(compatErr)
+	}
+	tools := string(chat.Extra["tools"])
+	if !strings.Contains(tools, `"strict":true`) || !strings.Contains(tools, `"function":{"description":"Get weather","name":"get_weather"`) {
+		t.Fatalf("tools=%s", tools)
+	}
+	if got := string(chat.Extra["tool_choice"]); got != `{"function":{"name":"get_weather"},"type":"function"}` {
+		t.Fatalf("tool_choice=%s", got)
+	}
+	if got := string(chat.Extra["parallel_tool_calls"]); got != "false" {
+		t.Fatalf("parallel_tool_calls=%s", got)
+	}
+}
+
+func TestResponseRequestConvertsFunctionCallAndOutput(t *testing.T) {
+	body := `{"model":"m","input":[{"type":"function_call","id":"fc_1","call_id":"call_1","name":"get_weather","arguments":"{\"location\":\"Paris\"}","status":"completed"},{"type":"function_call_output","call_id":"call_1","output":"25C"}]}`
+	var req ResponseRequest
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
+		t.Fatal(err)
+	}
+	chat, compatErr := req.ChatRequest()
+	if compatErr != nil {
+		t.Fatal(compatErr)
+	}
+	if len(chat.Messages) != 2 || chat.Messages[0].Role != "assistant" || chat.Messages[1].Role != "tool" {
+		t.Fatalf("messages=%#v", chat.Messages)
+	}
+	if !strings.Contains(string(chat.Messages[0].Extra["tool_calls"]), `"id":"call_1"`) {
+		t.Fatalf("tool_calls=%s", chat.Messages[0].Extra["tool_calls"])
+	}
+	if string(chat.Messages[1].Extra["tool_call_id"]) != `"call_1"` || string(chat.Messages[1].Content) != `"25C"` {
+		t.Fatalf("tool message=%#v", chat.Messages[1])
+	}
+}
+
+func TestResponseRequestRejectsInvalidFunctionCorrelation(t *testing.T) {
+	bodies := []string{
+		`{"model":"m","input":"x","tools":[{"type":"web_search"}]}`,
+		`{"model":"m","input":"x","tools":[{"type":"function","name":"f","parameters":[]}]}`,
+		`{"model":"m","input":"x","tools":[{"type":"function","name":"f","parameters":{}}],"tool_choice":{"type":"function","name":"missing"}}`,
+		`{"model":"m","input":[{"type":"function_call_output","call_id":"call_1","output":"x"}]}`,
+		`{"model":"m","input":[{"type":"function_call","call_id":"call_1","name":"f","arguments":"not-json"}]}`,
+	}
+	for _, body := range bodies {
+		var req ResponseRequest
+		if err := json.Unmarshal([]byte(body), &req); err != nil {
+			t.Fatal(err)
+		}
+		if _, compatErr := req.ChatRequest(); compatErr == nil || compatErr.Status != 400 {
+			t.Fatalf("body=%s err=%#v", body, compatErr)
 		}
 	}
 }
