@@ -23,11 +23,14 @@ make release-check
 - `make build`
 - `make smoke`
 - `make smoke-responses`
+- `make smoke-responses-tools`
 - `make smoke-rate-limit`
 - `make smoke-azure`
 - `make smoke-deepseek-skip`
 
 `make check-config` 会验证默认运行配置，`make check-config-examples` 会校验仓库内示例配置可被当前配置加载器接受，并执行一次配置自检。`make smoke` 使用 fake provider 启动本地服务，验证核心 HTTP 契约。`make smoke-responses` 离线验证 Responses API 的非流式 response 对象和 typed SSE 文本事件。`make smoke-rate-limit` 使用临时 fake 配置验证 gateway 限流响应。`make smoke-deepseek-skip` 强制清空 `DEEPSEEK_API_KEY`，只验证真实 provider smoke 的无 key 跳过路径。
+
+`make smoke-responses-tools` 使用 fake provider 离线验证 function call、function output、最终文本和 typed arguments streaming 两轮闭环。
 
 `make check-line-endings` 验证所有受版本控制的 shell 脚本使用 LF；`make test-line-endings`
 在临时 Git 仓库中验证检查器接受 LF 正例并拒绝 CRLF 反例。

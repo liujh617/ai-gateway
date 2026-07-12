@@ -7,7 +7,7 @@ COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X open-ai-gateway/internal/version.Version=$(VERSION) -X open-ai-gateway/internal/version.Commit=$(COMMIT) -X open-ai-gateway/internal/version.BuildTime=$(BUILD_TIME)
 
-.PHONY: fmt check-line-endings test-line-endings test race vet verify build run check-config check-config-examples smoke smoke-responses smoke-rate-limit smoke-azure smoke-deepseek smoke-deepseek-skip release-check docker-build docker-run
+.PHONY: fmt check-line-endings test-line-endings test race vet verify build run check-config check-config-examples smoke smoke-responses smoke-responses-tools smoke-rate-limit smoke-azure smoke-deepseek smoke-deepseek-skip release-check docker-build docker-run
 
 check-line-endings:
 	bash scripts/check-line-endings.sh
@@ -47,6 +47,9 @@ smoke:
 smoke-responses:
 	bash scripts/smoke-responses.sh
 
+smoke-responses-tools:
+	bash scripts/smoke-responses-tools.sh
+
 smoke-rate-limit:
 	bash scripts/smoke-rate-limit.sh
 
@@ -59,7 +62,7 @@ smoke-deepseek:
 smoke-deepseek-skip:
 	DEEPSEEK_API_KEY= bash scripts/smoke-deepseek.sh
 
-release-check: verify check-config check-config-examples build smoke smoke-responses smoke-rate-limit smoke-azure smoke-deepseek-skip
+release-check: verify check-config check-config-examples build smoke smoke-responses smoke-responses-tools smoke-rate-limit smoke-azure smoke-deepseek-skip
 
 docker-build:
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_TIME=$(BUILD_TIME) -t $(IMAGE) .

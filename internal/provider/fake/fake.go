@@ -43,6 +43,14 @@ func (p *Provider) CreateChatCompletion(ctx context.Context, req compat.ChatComp
 		return nil, p.Err
 	}
 	content, _ := json.Marshal(p.ResponseText)
+	var extra map[string]json.RawMessage
+	if result, ok := fakeToolResult(req); ok {
+		content, _ = json.Marshal("Tool result received: " + result)
+	} else if len(req.Extra["tools"]) > 0 {
+		content = json.RawMessage("null")
+		calls, _ := json.Marshal([]any{map[string]any{"id": "call_fake_weather", "type": "function", "function": map[string]string{"name": "get_weather", "arguments": "{\"location\":\"Paris\"}"}}})
+		extra = map[string]json.RawMessage{"tool_calls": calls}
+	}
 	return &compat.ChatCompletionResponse{
 		ID:      "chatcmpl_fake",
 		Object:  "chat.completion",
@@ -53,6 +61,7 @@ func (p *Provider) CreateChatCompletion(ctx context.Context, req compat.ChatComp
 			Message: compat.ChatMessage{
 				Role:    "assistant",
 				Content: content,
+				Extra:   extra,
 			},
 			FinishReason: "stop",
 		}},
@@ -72,7 +81,7 @@ func (p *Provider) StreamChatCompletion(ctx context.Context, req compat.ChatComp
 		return nil, p.StreamErr
 	}
 	parts := append([]string(nil), p.StreamParts...)
-	return &stream{provider: p, model: req.Model, parts: parts}, nil
+	return &stream{provider: p, model: req.Model, parts: parts, toolMode: len(req.Extra["tools"]) > 0}, nil
 }
 
 func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
@@ -102,11 +111,24 @@ type stream struct {
 	model    string
 	parts    []string
 	index    int
+	toolMode bool
 }
 
 func (s *stream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if s.toolMode {
+		if s.index >= 2 {
+			return nil, io.EOF
+		}
+		argument := `{"location":`
+		if s.index == 1 {
+			argument = `"Paris"}`
+		}
+		calls, _ := json.Marshal([]any{map[string]any{"index": 0, "id": "call_fake_weather", "type": "function", "function": map[string]string{"name": "get_weather", "arguments": argument}}})
+		s.index++
+		return &compat.ChatCompletionChunk{Model: s.model, Choices: []compat.ChatCompletionChunkChoice{{Index: 0, Delta: compat.ChatMessageDelta{Extra: map[string]json.RawMessage{"tool_calls": calls}}}}}, nil
 	}
 	if s.index >= len(s.parts) {
 		return nil, io.EOF
@@ -126,6 +148,19 @@ func (s *stream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) 
 			FinishReason: nil,
 		}},
 	}, nil
+}
+
+func fakeToolResult(req compat.ChatCompletionRequest) (string, bool) {
+	for i := len(req.Messages) - 1; i >= 0; i-- {
+		if req.Messages[i].Role != "tool" {
+			continue
+		}
+		var result string
+		if json.Unmarshal(req.Messages[i].Content, &result) == nil {
+			return result, true
+		}
+	}
+	return "", false
 }
 
 func (s *stream) Close() error {
