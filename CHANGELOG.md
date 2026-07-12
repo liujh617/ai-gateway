@@ -8,6 +8,7 @@ All notable changes to this project are documented here.
 
 - Stateless text-only `/v1/responses` compatibility with string/message inputs, `instructions`, non-streaming output Items, and typed SSE text streaming.
 - Credential-free Responses API smoke coverage included in release checks.
+- Responses function tools with strict schemas, common tool choices, parallel calls, stateless function outputs, and typed arguments streaming.
 
 ## 0.1.2 - 2026-07-12
 

@@ -155,6 +155,7 @@ curl -sS http://127.0.0.1:8080/healthz
 - `POST /v1/embeddings`
 - chat completions streaming
 - Responses typed SSE 文本 streaming
+- Responses function tools、并行 function calls 和无状态 function output 回传
 - 单模型主 provider 配置和可选 fallback provider
 - Bearer token 鉴权
 - 基础日志、request id、HTTP metrics、provider-reported token metrics（含带 `usage` 的流式响应）、可选 token cost metrics、rate limit rejection metrics、provider circuit open metrics、provider fallback metrics、provider health metrics、provider circuit breaker、超时和错误响应

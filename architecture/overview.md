@@ -125,6 +125,8 @@ Compat Mapper 是外部 API 契约的主要守门员。
 
 Responses API 首期由 Compat Mapper 转换为现有 `ChatCompletionRequest`，复用相同的 `chat` 模型路由、fallback、circuit breaker、provider timeout、usage 和 cost metrics。非流式 chat response 被转换为 Responses output Item，流式 chat chunk 被转换为 Responses typed SSE 生命周期事件。provider 接口和 adapter 不感知 Responses 外部格式；不可以无损表达的状态、工具和多模态能力在转换前返回稳定的 400 错误。
 
+Function tools 也由 Compat Mapper 双向转换：Responses function definition 和 Items 映射为 chat `tools`、assistant `tool_calls` 与 tool messages；chat tool calls 和 indexed stream deltas 映射回 Responses function Items/events。每个流式调用按 chat index 独立累计 arguments，provider adapter 仍只处理 Chat Completions wire format。
+
 ### Model Router
 
 职责：
