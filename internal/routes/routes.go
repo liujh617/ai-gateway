@@ -14,6 +14,7 @@ const (
 	MetricsPath         = "/metrics"
 	ModelsPath          = "/v1/models"
 	ChatCompletionsPath = "/v1/chat/completions"
+	ResponsesPath       = "/v1/responses"
 	EmbeddingsPath      = "/v1/embeddings"
 )
 
@@ -30,6 +31,7 @@ var definitions = []Route{
 	{Path: MetricsPath, Methods: []string{http.MethodGet, http.MethodHead}, Public: true},
 	{Path: ModelsPath, Methods: []string{http.MethodGet, http.MethodHead}},
 	{Path: ChatCompletionsPath, Methods: []string{http.MethodPost}},
+	{Path: ResponsesPath, Methods: []string{http.MethodPost}},
 	{Path: EmbeddingsPath, Methods: []string{http.MethodPost}},
 }
 

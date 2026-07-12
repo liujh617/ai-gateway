@@ -14,6 +14,18 @@ func TestNormalizePath(t *testing.T) {
 	}
 }
 
+func TestResponsesRoute(t *testing.T) {
+	if got := NormalizePath(ResponsesPath); got != ResponsesPath {
+		t.Fatalf("NormalizePath = %q", got)
+	}
+	if allowed, known := MethodAllowed(ResponsesPath, http.MethodPost); !known || !allowed {
+		t.Fatalf("POST known=%v allowed=%v", known, allowed)
+	}
+	if allowed, known := MethodAllowed(ResponsesPath, http.MethodGet); !known || allowed {
+		t.Fatalf("GET known=%v allowed=%v", known, allowed)
+	}
+}
+
 func TestPattern(t *testing.T) {
 	if got := Pattern(http.MethodPost, ChatCompletionsPath); got != "POST /v1/chat/completions" {
 		t.Fatalf("pattern = %q", got)

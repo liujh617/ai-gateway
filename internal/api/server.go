@@ -130,6 +130,7 @@ func (s *Server) routeHandlers() map[string]func(http.ResponseWriter, *http.Requ
 		routes.MetricsPath:         s.handleMetrics,
 		routes.ModelsPath:          s.handleModels,
 		routes.ChatCompletionsPath: s.handleChatCompletions,
+		routes.ResponsesPath:       s.handleResponses,
 		routes.EmbeddingsPath:      s.handleEmbeddings,
 	}
 }
