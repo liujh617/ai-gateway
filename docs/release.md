@@ -13,7 +13,7 @@ MAJOR.MINOR.PATCH
 示例：
 
 ```text
-0.1.0
+0.1.2
 ```
 
 ## Preflight
@@ -21,17 +21,18 @@ MAJOR.MINOR.PATCH
 在 WSL `Ubuntu-24.04` 中执行：
 
 ```bash
-make release-check VERSION=0.1.0
+make release-check VERSION=0.1.2
 ```
 
 `release-check` 会执行：
 
-- `make verify`
+- `make verify`，包含 shell line ending 检查、普通测试、race 和 vet
 - `make check-config`
 - `make check-config-examples`
 - `make build VERSION=<version>`
 - `make smoke`
 - `make smoke-rate-limit`
+- `make smoke-azure`
 - `make smoke-deepseek-skip`
 
 ## Changelog
@@ -47,13 +48,13 @@ make release-check VERSION=0.1.0
 构建二进制：
 
 ```bash
-make build VERSION=0.1.0
+make build VERSION=0.1.2
 ```
 
 构建镜像：
 
 ```bash
-make docker-build VERSION=0.1.0 IMAGE=open-ai-gateway:0.1.0
+make docker-build VERSION=0.1.2 IMAGE=open-ai-gateway:0.1.2
 ```
 
 ## Verify Runtime Version
@@ -73,8 +74,8 @@ curl -sS http://127.0.0.1:8080/version
 ## Git Tag
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag -a v0.1.2 -m "Release v0.1.2"
+git push origin v0.1.2
 ```
 
 ## Notes

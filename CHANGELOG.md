@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+## 0.1.2 - 2026-07-12
+
+### Added
+
+- Credential-free local Azure OpenAI smoke coverage for chat completions, streaming chat completions, and embeddings, included in release checks.
+- Repository-enforced LF line endings and automated LF/CRLF checks for shell scripts.
+
+### Fixed
+
+- Stabilized stream read timeout race coverage by replacing timing-dependent duplicate tests with deterministic shared HTTP stream tests.
+
 ## 0.1.1 - 2026-07-11
 
 ### Added
