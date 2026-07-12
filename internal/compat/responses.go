@@ -58,6 +58,29 @@ func (r *ResponseRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (r ResponseRequest) MarshalJSON() ([]byte, error) {
+	fields := make(map[string]json.RawMessage, 5)
+	model, _ := json.Marshal(r.Model)
+	fields["model"] = model
+	fields["input"] = cloneRawMessage(r.Input)
+	if r.Instructions != "" {
+		instructions, _ := json.Marshal(r.Instructions)
+		fields["instructions"] = instructions
+	}
+	if r.Stream {
+		stream, _ := json.Marshal(true)
+		fields["stream"] = stream
+	}
+	if r.Store != nil {
+		store, _ := json.Marshal(*r.Store)
+		fields["store"] = store
+	}
+	for key, value := range r.Extra {
+		fields[key] = cloneRawMessage(value)
+	}
+	return json.Marshal(fields)
+}
+
 func (r ResponseRequest) Validate() *Error {
 	if len(r.Extra) > 0 {
 		keys := make([]string, 0, len(r.Extra))

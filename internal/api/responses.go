@@ -105,6 +105,12 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 		if err := writeTypedSSE(w, eventType, fields); err != nil {
 			return false
 		}
+		chunkEvent := s.auditBaseEvent(r, audit.EventStreamChunk, routes.ResponsesPath, externalModel)
+		chunkEvent.Provider = providerName
+		chunkEvent.UpstreamModel = upstreamModel
+		chunkEvent.Status = http.StatusOK
+		chunkEvent.Body = rawBody(fields)
+		s.audit.Record(r.Context(), chunkEvent)
 		flusher.Flush()
 		return true
 	}

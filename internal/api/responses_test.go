@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"open-ai-gateway/internal/api"
+	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/provider/fake"
 )
@@ -51,6 +53,57 @@ func TestResponsesStreamOK(t *testing.T) {
 	}
 	if strings.Contains(text, "[DONE]") {
 		t.Fatalf("unexpected chat sentinel: %s", text)
+	}
+}
+
+func TestResponsesAuditUsesResponsesBodies(t *testing.T) {
+	recorder := &memoryAuditRecorder{}
+	handler := newTestHandlerWithOptions(fake.New(), api.Options{Audit: recorder})
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewBufferString(`{"model":"test-model","input":"hello"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	req.Header.Set(audit.TraceIDHeader, "responses-trace")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	events := recorder.Events()
+	if len(events) != 2 || events[0].Path != "/v1/responses" || events[1].Path != "/v1/responses" {
+		t.Fatalf("events=%#v", events)
+	}
+	if !strings.Contains(string(events[0].Body), `"input":"hello"`) {
+		t.Fatalf("request body=%s", events[0].Body)
+	}
+	if !strings.Contains(string(events[1].Body), `"object":"response"`) {
+		t.Fatalf("response body=%s", events[1].Body)
+	}
+}
+
+func TestResponsesMetricsUseResponsesPath(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	rr := doResponsesJSON(handler, `{"model":"test-model","input":"hello"}`, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	assertMetricsContains(t, handler, `open_ai_gateway_tokens_total{path="/v1/responses",model="test-model",provider="fake-provider",type="total",client="default"} 2`)
+}
+
+func TestResponsesStreamAuditsTypedEvents(t *testing.T) {
+	recorder := &memoryAuditRecorder{}
+	handler := newTestHandlerWithOptions(fake.New(), api.Options{Audit: recorder})
+	rr := doResponsesJSON(handler, `{"model":"test-model","input":"hello","stream":true}`, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	foundDelta := false
+	for _, event := range recorder.Events() {
+		if event.Event == audit.EventStreamChunk && strings.Contains(string(event.Body), `"type":"response.output_text.delta"`) {
+			foundDelta = true
+		}
+	}
+	if !foundDelta {
+		t.Fatalf("typed delta not audited: %#v", recorder.Events())
 	}
 }
 
