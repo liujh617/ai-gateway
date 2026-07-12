@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added
+
+- Stateless text-only `/v1/responses` compatibility with string/message inputs, `instructions`, non-streaming output Items, and typed SSE text streaming.
+- Credential-free Responses API smoke coverage included in release checks.
+
 ## 0.1.2 - 2026-07-12
 
 ### Added

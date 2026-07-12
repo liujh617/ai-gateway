@@ -123,6 +123,8 @@ Runtime probes:
 
 Compat Mapper 是外部 API 契约的主要守门员。
 
+Responses API 首期由 Compat Mapper 转换为现有 `ChatCompletionRequest`，复用相同的 `chat` 模型路由、fallback、circuit breaker、provider timeout、usage 和 cost metrics。非流式 chat response 被转换为 Responses output Item，流式 chat chunk 被转换为 Responses typed SSE 生命周期事件。provider 接口和 adapter 不感知 Responses 外部格式；不可以无损表达的状态、工具和多模态能力在转换前返回稳定的 400 错误。
+
 ### Model Router
 
 职责：
