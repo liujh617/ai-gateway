@@ -70,7 +70,7 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 	requestEvent.Body = rawBody(req)
 	s.audit.Record(r.Context(), requestEvent)
 	if req.Stream {
-		s.streamResponse(w, r, route, externalModel, chatReq)
+		s.streamResponse(w, r, route, externalModel, chatReq, history, currentMessages, req)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
@@ -155,7 +155,7 @@ func (s *Server) responseHistory(r *http.Request, previousResponseID, model stri
 	return nil, compat.NewError(http.StatusNotFound, "invalid_request_error", "previous response not found", &param)
 }
 
-func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route router.ModelRoute, externalModel string, req compat.ChatCompletionRequest) {
+func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route router.ModelRoute, externalModel string, req compat.ChatCompletionRequest, history, currentMessages []compat.ChatMessage, responseReq compat.ResponseRequest) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		s.writeError(w, r, compat.ServerError(http.StatusInternalServerError, "streaming unsupported"))
@@ -198,7 +198,13 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 		flusher.Flush()
 		return true
 	}
-	base := &compat.Response{ID: responseID, Object: "response", CreatedAt: created.Unix(), Status: "in_progress", Model: externalModel, Output: []compat.ResponseOutputMessage{}, ParallelToolCalls: true, Store: false, Tools: []any{}}
+	shouldStore := responseReq.Store == nil || *responseReq.Store
+	willStore := shouldStore && s.responseStore != nil && s.responseStore.Enabled()
+	var previousResponseID any
+	if responseReq.PreviousResponseID != "" {
+		previousResponseID = responseReq.PreviousResponseID
+	}
+	base := &compat.Response{ID: responseID, Object: "response", CreatedAt: created.Unix(), Status: "in_progress", Model: externalModel, Output: []compat.ResponseOutputMessage{}, ParallelToolCalls: true, PreviousResponseID: previousResponseID, Store: willStore, Tools: []any{}}
 	if !emit("response.created", map[string]any{"response": base}) || !emit("response.in_progress", map[string]any{"response": base}) {
 		return
 	}
@@ -312,10 +318,41 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 	if usage != nil {
 		completed.Usage = &compat.ResponseUsage{InputTokens: usage.PromptTokens, OutputTokens: usage.CompletionTokens, TotalTokens: usage.TotalTokens}
 	}
-	emit("response.completed", map[string]any{"response": &completed})
+	if !emit("response.completed", map[string]any{"response": &completed}) {
+		return
+	}
+	if willStore {
+		assistant := streamAssistantMessage(text, textStarted, functionOrder)
+		transcript := append(append(append([]compat.ChatMessage(nil), history...), currentMessages...), assistant)
+		if err := s.responseStore.Put(responsestore.Record{ID: responseID, Client: clientFromContext(r.Context()), Model: externalModel, Transcript: transcript}); err != nil {
+			s.logger.Warn("failed to store completed response stream", "error", err)
+		}
+	}
 	doneEvent := s.auditBaseEvent(r, audit.EventStreamDone, routes.ResponsesPath, externalModel)
 	doneEvent.Provider, doneEvent.UpstreamModel, doneEvent.Status = providerName, upstreamModel, http.StatusOK
 	s.audit.Record(r.Context(), doneEvent)
+}
+
+func streamAssistantMessage(text string, textStarted bool, functions []*responseFunctionStreamState) compat.ChatMessage {
+	content := json.RawMessage("null")
+	if textStarted {
+		content, _ = json.Marshal(text)
+	}
+	message := compat.ChatMessage{Role: "assistant", Content: content}
+	if len(functions) == 0 {
+		return message
+	}
+	calls := make([]map[string]any, 0, len(functions))
+	for _, state := range functions {
+		calls = append(calls, map[string]any{
+			"id":       state.CallID,
+			"type":     "function",
+			"function": map[string]string{"name": state.Name, "arguments": state.Arguments},
+		})
+	}
+	raw, _ := json.Marshal(calls)
+	message.Extra = map[string]json.RawMessage{"tool_calls": raw}
+	return message
 }
 
 type responseFunctionStreamState struct {

@@ -283,6 +283,93 @@ func TestResponsesStreamOK(t *testing.T) {
 	}
 }
 
+func TestResponsesCompletedStreamCanBeContinued(t *testing.T) {
+	p := &responseStateStreamProvider{}
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(p, api.Options{ResponseStore: store})
+	streamed := doResponsesJSON(handler, `{"model":"test-model","input":"hello","stream":true}`, true)
+	if streamed.Code != http.StatusOK {
+		t.Fatalf("stream status=%d body=%s", streamed.Code, streamed.Body.String())
+	}
+	responseID := completedResponseID(t, streamed.Body.String())
+	continued := doResponsesJSON(handler, `{"model":"test-model","input":"again","previous_response_id":"`+responseID+`"}`, true)
+	if continued.Code != http.StatusOK {
+		t.Fatalf("continued status=%d body=%s", continued.Code, continued.Body.String())
+	}
+	if len(p.requests) != 2 || len(p.requests[1].Messages) != 3 || messageText(p.requests[1].Messages[1]) != "stream-answer" {
+		t.Fatalf("requests=%#v", p.requests)
+	}
+}
+
+func TestResponsesFailedStreamCannotBeContinued(t *testing.T) {
+	p := &responseStateStreamProvider{streamErr: errors.New("stream failed")}
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(p, api.Options{ResponseStore: store})
+	streamed := doResponsesJSON(handler, `{"model":"test-model","input":"hello","stream":true}`, true)
+	if strings.Contains(streamed.Body.String(), "response.completed") {
+		t.Fatalf("unexpected completion: %s", streamed.Body.String())
+	}
+	if stats := store.Snapshot(); stats.Entries != 0 {
+		t.Fatalf("stored failed stream: %+v", stats)
+	}
+}
+
+func completedResponseID(t *testing.T, stream string) string {
+	t.Helper()
+	for _, block := range strings.Split(stream, "\n\n") {
+		if !strings.HasPrefix(block, "event: response.completed\n") {
+			continue
+		}
+		line := strings.TrimPrefix(strings.SplitN(block, "\n", 2)[1], "data: ")
+		var event struct {
+			Response compat.Response `json:"response"`
+		}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatal(err)
+		}
+		return event.Response.ID
+	}
+	t.Fatalf("missing response.completed: %s", stream)
+	return ""
+}
+
+type responseStateStreamProvider struct {
+	requests  []compat.ChatCompletionRequest
+	streamErr error
+}
+
+func (p *responseStateStreamProvider) ListModels(context.Context) ([]compat.Model, error) {
+	return nil, nil
+}
+func (p *responseStateStreamProvider) CreateChatCompletion(_ context.Context, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	p.requests = append(p.requests, req)
+	return &compat.ChatCompletionResponse{Choices: []compat.ChatCompletionChoice{{Index: 0, Message: compat.ChatMessage{Role: "assistant", Content: json.RawMessage(`"continued"`)}, FinishReason: "stop"}}}, nil
+}
+func (p *responseStateStreamProvider) StreamChatCompletion(_ context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
+	p.requests = append(p.requests, req)
+	return &responseStateStream{err: p.streamErr}, nil
+}
+func (p *responseStateStreamProvider) CreateEmbedding(context.Context, compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("unused")
+}
+
+type responseStateStream struct {
+	sent bool
+	err  error
+}
+
+func (s *responseStateStream) Next(context.Context) (*compat.ChatCompletionChunk, error) {
+	if !s.sent {
+		s.sent = true
+		return &compat.ChatCompletionChunk{Choices: []compat.ChatCompletionChunkChoice{{Index: 0, Delta: compat.ChatMessageDelta{Content: "stream-answer"}}}}, nil
+	}
+	if s.err != nil {
+		return nil, s.err
+	}
+	return nil, io.EOF
+}
+func (s *responseStateStream) Close() error { return nil }
+
 func TestResponsesAuditUsesResponsesBodies(t *testing.T) {
 	recorder := &memoryAuditRecorder{}
 	handler := newTestHandlerWithOptions(fake.New(), api.Options{Audit: recorder})
@@ -354,6 +441,24 @@ func TestResponsesStreamFunctionCall(t *testing.T) {
 	}
 }
 
+func TestResponsesCompletedFunctionStreamCanBeContinued(t *testing.T) {
+	p := &functionStreamProvider{}
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(p, api.Options{ResponseStore: store})
+	streamed := doResponsesJSON(handler, `{"model":"test-model","input":"weather","stream":true,"tools":[{"type":"function","name":"get_weather","parameters":{"type":"object"}}]}`, true)
+	if streamed.Code != http.StatusOK {
+		t.Fatalf("stream status=%d body=%s", streamed.Code, streamed.Body.String())
+	}
+	responseID := completedResponseID(t, streamed.Body.String())
+	continued := doResponsesJSON(handler, `{"model":"test-model","previous_response_id":"`+responseID+`","input":[{"type":"function_call_output","call_id":"call_1","output":"sunny"}]}`, true)
+	if continued.Code != http.StatusOK {
+		t.Fatalf("continued status=%d body=%s", continued.Code, continued.Body.String())
+	}
+	if len(p.requests) != 2 || len(p.requests[1].Messages) != 3 || p.requests[1].Messages[2].Role != "tool" {
+		t.Fatalf("requests=%#v", p.requests)
+	}
+}
+
 func doResponsesJSON(handler http.Handler, body string, auth bool) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -365,16 +470,21 @@ func doResponsesJSON(handler http.Handler, body string, auth bool) *httptest.Res
 	return rr
 }
 
-type functionStreamProvider struct{ closed bool }
+type functionStreamProvider struct {
+	closed   bool
+	requests []compat.ChatCompletionRequest
+}
 
 func (p *functionStreamProvider) ListModels(context.Context) ([]compat.Model, error) { return nil, nil }
-func (p *functionStreamProvider) CreateChatCompletion(context.Context, compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
-	return nil, errors.New("unused")
+func (p *functionStreamProvider) CreateChatCompletion(_ context.Context, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	p.requests = append(p.requests, req)
+	return &compat.ChatCompletionResponse{Choices: []compat.ChatCompletionChoice{{Index: 0, Message: compat.ChatMessage{Role: "assistant", Content: json.RawMessage(`"done"`)}, FinishReason: "stop"}}}, nil
 }
 func (p *functionStreamProvider) CreateEmbedding(context.Context, compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
 	return nil, errors.New("unused")
 }
-func (p *functionStreamProvider) StreamChatCompletion(context.Context, compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
+func (p *functionStreamProvider) StreamChatCompletion(_ context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
+	p.requests = append(p.requests, req)
 	return &functionStream{p: p}, nil
 }
 
