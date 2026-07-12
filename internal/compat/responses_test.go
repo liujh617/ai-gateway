@@ -148,3 +148,31 @@ func TestNewResponseEnvelopeRejectsAmbiguousChatOutput(t *testing.T) {
 		}
 	}
 }
+
+func TestNewResponseEnvelopeMapsFunctionCalls(t *testing.T) {
+	toolCalls := json.RawMessage(`[{"id":"call_1","type":"function","function":{"name":"get_weather","arguments":"{\"location\":\"Paris\"}"}},{"id":"call_2","type":"function","function":{"name":"get_time","arguments":"{}"}}]`)
+	chat := &ChatCompletionResponse{Choices: []ChatCompletionChoice{{Index: 0, Message: ChatMessage{Role: "assistant", Content: json.RawMessage(`"checking"`), Extra: map[string]json.RawMessage{"tool_calls": toolCalls}}}}}
+	got, compatErr := NewResponseEnvelope("m", chat, time.Unix(1, 0), "resp_1", "msg_1")
+	if compatErr != nil {
+		t.Fatal(compatErr)
+	}
+	if len(got.Output) != 3 || got.Output[0].Type != "message" || got.Output[1].Type != "function_call" || got.Output[2].CallID != "call_2" {
+		t.Fatalf("output=%#v", got.Output)
+	}
+	if got.Output[1].Name != "get_weather" || got.Output[1].Arguments != `{"location":"Paris"}` || !strings.HasPrefix(got.Output[1].ID, "fc_") {
+		t.Fatalf("function item=%#v", got.Output[1])
+	}
+}
+
+func TestNewResponseEnvelopeRejectsInvalidFunctionCalls(t *testing.T) {
+	for _, calls := range []string{
+		`[{"id":"","type":"function","function":{"name":"f","arguments":"{}"}}]`,
+		`[{"id":"call_1","type":"function","function":{"name":"f","arguments":"bad"}}]`,
+		`[{"id":"call_1","type":"function","function":{"name":"f","arguments":"{}"}},{"id":"call_1","type":"function","function":{"name":"f","arguments":"{}"}}]`,
+	} {
+		chat := &ChatCompletionResponse{Choices: []ChatCompletionChoice{{Index: 0, Message: ChatMessage{Role: "assistant", Content: json.RawMessage("null"), Extra: map[string]json.RawMessage{"tool_calls": json.RawMessage(calls)}}}}}
+		if _, compatErr := NewResponseEnvelope("m", chat, time.Time{}, "resp", "msg"); compatErr == nil {
+			t.Fatalf("calls=%s", calls)
+		}
+	}
+}

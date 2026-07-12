@@ -335,11 +335,14 @@ type Response struct {
 }
 
 type ResponseOutputMessage struct {
-	ID      string               `json:"id"`
-	Type    string               `json:"type"`
-	Status  string               `json:"status"`
-	Role    string               `json:"role"`
-	Content []ResponseOutputText `json:"content"`
+	ID        string               `json:"id"`
+	Type      string               `json:"type"`
+	Status    string               `json:"status"`
+	Role      string               `json:"role,omitempty"`
+	Content   []ResponseOutputText `json:"content,omitempty"`
+	CallID    string               `json:"call_id,omitempty"`
+	Name      string               `json:"name,omitempty"`
+	Arguments string               `json:"arguments,omitempty"`
 }
 
 type ResponseOutputText struct {
@@ -359,23 +362,59 @@ func NewResponseEnvelope(externalModel string, chat *ChatCompletionResponse, now
 		return nil, ServerError(502, "provider returned unsupported response choices")
 	}
 	choice := chat.Choices[0]
-	if choice.Message.Role != "assistant" || len(choice.Message.Extra) != 0 {
+	if choice.Message.Role != "assistant" {
 		return nil, ServerError(502, "provider returned unsupported response content")
 	}
+	output := make([]ResponseOutputMessage, 0, 2)
 	var text string
-	if err := json.Unmarshal(choice.Message.Content, &text); err != nil {
+	trimmedContent := strings.TrimSpace(string(choice.Message.Content))
+	if trimmedContent != "" && trimmedContent != "null" {
+		if err := json.Unmarshal(choice.Message.Content, &text); err != nil {
+			return nil, ServerError(502, "provider returned unsupported response content")
+		}
+		if text != "" {
+			output = append(output, ResponseOutputMessage{ID: messageID, Type: "message", Status: "completed", Role: "assistant", Content: []ResponseOutputText{{Type: "output_text", Text: text, Annotations: []any{}}}})
+		}
+	}
+	toolCallsRaw := choice.Message.Extra["tool_calls"]
+	for key := range choice.Message.Extra {
+		if key != "tool_calls" {
+			return nil, ServerError(502, "provider returned unsupported response content")
+		}
+	}
+	if len(toolCallsRaw) > 0 {
+		var calls []chatResponseToolCall
+		if json.Unmarshal(toolCallsRaw, &calls) != nil || len(calls) == 0 {
+			return nil, ServerError(502, "provider returned unsupported function calls")
+		}
+		seen := map[string]bool{}
+		for i, call := range calls {
+			if strings.TrimSpace(call.ID) == "" || seen[call.ID] || call.Type != "function" || strings.TrimSpace(call.Function.Name) == "" || !validJSONString(call.Function.Arguments) {
+				return nil, ServerError(502, "provider returned unsupported function calls")
+			}
+			seen[call.ID] = true
+			output = append(output, ResponseOutputMessage{ID: fmt.Sprintf("fc_%s_%d", strings.TrimPrefix(responseID, "resp_"), i), Type: "function_call", Status: "completed", CallID: call.ID, Name: call.Function.Name, Arguments: call.Function.Arguments})
+		}
+	}
+	if len(output) == 0 {
 		return nil, ServerError(502, "provider returned unsupported response content")
 	}
 	response := &Response{
 		ID: responseID, Object: "response", CreatedAt: now.Unix(), Status: "completed",
-		Model: externalModel, Output: []ResponseOutputMessage{{
-			ID: messageID, Type: "message", Status: "completed", Role: "assistant",
-			Content: []ResponseOutputText{{Type: "output_text", Text: text, Annotations: []any{}}},
-		}},
+		Model: externalModel, Output: output,
 		ParallelToolCalls: true, Store: false, Tools: []any{},
 	}
 	if chat.Usage != nil {
 		response.Usage = &ResponseUsage{InputTokens: chat.Usage.PromptTokens, OutputTokens: chat.Usage.CompletionTokens, TotalTokens: chat.Usage.TotalTokens}
 	}
 	return response, nil
+}
+
+type chatResponseToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
 }
