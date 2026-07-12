@@ -237,7 +237,7 @@ func (r ResponseRequest) chatToolFields() (map[string]json.RawMessage, map[strin
 		for _, tool := range tools {
 			name := strings.TrimSpace(tool.Name)
 			var parameters map[string]any
-			if tool.Type != "function" || name == "" || name != tool.Name || names[name] || json.Unmarshal(tool.Parameters, &parameters) != nil {
+			if tool.Type != "function" || name == "" || name != tool.Name || names[name] || json.Unmarshal(tool.Parameters, &parameters) != nil || parameters == nil || !strings.HasPrefix(strings.TrimSpace(string(tool.Parameters)), "{") {
 				return nil, nil, InvalidRequest("invalid function tool", "tools")
 			}
 			names[name] = true

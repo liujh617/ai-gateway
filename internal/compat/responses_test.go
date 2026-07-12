@@ -105,6 +105,7 @@ func TestResponseRequestRejectsInvalidFunctionCorrelation(t *testing.T) {
 	bodies := []string{
 		`{"model":"m","input":"x","tools":[{"type":"web_search"}]}`,
 		`{"model":"m","input":"x","tools":[{"type":"function","name":"f","parameters":[]}]}`,
+		`{"model":"m","input":"x","tools":[{"type":"function","name":"f","parameters":null}]}`,
 		`{"model":"m","input":"x","tools":[{"type":"function","name":"f","parameters":{}}],"tool_choice":{"type":"function","name":"missing"}}`,
 		`{"model":"m","input":[{"type":"function_call_output","call_id":"call_1","output":"x"}]}`,
 		`{"model":"m","input":[{"type":"function_call","call_id":"call_1","name":"f","arguments":"not-json"}]}`,
