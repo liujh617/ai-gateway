@@ -394,6 +394,50 @@ func TestResponsesAuditUsesResponsesBodies(t *testing.T) {
 	}
 }
 
+func TestResponsesAuditRecordsPreviousResponseID(t *testing.T) {
+	recorder := &memoryAuditRecorder{}
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(&responseStateProvider{}, api.Options{Audit: recorder, ResponseStore: store})
+	first := doResponsesJSON(handler, `{"model":"test-model","input":"hello"}`, true)
+	var response compat.Response
+	if err := json.NewDecoder(first.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	second := doResponsesJSON(handler, `{"model":"test-model","input":"again","previous_response_id":"`+response.ID+`"}`, true)
+	if second.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", second.Code, second.Body.String())
+	}
+	events := recorder.Events()
+	found := false
+	for _, event := range events {
+		if event.Event == audit.EventRequest && event.PreviousResponseID == response.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("previous response id missing from audit: %#v", events)
+	}
+}
+
+func TestResponsesAccessLogDoesNotRecordPreviousResponseID(t *testing.T) {
+	var logs bytes.Buffer
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithLogger(&responseStateProvider{}, slog.New(slog.NewJSONHandler(&logs, nil)), api.Options{ResponseStore: store})
+	first := doResponsesJSON(handler, `{"model":"test-model","input":"hello"}`, true)
+	var response compat.Response
+	if err := json.NewDecoder(first.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	logs.Reset()
+	second := doResponsesJSON(handler, `{"model":"test-model","input":"again","previous_response_id":"`+response.ID+`"}`, true)
+	if second.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", second.Code, second.Body.String())
+	}
+	if !strings.Contains(logs.String(), `"previous_response":true`) || strings.Contains(logs.String(), response.ID) {
+		t.Fatalf("unsafe access log: %s", logs.String())
+	}
+}
+
 func TestResponsesMetricsUseResponsesPath(t *testing.T) {
 	handler := newTestHandler(fake.New())
 	rr := doResponsesJSON(handler, `{"model":"test-model","input":"hello"}`, true)

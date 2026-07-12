@@ -64,6 +64,7 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 	if opts.Metrics == nil {
 		opts.Metrics = middleware.NewMetrics()
 	}
+	opts.Metrics.SetResponseStore(opts.ResponseStore)
 	if opts.Audit == nil {
 		opts.Audit = audit.NoopRecorder{}
 	}

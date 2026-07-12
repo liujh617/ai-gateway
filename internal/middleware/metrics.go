@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"open-ai-gateway/internal/responsestore"
 	"open-ai-gateway/internal/routes"
 )
 
@@ -21,6 +22,16 @@ type Metrics struct {
 	circuitOpen         map[circuitOpenMetricKey]int64
 	fallbacks           map[fallbackMetricKey]int64
 	health              map[string]bool
+	responseStore       *responsestore.Store
+}
+
+func (m *Metrics) SetResponseStore(store *responsestore.Store) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.responseStore = store
+	m.mu.Unlock()
 }
 
 type metricsFieldsKey struct{}
@@ -344,6 +355,34 @@ func (m *Metrics) WritePrometheus(w http.ResponseWriter) {
 		fmt.Fprintf(w, "open_ai_gateway_provider_health_status{provider=%q,state=%q} %d\n", item.Provider, "healthy", healthyValue)
 		fmt.Fprintf(w, "open_ai_gateway_provider_health_status{provider=%q,state=%q} %d\n", item.Provider, "unhealthy", unhealthyValue)
 	}
+
+	storeSnapshot := m.responseStoreSnapshot()
+	fmt.Fprintln(w, "# HELP open_ai_gateway_response_store_entries Current stored response entries.")
+	fmt.Fprintln(w, "# TYPE open_ai_gateway_response_store_entries gauge")
+	fmt.Fprintf(w, "open_ai_gateway_response_store_entries %d\n", storeSnapshot.Entries)
+	fmt.Fprintln(w, "# HELP open_ai_gateway_response_store_bytes Current stored response transcript bytes.")
+	fmt.Fprintln(w, "# TYPE open_ai_gateway_response_store_bytes gauge")
+	fmt.Fprintf(w, "open_ai_gateway_response_store_bytes %d\n", storeSnapshot.Bytes)
+	fmt.Fprintln(w, "# HELP open_ai_gateway_response_store_evictions_total Total response store evictions.")
+	fmt.Fprintln(w, "# TYPE open_ai_gateway_response_store_evictions_total counter")
+	for _, reason := range []responsestore.EvictionReason{responsestore.EvictionExpired, responsestore.EvictionCapacity} {
+		fmt.Fprintf(w, "open_ai_gateway_response_store_evictions_total{reason=%q} %d\n", reason, storeSnapshot.Evictions[reason])
+	}
+	fmt.Fprintln(w, "# HELP open_ai_gateway_response_store_misses_total Total response store lookup misses.")
+	fmt.Fprintln(w, "# TYPE open_ai_gateway_response_store_misses_total counter")
+	for _, reason := range []responsestore.MissReason{responsestore.MissNotFound, responsestore.MissExpired, responsestore.MissClient, responsestore.MissModel} {
+		fmt.Fprintf(w, "open_ai_gateway_response_store_misses_total{reason=%q} %d\n", reason, storeSnapshot.Misses[reason])
+	}
+}
+
+func (m *Metrics) responseStoreSnapshot() responsestore.Stats {
+	m.mu.Lock()
+	store := m.responseStore
+	m.mu.Unlock()
+	if store == nil {
+		return responsestore.Stats{Evictions: map[responsestore.EvictionReason]uint64{}, Misses: map[responsestore.MissReason]uint64{}}
+	}
+	return store.Snapshot()
 }
 
 type metricSnapshotItem struct {

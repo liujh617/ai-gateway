@@ -12,13 +12,14 @@ import (
 type logFieldsKey struct{}
 
 type LogFields struct {
-	Client        string
-	ExternalModel string
-	Provider      string
-	UpstreamModel string
-	Stream        *bool
-	ErrorType     string
-	ErrorCode     string
+	Client           string
+	ExternalModel    string
+	Provider         string
+	UpstreamModel    string
+	Stream           *bool
+	ErrorType        string
+	ErrorCode        string
+	PreviousResponse *bool
 }
 
 func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
@@ -51,6 +52,9 @@ func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 			}
 			if fields.Stream != nil {
 				attrs = append(attrs, "stream", *fields.Stream)
+			}
+			if fields.PreviousResponse != nil {
+				attrs = append(attrs, "previous_response", *fields.PreviousResponse)
 			}
 			if fields.ErrorType != "" {
 				attrs = append(attrs, "error_type", fields.ErrorType)
@@ -87,6 +91,14 @@ func SetLogStream(ctx context.Context, stream bool) {
 		return
 	}
 	fields.Stream = &stream
+}
+
+func SetLogPreviousResponse(ctx context.Context, previous bool) {
+	fields := logFieldsFromContext(ctx)
+	if fields == nil {
+		return
+	}
+	fields.PreviousResponse = &previous
 }
 
 func SetLogError(ctx context.Context, typ string, code *string) {

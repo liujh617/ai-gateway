@@ -32,6 +32,7 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	middleware.SetLogStream(r.Context(), req.Stream)
+	middleware.SetLogPreviousResponse(r.Context(), req.PreviousResponseID != "")
 	chatReq, validationErr := req.ChatRequest()
 	if validationErr != nil {
 		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, validationErr)
@@ -67,6 +68,7 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 	}
 	externalModel := req.Model
 	requestEvent := s.auditBaseEvent(r, audit.EventRequest, routes.ResponsesPath, externalModel)
+	requestEvent.PreviousResponseID = req.PreviousResponseID
 	requestEvent.Body = rawBody(req)
 	s.audit.Record(r.Context(), requestEvent)
 	if req.Stream {

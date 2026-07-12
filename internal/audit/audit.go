@@ -25,19 +25,20 @@ const (
 )
 
 type Event struct {
-	Timestamp     time.Time       `json:"timestamp"`
-	Event         string          `json:"event"`
-	RequestID     string          `json:"request_id,omitempty"`
-	TraceID       string          `json:"trace_id,omitempty"`
-	Path          string          `json:"path,omitempty"`
-	Client        string          `json:"client,omitempty"`
-	ExternalModel string          `json:"external_model,omitempty"`
-	Provider      string          `json:"provider,omitempty"`
-	UpstreamModel string          `json:"upstream_model,omitempty"`
-	Status        int             `json:"status,omitempty"`
-	DurationMS    int64           `json:"duration_ms,omitempty"`
-	Body          json.RawMessage `json:"body,omitempty"`
-	Error         string          `json:"error,omitempty"`
+	Timestamp          time.Time       `json:"timestamp"`
+	Event              string          `json:"event"`
+	RequestID          string          `json:"request_id,omitempty"`
+	TraceID            string          `json:"trace_id,omitempty"`
+	Path               string          `json:"path,omitempty"`
+	Client             string          `json:"client,omitempty"`
+	ExternalModel      string          `json:"external_model,omitempty"`
+	PreviousResponseID string          `json:"previous_response_id,omitempty"`
+	Provider           string          `json:"provider,omitempty"`
+	UpstreamModel      string          `json:"upstream_model,omitempty"`
+	Status             int             `json:"status,omitempty"`
+	DurationMS         int64           `json:"duration_ms,omitempty"`
+	Body               json.RawMessage `json:"body,omitempty"`
+	Error              string          `json:"error,omitempty"`
 }
 
 type Recorder interface {
