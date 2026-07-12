@@ -9,15 +9,17 @@ import (
 )
 
 type ResponseRequest struct {
-	Model             string
-	Input             json.RawMessage
-	Instructions      string
-	Stream            bool
-	Store             *bool
-	Tools             json.RawMessage
-	ToolChoice        json.RawMessage
-	ParallelToolCalls *bool
-	Extra             map[string]json.RawMessage
+	Model                 string
+	Input                 json.RawMessage
+	Instructions          string
+	Stream                bool
+	Store                 *bool
+	Tools                 json.RawMessage
+	ToolChoice            json.RawMessage
+	ParallelToolCalls     *bool
+	PreviousResponseID    string
+	Extra                 map[string]json.RawMessage
+	previousResponseIDSet bool
 }
 
 func (r *ResponseRequest) UnmarshalJSON(data []byte) error {
@@ -54,6 +56,15 @@ func (r *ResponseRequest) UnmarshalJSON(data []byte) error {
 		}
 		r.Store = &store
 		delete(fields, "store")
+	}
+	if raw, ok := fields["previous_response_id"]; ok {
+		r.previousResponseIDSet = true
+		if string(raw) != "null" {
+			if err := json.Unmarshal(raw, &r.PreviousResponseID); err != nil {
+				return err
+			}
+		}
+		delete(fields, "previous_response_id")
 	}
 	if raw, ok := fields["tools"]; ok {
 		r.Tools = cloneRawMessage(raw)
@@ -94,6 +105,10 @@ func (r ResponseRequest) MarshalJSON() ([]byte, error) {
 		store, _ := json.Marshal(*r.Store)
 		fields["store"] = store
 	}
+	if r.previousResponseIDSet || r.PreviousResponseID != "" {
+		previousResponseID, _ := json.Marshal(r.PreviousResponseID)
+		fields["previous_response_id"] = previousResponseID
+	}
 	if len(r.Tools) > 0 {
 		fields["tools"] = cloneRawMessage(r.Tools)
 	}
@@ -122,8 +137,8 @@ func (r ResponseRequest) Validate() *Error {
 	if strings.TrimSpace(r.Model) == "" {
 		return InvalidRequest("missing required field: model", "model")
 	}
-	if r.Store != nil && *r.Store {
-		return InvalidRequest("unsupported field: store", "store")
+	if r.previousResponseIDSet && strings.TrimSpace(r.PreviousResponseID) == "" {
+		return InvalidRequest("previous_response_id must be a non-empty string", "previous_response_id")
 	}
 	if len(r.Input) == 0 || string(r.Input) == "null" {
 		return InvalidRequest("missing required field: input", "input")
@@ -177,7 +192,7 @@ func (r ResponseRequest) ChatRequest() (ChatCompletionRequest, *Error) {
 		}
 		if header.Type == "function_call_output" {
 			var item responseFunctionCallOutputInput
-			if json.Unmarshal(raw, &item) != nil || !seenCalls[item.CallID] || seenOutputs[item.CallID] || item.Output == nil {
+			if json.Unmarshal(raw, &item) != nil || (!seenCalls[item.CallID] && r.PreviousResponseID == "") || seenOutputs[item.CallID] || item.Output == nil {
 				return ChatCompletionRequest{}, InvalidRequest(fmt.Sprintf("invalid function_call_output at input index %d", i), "input")
 			}
 			seenOutputs[item.CallID] = true

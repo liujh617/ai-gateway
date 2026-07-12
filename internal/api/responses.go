@@ -16,6 +16,7 @@ import (
 	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
+	"open-ai-gateway/internal/responsestore"
 	"open-ai-gateway/internal/router"
 	"open-ai-gateway/internal/routes"
 )
@@ -34,6 +35,23 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 	chatReq, validationErr := req.ChatRequest()
 	if validationErr != nil {
 		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, validationErr)
+		return
+	}
+	history, stateErr := s.responseHistory(r, req.PreviousResponseID, req.Model)
+	if stateErr != nil {
+		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, stateErr)
+		return
+	}
+	currentMessages := chatReq.Messages
+	if req.Instructions != "" {
+		currentMessages = currentMessages[1:]
+		chatReq.Messages = append([]compat.ChatMessage{chatReq.Messages[0]}, history...)
+		chatReq.Messages = append(chatReq.Messages, currentMessages...)
+	} else {
+		chatReq.Messages = append(append([]compat.ChatMessage(nil), history...), currentMessages...)
+	}
+	if !validResponseToolOutputs(history, currentMessages) {
+		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, compat.InvalidRequest("function_call_output references an unknown call", "input"))
 		return
 	}
 	if !s.modelAllowedForRequest(r, req.Model) {
@@ -67,6 +85,24 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 		s.writeAuditedError(w, r, routes.ResponsesPath, externalModel, conversionErr)
 		return
 	}
+	response.PreviousResponseID = nil
+	if req.PreviousResponseID != "" {
+		response.PreviousResponseID = req.PreviousResponseID
+	}
+	shouldStore := req.Store == nil || *req.Store
+	if shouldStore && s.responseStore != nil && s.responseStore.Enabled() {
+		transcript := append(append(append([]compat.ChatMessage(nil), history...), currentMessages...), chatResp.Choices[0].Message)
+		err := s.responseStore.Put(responsestore.Record{ID: response.ID, Client: clientFromContext(r.Context()), Model: externalModel, Transcript: transcript})
+		if err != nil {
+			if errors.Is(err, responsestore.ErrContextTooLarge) {
+				s.writeAuditedError(w, r, routes.ResponsesPath, externalModel, compat.InvalidRequest("response context is too large", "previous_response_id"))
+				return
+			}
+			s.writeAuditedError(w, r, routes.ResponsesPath, externalModel, compat.ServerError(http.StatusInternalServerError, "failed to store response state"))
+			return
+		}
+		response.Store = true
+	}
 	responseEvent := s.auditBaseEvent(r, audit.EventResponse, routes.ResponsesPath, externalModel)
 	responseEvent.Provider = providerName
 	responseEvent.UpstreamModel = upstreamModel
@@ -75,6 +111,48 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 	s.audit.Record(r.Context(), responseEvent)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(response)
+}
+
+func validResponseToolOutputs(history, current []compat.ChatMessage) bool {
+	known := make(map[string]bool)
+	for _, message := range append(append([]compat.ChatMessage(nil), history...), current...) {
+		if raw := message.Extra["tool_calls"]; len(raw) > 0 {
+			var calls []struct {
+				ID string `json:"id"`
+			}
+			if json.Unmarshal(raw, &calls) != nil {
+				return false
+			}
+			for _, call := range calls {
+				known[call.ID] = true
+			}
+		}
+		if raw := message.Extra["tool_call_id"]; len(raw) > 0 {
+			var callID string
+			if json.Unmarshal(raw, &callID) != nil || !known[callID] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (s *Server) responseHistory(r *http.Request, previousResponseID, model string) ([]compat.ChatMessage, *compat.Error) {
+	if previousResponseID == "" {
+		return nil, nil
+	}
+	if s.responseStore == nil || !s.responseStore.Enabled() {
+		return nil, compat.InvalidRequest("response store is disabled", "previous_response_id")
+	}
+	record, reason, ok := s.responseStore.Get(previousResponseID, clientFromContext(r.Context()), model)
+	if ok {
+		return record.Transcript, nil
+	}
+	if reason == responsestore.MissModel {
+		return nil, compat.InvalidRequest("previous response model does not match request model", "previous_response_id")
+	}
+	param := "previous_response_id"
+	return nil, compat.NewError(http.StatusNotFound, "invalid_request_error", "previous response not found", &param)
 }
 
 func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route router.ModelRoute, externalModel string, req compat.ChatCompletionRequest) {

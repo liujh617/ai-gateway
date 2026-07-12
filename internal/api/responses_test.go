@@ -5,17 +5,23 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"open-ai-gateway/internal/api"
 	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
+	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/provider"
 	"open-ai-gateway/internal/provider/fake"
+	"open-ai-gateway/internal/responsestore"
+	"open-ai-gateway/internal/router"
 )
 
 func TestResponsesNonStreamOK(t *testing.T) {
@@ -30,6 +36,223 @@ func TestResponsesNonStreamOK(t *testing.T) {
 	if got.Object != "response" || got.Model != "test-model" || len(got.Output) != 1 || got.Output[0].Content[0].Text != "Hello from open-ai-gateway." {
 		t.Fatalf("unexpected response: %#v", got)
 	}
+}
+
+func TestResponsesNonStreamContinuesStoredResponse(t *testing.T) {
+	p := &responseStateProvider{}
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(p, api.Options{ResponseStore: store})
+	first := doResponsesJSON(handler, `{"model":"test-model","input":"hello"}`, true)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status=%d body=%s", first.Code, first.Body.String())
+	}
+	var firstResponse compat.Response
+	if err := json.NewDecoder(first.Body).Decode(&firstResponse); err != nil {
+		t.Fatal(err)
+	}
+	if !firstResponse.Store {
+		t.Fatalf("response should report stored: %#v", firstResponse)
+	}
+
+	second := doResponsesJSON(handler, `{"model":"test-model","input":"again","previous_response_id":"`+firstResponse.ID+`"}`, true)
+	if second.Code != http.StatusOK {
+		t.Fatalf("second status=%d body=%s", second.Code, second.Body.String())
+	}
+	if len(p.requests) != 2 {
+		t.Fatalf("requests=%d", len(p.requests))
+	}
+	messages := p.requests[1].Messages
+	if len(messages) != 3 || messageText(messages[0]) != "hello" || messageText(messages[1]) != "answer-1" || messageText(messages[2]) != "again" {
+		t.Fatalf("continuation messages=%#v", messages)
+	}
+}
+
+func TestResponsesStoreFalseDoesNotCreatePreviousResponse(t *testing.T) {
+	p := &responseStateProvider{}
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(p, api.Options{ResponseStore: store})
+	first := doResponsesJSON(handler, `{"model":"test-model","input":"hello","store":false}`, true)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status=%d body=%s", first.Code, first.Body.String())
+	}
+	var response compat.Response
+	if err := json.NewDecoder(first.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Store {
+		t.Fatal("response unexpectedly stored")
+	}
+	second := doResponsesJSON(handler, `{"model":"test-model","input":"again","previous_response_id":"`+response.ID+`"}`, true)
+	if second.Code != http.StatusNotFound {
+		t.Fatalf("status=%d body=%s", second.Code, second.Body.String())
+	}
+	var errorResponse compat.ErrorResponse
+	if err := json.NewDecoder(second.Body).Decode(&errorResponse); err != nil {
+		t.Fatal(err)
+	}
+	if errorResponse.Error.Type != "invalid_request_error" || errorResponse.Error.Param == nil || *errorResponse.Error.Param != "previous_response_id" {
+		t.Fatalf("error=%#v", errorResponse)
+	}
+}
+
+func TestResponsesStoreFalseCanReadPreviousWithoutInheritingInstructions(t *testing.T) {
+	p := &responseStateProvider{}
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(p, api.Options{ResponseStore: store})
+	first := doResponsesJSON(handler, `{"model":"test-model","instructions":"first-turn-only","input":"hello"}`, true)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status=%d body=%s", first.Code, first.Body.String())
+	}
+	var firstResponse compat.Response
+	if err := json.NewDecoder(first.Body).Decode(&firstResponse); err != nil {
+		t.Fatal(err)
+	}
+
+	second := doResponsesJSON(handler, `{"model":"test-model","input":"again","store":false,"previous_response_id":"`+firstResponse.ID+`"}`, true)
+	if second.Code != http.StatusOK {
+		t.Fatalf("second status=%d body=%s", second.Code, second.Body.String())
+	}
+	var secondResponse compat.Response
+	if err := json.NewDecoder(second.Body).Decode(&secondResponse); err != nil {
+		t.Fatal(err)
+	}
+	if secondResponse.Store {
+		t.Fatal("store:false response unexpectedly stored")
+	}
+	for _, message := range p.requests[1].Messages {
+		if message.Role == "developer" && messageText(message) == "first-turn-only" {
+			t.Fatalf("instructions inherited: %#v", p.requests[1].Messages)
+		}
+	}
+	third := doResponsesJSON(handler, `{"model":"test-model","input":"third","previous_response_id":"`+secondResponse.ID+`"}`, true)
+	if third.Code != http.StatusNotFound {
+		t.Fatalf("third status=%d body=%s", third.Code, third.Body.String())
+	}
+}
+
+func TestResponsesPreviousResponseIsClientAndModelIsolated(t *testing.T) {
+	p := &responseStateProvider{}
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newResponseStateIsolationHandler(p, store)
+	first := doResponsesJSONWithKey(handler, `{"model":"test-model","input":"hello"}`, "alpha-secret")
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status=%d body=%s", first.Code, first.Body.String())
+	}
+	var response compat.Response
+	if err := json.NewDecoder(first.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+
+	otherClient := doResponsesJSONWithKey(handler, `{"model":"test-model","input":"again","previous_response_id":"`+response.ID+`"}`, "beta-secret")
+	if otherClient.Code != http.StatusNotFound {
+		t.Fatalf("client status=%d body=%s", otherClient.Code, otherClient.Body.String())
+	}
+	otherModel := doResponsesJSONWithKey(handler, `{"model":"other-model","input":"again","previous_response_id":"`+response.ID+`"}`, "alpha-secret")
+	if otherModel.Code != http.StatusBadRequest || !strings.Contains(otherModel.Body.String(), `"param":"previous_response_id"`) {
+		t.Fatalf("model status=%d body=%s", otherModel.Code, otherModel.Body.String())
+	}
+}
+
+func TestResponsesContinuesFunctionCallOutputFromPreviousResponse(t *testing.T) {
+	p := &responseFunctionStateProvider{}
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(p, api.Options{ResponseStore: store})
+	first := doResponsesJSON(handler, `{"model":"test-model","input":"weather","tools":[{"type":"function","name":"get_weather","parameters":{"type":"object"}}]}`, true)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status=%d body=%s", first.Code, first.Body.String())
+	}
+	var firstResponse compat.Response
+	if err := json.NewDecoder(first.Body).Decode(&firstResponse); err != nil {
+		t.Fatal(err)
+	}
+	second := doResponsesJSON(handler, `{"model":"test-model","previous_response_id":"`+firstResponse.ID+`","input":[{"type":"function_call_output","call_id":"call_1","output":"sunny"}]}`, true)
+	if second.Code != http.StatusOK {
+		t.Fatalf("second status=%d body=%s", second.Code, second.Body.String())
+	}
+	if len(p.requests) != 2 || len(p.requests[1].Messages) != 3 || p.requests[1].Messages[1].Extra["tool_calls"] == nil || p.requests[1].Messages[2].Role != "tool" {
+		t.Fatalf("requests=%#v", p.requests)
+	}
+}
+
+func TestResponsesRejectsPreviousResponseWhenStoreDisabled(t *testing.T) {
+	rr := doResponsesJSON(newTestHandler(fake.New()), `{"model":"test-model","input":"next","previous_response_id":"resp_missing"}`, true)
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "response store is disabled") {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestResponsesRejectsTranscriptOverStoreLimit(t *testing.T) {
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 2, MaxTotalBytes: 100}, nil)
+	rr := doResponsesJSON(newTestHandlerWithOptions(&responseStateProvider{}, api.Options{ResponseStore: store}), `{"model":"test-model","input":"hello"}`, true)
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), `"param":"previous_response_id"`) {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+type responseFunctionStateProvider struct {
+	requests []compat.ChatCompletionRequest
+}
+
+func (p *responseFunctionStateProvider) ListModels(context.Context) ([]compat.Model, error) {
+	return nil, nil
+}
+func (p *responseFunctionStateProvider) CreateChatCompletion(_ context.Context, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	p.requests = append(p.requests, req)
+	message := compat.ChatMessage{Role: "assistant", Content: json.RawMessage(`"done"`)}
+	if len(p.requests) == 1 {
+		message.Content = json.RawMessage("null")
+		message.Extra = map[string]json.RawMessage{"tool_calls": json.RawMessage(`[{"id":"call_1","type":"function","function":{"name":"get_weather","arguments":"{}"}}]`)}
+	}
+	return &compat.ChatCompletionResponse{Choices: []compat.ChatCompletionChoice{{Index: 0, Message: message, FinishReason: "stop"}}}, nil
+}
+func (p *responseFunctionStateProvider) StreamChatCompletion(context.Context, compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
+	return nil, errors.New("unused")
+}
+func (p *responseFunctionStateProvider) CreateEmbedding(context.Context, compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("unused")
+}
+
+func newResponseStateIsolationHandler(p provider.Provider, store *responsestore.Store) http.Handler {
+	modelRouter := router.NewModelRouter([]router.ModelRoute{
+		{ExternalModel: "test-model", UpstreamModel: "upstream-test-model", ProviderName: "fake-provider", Provider: p},
+		{ExternalModel: "other-model", UpstreamModel: "upstream-other-model", ProviderName: "fake-provider", Provider: p},
+	})
+	return api.NewServer(modelRouter, "", slog.New(slog.NewTextHandler(io.Discard, nil)), api.Options{
+		ResponseStore: store,
+		Credentials:   []middleware.AuthCredential{{Client: "alpha", APIKey: "alpha-secret"}, {Client: "beta", APIKey: "beta-secret"}},
+	}).Handler()
+}
+
+func doResponsesJSONWithKey(handler http.Handler, body, key string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+key)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	return rr
+}
+
+type responseStateProvider struct {
+	requests []compat.ChatCompletionRequest
+}
+
+func (p *responseStateProvider) ListModels(context.Context) ([]compat.Model, error) { return nil, nil }
+func (p *responseStateProvider) CreateChatCompletion(_ context.Context, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	p.requests = append(p.requests, req)
+	content, _ := json.Marshal(fmt.Sprintf("answer-%d", len(p.requests)))
+	return &compat.ChatCompletionResponse{Choices: []compat.ChatCompletionChoice{{Index: 0, Message: compat.ChatMessage{Role: "assistant", Content: content}, FinishReason: "stop"}}}, nil
+}
+func (p *responseStateProvider) StreamChatCompletion(context.Context, compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
+	return nil, errors.New("unused")
+}
+func (p *responseStateProvider) CreateEmbedding(context.Context, compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("unused")
+}
+
+func messageText(message compat.ChatMessage) string {
+	var text string
+	_ = json.Unmarshal(message.Content, &text)
+	return text
 }
 
 func TestResponsesRejectsUnsupportedField(t *testing.T) {

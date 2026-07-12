@@ -44,8 +44,6 @@ func TestResponseRequestMessagePartsToChat(t *testing.T) {
 
 func TestResponseRequestRejectsUnsupportedFields(t *testing.T) {
 	for _, body := range []string{
-		`{"model":"m","input":"x","previous_response_id":"resp_1"}`,
-		`{"model":"m","input":"x","store":true}`,
 		`{"model":"m","input":[{"role":"user","content":[{"type":"input_image","image_url":"x"}]}]}`,
 	} {
 		var req ResponseRequest
@@ -174,6 +172,32 @@ func TestNewResponseEnvelopeRejectsInvalidFunctionCalls(t *testing.T) {
 		chat := &ChatCompletionResponse{Choices: []ChatCompletionChoice{{Index: 0, Message: ChatMessage{Role: "assistant", Content: json.RawMessage("null"), Extra: map[string]json.RawMessage{"tool_calls": json.RawMessage(calls)}}}}}
 		if _, compatErr := NewResponseEnvelope("m", chat, time.Time{}, "resp", "msg"); compatErr == nil {
 			t.Fatalf("calls=%s", calls)
+		}
+	}
+}
+
+func TestResponseRequestAcceptsConversationStateFields(t *testing.T) {
+	var request ResponseRequest
+	if err := json.Unmarshal([]byte(`{"model":"gpt","input":"next","previous_response_id":"resp_1","store":true}`), &request); err != nil {
+		t.Fatal(err)
+	}
+	if request.PreviousResponseID != "resp_1" || request.Store == nil || !*request.Store {
+		t.Fatalf("unexpected request: %#v", request)
+	}
+	if err := request.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+}
+
+func TestResponseRequestRejectsInvalidPreviousResponseID(t *testing.T) {
+	for _, value := range []string{`null`, `""`, `"  "`} {
+		var request ResponseRequest
+		if err := json.Unmarshal([]byte(`{"model":"gpt","input":"next","previous_response_id":`+value+`}`), &request); err != nil {
+			t.Fatalf("value %s: %v", value, err)
+		}
+		validation := request.Validate()
+		if validation == nil || validation.Param == nil || *validation.Param != "previous_response_id" {
+			t.Fatalf("value %s validation=%#v", value, validation)
 		}
 	}
 }

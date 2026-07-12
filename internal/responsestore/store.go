@@ -97,6 +97,10 @@ func New(config Config, clock Clock) *Store {
 	}
 }
 
+func (s *Store) Enabled() bool {
+	return s != nil && s.config.enabled()
+}
+
 func (s *Store) Put(record Record) error {
 	if s == nil || !s.config.enabled() {
 		return ErrDisabled
