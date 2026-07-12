@@ -69,6 +69,14 @@ schema/config.schema.json
 make smoke
 ```
 
+Responses API 文本兼容 smoke：
+
+```bash
+make smoke-responses
+```
+
+该命令验证非流式 response envelope、typed SSE 事件和不发送 `[DONE]` 的契约，不需要真实凭据或外部网络。
+
 限流 smoke test：
 
 ```bash
