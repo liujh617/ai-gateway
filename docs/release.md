@@ -31,6 +31,7 @@ make release-check VERSION=0.1.2
 - `make check-config-examples`
 - `make build VERSION=<version>`
 - `make smoke`
+- `make smoke-responses-state`，离线验证文本和 function `previous_response_id` continuation
 - `make smoke-rate-limit`
 - `make smoke-azure`
 - `make smoke-deepseek-skip`

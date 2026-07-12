@@ -119,6 +119,7 @@ wsl.exe -d Ubuntu-24.04 --cd /mnt/e/code/open-ai-gateway -- bash -lc "OPENAI_API
 - `rate_limit.requests_per_minute`: 按 gateway client 的简单内存限流，`0` 表示关闭；`api_clients[].rate_limit.requests_per_minute` 可覆盖单个 client，显式 `0` 表示该 client 关闭限流。超限返回 `429 rate_limit_error`，并包含按当前窗口剩余秒数设置的 `Retry-After`。
 - `provider_health.failure_threshold`: provider 连续可 fallback 错误达到该次数后短暂熔断，默认 `2`。
 - `provider_health.cooldown_seconds`: provider 熔断后的冷却时间，默认 `30`。
+- `response_store`: `/v1/responses` 会话状态的进程内存储；默认 TTL 3600 秒、1000 条、单条 4 MiB、总计 64 MiB，任一限制为 `0` 时整体禁用。
 - `models.<external>.pricing.prompt_usd_per_1m_tokens`: 可选 prompt token 单价，用于成本指标，单位 USD / 1M tokens。
 - `models.<external>.pricing.completion_usd_per_1m_tokens`: 可选 completion token 单价，用于成本指标，单位 USD / 1M tokens。
 - `models.<external>.fallbacks[].pricing`: fallback provider 可配置独立单价。
@@ -151,14 +152,15 @@ curl -sS http://127.0.0.1:8080/healthz
 
 - `GET /v1/models`
 - `POST /v1/chat/completions`
-- `POST /v1/responses`（无状态纯文本子集）
+- `POST /v1/responses`（文本、function tools 和进程内 `previous_response_id` 续接子集）
 - `POST /v1/embeddings`
 - chat completions streaming
 - Responses typed SSE 文本 streaming
-- Responses function tools、并行 function calls 和无状态 function output 回传
+- Responses function tools、并行 function calls，以及有状态或无状态 function output 回传
+- 有 TTL 和容量上限的单进程 Responses store；重启后状态丢失
 - 单模型主 provider 配置和可选 fallback provider
 - Bearer token 鉴权
-- 基础日志、request id、HTTP metrics、provider-reported token metrics（含带 `usage` 的流式响应）、可选 token cost metrics、rate limit rejection metrics、provider circuit open metrics、provider fallback metrics、provider health metrics、provider circuit breaker、超时和错误响应
+- 基础日志、request id、HTTP metrics、provider-reported token metrics（含带 `usage` 的流式响应）、可选 token cost metrics、rate limit rejection metrics、provider circuit open metrics、provider fallback metrics、provider health metrics、response store metrics、provider circuit breaker、超时和错误响应
 
 不在第一阶段实现：
 

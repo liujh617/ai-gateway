@@ -97,6 +97,10 @@ Metrics endpoint:
 - `open_ai_gateway_provider_circuit_open_total`
 - `open_ai_gateway_provider_fallbacks_total`
 - `open_ai_gateway_provider_health_status`
+- `open_ai_gateway_response_store_entries`
+- `open_ai_gateway_response_store_bytes`
+- `open_ai_gateway_response_store_evictions_total`
+- `open_ai_gateway_response_store_misses_total`
 - Metrics `path` labels keep known routes and collapse unknown routes to `/__unknown__`.
 - HTTP metrics include the non-secret gateway client label when available.
 - Token metrics use provider-reported `usage` only and are labeled by path, external model, provider, token type, and gateway client. Streaming chat completions record token metrics only when an upstream SSE chunk includes `usage`.
@@ -105,6 +109,7 @@ Metrics endpoint:
 - Provider circuit open metrics count provider attempts skipped by the in-memory circuit breaker and are labeled by path, external model, provider, and gateway client.
 - Provider fallback metrics are labeled by path, external model, source provider, target provider, and gateway client.
 - Provider health metrics expose each provider's in-memory circuit breaker state.
+- Response store metrics expose aggregate entries/bytes and fixed `expired|capacity` eviction or `not_found|expired|client|model` miss reasons; they never label response IDs or client identities.
 
 Runtime probes:
 
@@ -126,6 +131,8 @@ Compat Mapper 是外部 API 契约的主要守门员。
 Responses API 首期由 Compat Mapper 转换为现有 `ChatCompletionRequest`，复用相同的 `chat` 模型路由、fallback、circuit breaker、provider timeout、usage 和 cost metrics。非流式 chat response 被转换为 Responses output Item，流式 chat chunk 被转换为 Responses typed SSE 生命周期事件。provider 接口和 adapter 不感知 Responses 外部格式；不可以无损表达的状态、工具和多模态能力在转换前返回稳定的 400 错误。
 
 Function tools 也由 Compat Mapper 双向转换：Responses function definition 和 Items 映射为 chat `tools`、assistant `tool_calls` 与 tool messages；chat tool calls 和 indexed stream deltas 映射回 Responses function Items/events。每个流式调用按 chat index 独立累计 arguments，provider adapter 仍只处理 Chat Completions wire format。
+
+`internal/responsestore` 为 Responses continuation 提供独立的进程内状态边界。API 层按 gateway client 和外部模型读取 `previous_response_id`，把历史 transcript 与本轮 input 合并后交给既有 Compat Mapper；仅在完整成功后保存新快照。store 使用绝对 TTL、LRU、条目数和 JSON 字节上限，返回深拷贝且不启动后台 goroutine。provider adapter 和 router 保持无状态，store 也不参与 readiness。
 
 ### Model Router
 
@@ -185,6 +192,7 @@ Provider Adapter 不应直接依赖 HTTP handler。
 - 加载模型和 fallback 的可选 token pricing。
 - 加载超时配置。
 - 加载 provider health / circuit breaker 配置。
+- 加载 Responses 进程内 store 的 TTL、条目和字节上限。
 - 加载本地 agent audit JSONL 配置，默认关闭。
 - 通过共享的 upstream URL 校验逻辑，校验 OpenAI-compatible provider `base_url` 只使用 `http` 或 `https`，且不包含 query 或 fragment。
 

@@ -81,6 +81,12 @@ Function tools 两轮闭环：
 make smoke-responses-tools
 ```
 
+Responses `previous_response_id` 文本与 function continuation：
+
+```bash
+make smoke-responses-state
+```
+
 该命令验证非流式 response envelope、typed SSE 事件和不发送 `[DONE]` 的契约，不需要真实凭据或外部网络。
 
 若本地已安装官方 OpenAI Python SDK，可在网关运行时验证 SDK 反序列化；该步骤不属于离线 `make verify`：
