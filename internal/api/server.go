@@ -10,6 +10,7 @@ import (
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/requestctx"
+	"open-ai-gateway/internal/responsestore"
 	"open-ai-gateway/internal/router"
 	"open-ai-gateway/internal/routes"
 	"open-ai-gateway/internal/version"
@@ -27,6 +28,7 @@ type Server struct {
 	clientModels   map[string]map[string]bool
 	maxBodyBytes   int64
 	audit          audit.Recorder
+	responseStore  *responsestore.Store
 }
 
 type Options struct {
@@ -39,6 +41,7 @@ type Options struct {
 	ClientModels          map[string][]string
 	MaxBodyBytes          int64
 	Audit                 audit.Recorder
+	ResponseStore         *responsestore.Store
 }
 
 func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logger, options ...Options) *Server {
@@ -91,6 +94,7 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 		clientModels:   copyClientModels(opts.ClientModels),
 		maxBodyBytes:   opts.MaxBodyBytes,
 		audit:          opts.Audit,
+		responseStore:  opts.ResponseStore,
 	}
 }
 

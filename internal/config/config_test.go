@@ -48,6 +48,68 @@ func TestLoadDefaultConfig(t *testing.T) {
 	if cfg.Audit.MaxFileBytes != 0 {
 		t.Fatalf("audit max file bytes = %d", cfg.Audit.MaxFileBytes)
 	}
+	if cfg.ResponseStore == nil || !cfg.ResponseStore.Enabled() {
+		t.Fatalf("response store should be enabled: %#v", cfg.ResponseStore)
+	}
+	if *cfg.ResponseStore != (config.ResponseStoreConfig{TTLSeconds: 3600, MaxEntries: 1000, MaxContextBytes: 4194304, MaxTotalBytes: 67108864}) {
+		t.Fatalf("response store defaults = %#v", cfg.ResponseStore)
+	}
+}
+
+func TestLoadResponseStoreExplicitZeroDisables(t *testing.T) {
+	fields := []string{"ttl_seconds", "max_entries", "max_context_bytes", "max_total_bytes"}
+	for _, field := range fields {
+		t.Run(field, func(t *testing.T) {
+			path := writeConfigWithResponseStore(t, map[string]int64{
+				"ttl_seconds": 3600, "max_entries": 1000,
+				"max_context_bytes": 4194304, "max_total_bytes": 67108864,
+				field: 0,
+			})
+			cfg, report, err := config.Check(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.ResponseStore.Enabled() || report.ResponseStore.Enabled {
+				t.Fatalf("store should be disabled: %#v %#v", cfg.ResponseStore, report.ResponseStore)
+			}
+			if len(report.Warnings) == 0 || !strings.Contains(strings.Join(report.Warnings, " "), "response_store") {
+				t.Fatalf("missing warning: %#v", report.Warnings)
+			}
+		})
+	}
+}
+
+func TestLoadResponseStoreRejectsNegativeLimits(t *testing.T) {
+	fields := []string{"ttl_seconds", "max_entries", "max_context_bytes", "max_total_bytes"}
+	for _, field := range fields {
+		t.Run(field, func(t *testing.T) {
+			values := map[string]int64{"ttl_seconds": 3600, "max_entries": 1000, "max_context_bytes": 4194304, "max_total_bytes": 67108864}
+			values[field] = -1
+			_, err := config.Load(writeConfigWithResponseStore(t, values))
+			if err == nil || !strings.Contains(err.Error(), "response_store."+field+" must be non-negative") {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
+func writeConfigWithResponseStore(t *testing.T, values map[string]int64) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.json")
+	payload := map[string]any{
+		"api_key":        "test-key",
+		"providers":      map[string]any{"fake": map[string]any{"type": "fake"}},
+		"models":         map[string]any{"test-model": map[string]any{"provider": "fake"}},
+		"response_store": values,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func TestValidateAcceptsAzureOpenAIProvider(t *testing.T) {

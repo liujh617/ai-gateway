@@ -31,6 +31,7 @@ type Config struct {
 	Audit                    AuditConfig               `json:"audit"`
 	RateLimit                RateLimitConfig           `json:"rate_limit"`
 	ProviderHealth           ProviderHealthConfig      `json:"provider_health"`
+	ResponseStore            *ResponseStoreConfig      `json:"response_store,omitempty"`
 	Providers                map[string]ProviderConfig `json:"providers"`
 	Models                   map[string]ModelConfig    `json:"models"`
 
@@ -86,6 +87,17 @@ type ProviderHealthConfig struct {
 	CooldownSeconds  int `json:"cooldown_seconds"`
 }
 
+type ResponseStoreConfig struct {
+	TTLSeconds      int   `json:"ttl_seconds"`
+	MaxEntries      int   `json:"max_entries"`
+	MaxContextBytes int64 `json:"max_context_bytes"`
+	MaxTotalBytes   int64 `json:"max_total_bytes"`
+}
+
+func (c *ResponseStoreConfig) Enabled() bool {
+	return c != nil && c.TTLSeconds > 0 && c.MaxEntries > 0 && c.MaxContextBytes > 0 && c.MaxTotalBytes > 0
+}
+
 type LogConfig struct {
 	Format string `json:"format"`
 	Level  string `json:"level"`
@@ -117,11 +129,20 @@ type CheckReport struct {
 	RateLimitRequestsPerMinute     int                    `json:"rate_limit_requests_per_minute"`
 	ProviderHealthFailureThreshold int                    `json:"provider_health_failure_threshold"`
 	ProviderHealthCooldownSeconds  int                    `json:"provider_health_cooldown_seconds"`
+	ResponseStore                  ResponseStoreSummary   `json:"response_store"`
 	ProviderCount                  int                    `json:"provider_count"`
 	ModelCount                     int                    `json:"model_count"`
 	Providers                      []ProviderSummary      `json:"providers"`
 	Models                         []ModelSummary         `json:"models"`
 	Warnings                       []string               `json:"warnings"`
+}
+
+type ResponseStoreSummary struct {
+	Enabled         bool  `json:"enabled"`
+	TTLSeconds      int   `json:"ttl_seconds"`
+	MaxEntries      int   `json:"max_entries"`
+	MaxContextBytes int64 `json:"max_context_bytes"`
+	MaxTotalBytes   int64 `json:"max_total_bytes"`
 }
 
 type GatewayClientSummary struct {
@@ -220,8 +241,18 @@ func (c *Config) CheckReport() CheckReport {
 		RateLimitRequestsPerMinute:     c.RateLimit.RequestsPerMinute,
 		ProviderHealthFailureThreshold: c.ProviderHealth.FailureThreshold,
 		ProviderHealthCooldownSeconds:  c.ProviderHealth.CooldownSeconds,
-		ProviderCount:                  len(c.Providers),
-		ModelCount:                     len(c.Models),
+		ResponseStore: ResponseStoreSummary{
+			Enabled:         c.ResponseStore.Enabled(),
+			TTLSeconds:      c.ResponseStore.TTLSeconds,
+			MaxEntries:      c.ResponseStore.MaxEntries,
+			MaxContextBytes: c.ResponseStore.MaxContextBytes,
+			MaxTotalBytes:   c.ResponseStore.MaxTotalBytes,
+		},
+		ProviderCount: len(c.Providers),
+		ModelCount:    len(c.Models),
+	}
+	if !c.ResponseStore.Enabled() {
+		report.Warnings = append(report.Warnings, "response_store is disabled because at least one limit is zero")
 	}
 
 	for _, client := range c.GatewayAPIClients() {
@@ -379,6 +410,21 @@ func (c *Config) Validate() error {
 	if c.ShutdownTimeoutSeconds < 0 {
 		return fmt.Errorf("shutdown_timeout_seconds must be non-negative")
 	}
+	if c.ResponseStore == nil {
+		return fmt.Errorf("response_store is required after defaults are applied")
+	}
+	if c.ResponseStore.TTLSeconds < 0 {
+		return fmt.Errorf("response_store.ttl_seconds must be non-negative")
+	}
+	if c.ResponseStore.MaxEntries < 0 {
+		return fmt.Errorf("response_store.max_entries must be non-negative")
+	}
+	if c.ResponseStore.MaxContextBytes < 0 {
+		return fmt.Errorf("response_store.max_context_bytes must be non-negative")
+	}
+	if c.ResponseStore.MaxTotalBytes < 0 {
+		return fmt.Errorf("response_store.max_total_bytes must be non-negative")
+	}
 	if c.MaxRequestBodyBytes < 0 {
 		return fmt.Errorf("max_request_body_bytes must be non-negative")
 	}
@@ -530,6 +576,14 @@ func (c *Config) ModelNames() []string {
 }
 
 func (c *Config) applyDefaults() {
+	if c.ResponseStore == nil {
+		c.ResponseStore = &ResponseStoreConfig{
+			TTLSeconds:      3600,
+			MaxEntries:      1000,
+			MaxContextBytes: 4194304,
+			MaxTotalBytes:   67108864,
+		}
+	}
 	if c.Addr == "" {
 		c.Addr = "127.0.0.1:8080"
 	}

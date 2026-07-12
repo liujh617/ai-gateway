@@ -13,6 +13,12 @@
     "format": "json",
     "level": "info"
   },
+  "response_store": {
+    "ttl_seconds": 3600,
+    "max_entries": 1000,
+    "max_context_bytes": 4194304,
+    "max_total_bytes": 67108864
+  },
   "providers": {
     "azure": {
       "type": "azure-openai",

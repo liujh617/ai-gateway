@@ -23,6 +23,7 @@ import (
 	"open-ai-gateway/internal/provider/azureopenai"
 	"open-ai-gateway/internal/provider/fake"
 	"open-ai-gateway/internal/provider/openai"
+	"open-ai-gateway/internal/responsestore"
 	"open-ai-gateway/internal/router"
 )
 
@@ -46,6 +47,9 @@ func main() {
 		os.Exit(1)
 	}
 	logger = newLogger(cfg.Log)
+	if !cfg.ResponseStore.Enabled() {
+		logger.Warn("response store disabled because at least one configured limit is zero")
+	}
 
 	if shouldCheckConfig(os.Args, os.Getenv("GATEWAY_CHECK_CONFIG")) {
 		if err := runConfigCheck(os.Stdout, configPath); err != nil {
@@ -84,6 +88,12 @@ func main() {
 		},
 		MaxBodyBytes: cfg.MaxRequestBodyBytes,
 		Audit:        auditRecorder,
+		ResponseStore: responsestore.New(responsestore.Config{
+			TTL:             time.Duration(cfg.ResponseStore.TTLSeconds) * time.Second,
+			MaxEntries:      cfg.ResponseStore.MaxEntries,
+			MaxContextBytes: cfg.ResponseStore.MaxContextBytes,
+			MaxTotalBytes:   cfg.ResponseStore.MaxTotalBytes,
+		}, nil),
 	})
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,
@@ -115,6 +125,7 @@ func main() {
 		"client_model_overrides", len(gatewayClientModels(cfg)),
 		"provider_health_failure_threshold", cfg.ProviderHealth.FailureThreshold,
 		"provider_health_cooldown_seconds", cfg.ProviderHealth.CooldownSeconds,
+		"response_store_enabled", cfg.ResponseStore.Enabled(),
 	)
 
 	if err := serve(ctx, httpServer, cfg.ShutdownTimeout(), logger); err != nil {

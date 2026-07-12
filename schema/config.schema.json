@@ -73,6 +73,9 @@
     "provider_health": {
       "$ref": "#/$defs/provider_health"
     },
+    "response_store": {
+      "$ref": "#/$defs/response_store"
+    },
     "providers": {
       "type": "object",
       "minProperties": 1,
@@ -181,6 +184,18 @@
           "minimum": 0
         }
       }
+    },
+    "response_store": {
+      "type": "object",
+      "description": "Bounded in-memory storage for Responses previous_response_id continuation. Any zero value disables the store.",
+      "additionalProperties": false,
+      "properties": {
+        "ttl_seconds": { "type": "integer", "minimum": 0 },
+        "max_entries": { "type": "integer", "minimum": 0 },
+        "max_context_bytes": { "type": "integer", "minimum": 0 },
+        "max_total_bytes": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["ttl_seconds", "max_entries", "max_context_bytes", "max_total_bytes"]
     },
     "provider": {
       "type": "object",
