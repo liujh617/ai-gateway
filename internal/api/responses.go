@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -97,6 +98,11 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 	created := time.Now()
 	sequence := 0
 	text := ""
+	textStarted := false
+	textOutputIndex := -1
+	nextOutputIndex := 0
+	functionStates := map[int]*responseFunctionStreamState{}
+	functionOrder := make([]*responseFunctionStreamState, 0)
 	var usage *compat.Usage
 	emit := func(eventType string, fields map[string]any) bool {
 		fields["type"] = eventType
@@ -118,11 +124,6 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 	if !emit("response.created", map[string]any{"response": base}) || !emit("response.in_progress", map[string]any{"response": base}) {
 		return
 	}
-	item := compat.ResponseOutputMessage{ID: messageID, Type: "message", Status: "in_progress", Role: "assistant", Content: []compat.ResponseOutputText{}}
-	if !emit("response.output_item.added", map[string]any{"output_index": 0, "item": item}) ||
-		!emit("response.content_part.added", map[string]any{"item_id": messageID, "output_index": 0, "content_index": 0, "part": compat.ResponseOutputText{Type: "output_text", Text: "", Annotations: []any{}}}) {
-		return
-	}
 	for {
 		chunk, nextErr := stream.Next(ctx)
 		if nextErr != nil {
@@ -138,15 +139,64 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 			}
 			return
 		}
-		if len(chunk.Choices) > 1 || (len(chunk.Choices) == 1 && (chunk.Choices[0].Index != 0 || len(chunk.Choices[0].Delta.Extra) != 0)) {
+		if len(chunk.Choices) > 1 || (len(chunk.Choices) == 1 && chunk.Choices[0].Index != 0) {
 			emit("error", map[string]any{"error": compat.ErrorResponseFor(compat.ServerError(http.StatusBadGateway, "provider returned unsupported stream content")).Error})
 			return
 		}
 		if len(chunk.Choices) == 1 && chunk.Choices[0].Delta.Content != "" {
+			if !textStarted {
+				textStarted = true
+				textOutputIndex = nextOutputIndex
+				if !emit("response.output_item.added", map[string]any{"output_index": textOutputIndex, "item": compat.ResponseOutputMessage{ID: messageID, Type: "message", Status: "in_progress", Role: "assistant"}}) || !emit("response.content_part.added", map[string]any{"item_id": messageID, "output_index": textOutputIndex, "content_index": 0, "part": compat.ResponseOutputText{Type: "output_text", Text: "", Annotations: []any{}}}) {
+					return
+				}
+				nextOutputIndex++
+			}
 			delta := chunk.Choices[0].Delta.Content
 			text += delta
-			if !emit("response.output_text.delta", map[string]any{"item_id": messageID, "output_index": 0, "content_index": 0, "delta": delta}) {
+			if !emit("response.output_text.delta", map[string]any{"item_id": messageID, "output_index": textOutputIndex, "content_index": 0, "delta": delta}) {
 				return
+			}
+		}
+		if len(chunk.Choices) == 1 {
+			extra := chunk.Choices[0].Delta.Extra
+			for key := range extra {
+				if key != "tool_calls" {
+					emit("error", map[string]any{"error": compat.ErrorResponseFor(compat.ServerError(http.StatusBadGateway, "provider returned unsupported stream content")).Error})
+					return
+				}
+			}
+			if raw := extra["tool_calls"]; len(raw) > 0 {
+				var deltas []chatToolCallDelta
+				if json.Unmarshal(raw, &deltas) != nil {
+					emit("error", map[string]any{"error": compat.ErrorResponseFor(compat.ServerError(http.StatusBadGateway, "provider returned invalid function call stream")).Error})
+					return
+				}
+				sort.SliceStable(deltas, func(i, j int) bool { return deltas[i].Index < deltas[j].Index })
+				for _, delta := range deltas {
+					state := functionStates[delta.Index]
+					if state == nil {
+						if delta.Index < 0 || strings.TrimSpace(delta.ID) == "" || delta.Type != "function" || strings.TrimSpace(delta.Function.Name) == "" {
+							emit("error", map[string]any{"error": compat.ErrorResponseFor(compat.ServerError(http.StatusBadGateway, "provider returned invalid function call stream")).Error})
+							return
+						}
+						state = &responseFunctionStreamState{ChatIndex: delta.Index, OutputIndex: nextOutputIndex, ItemID: responseIdentifier("fc"), CallID: delta.ID, Name: delta.Function.Name}
+						nextOutputIndex++
+						functionStates[delta.Index] = state
+						functionOrder = append(functionOrder, state)
+						item := compat.ResponseOutputMessage{ID: state.ItemID, Type: "function_call", Status: "in_progress", CallID: state.CallID, Name: state.Name, Arguments: ""}
+						if !emit("response.output_item.added", map[string]any{"output_index": state.OutputIndex, "item": item}) {
+							return
+						}
+					} else if (delta.ID != "" && delta.ID != state.CallID) || (delta.Function.Name != "" && delta.Function.Name != state.Name) {
+						emit("error", map[string]any{"error": compat.ErrorResponseFor(compat.ServerError(http.StatusBadGateway, "provider returned conflicting function call stream")).Error})
+						return
+					}
+					state.Arguments += delta.Function.Arguments
+					if delta.Function.Arguments != "" && !emit("response.function_call_arguments.delta", map[string]any{"item_id": state.ItemID, "output_index": state.OutputIndex, "delta": delta.Function.Arguments}) {
+						return
+					}
+				}
 			}
 		}
 		if chunk.Usage != nil {
@@ -154,16 +204,33 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 			s.observeUsage(routes.ResponsesPath, externalModel, providerName, clientFromContext(r.Context()), chunk.Usage, pricing)
 		}
 	}
-	donePart := compat.ResponseOutputText{Type: "output_text", Text: text, Annotations: []any{}}
-	doneItem := compat.ResponseOutputMessage{ID: messageID, Type: "message", Status: "completed", Role: "assistant", Content: []compat.ResponseOutputText{donePart}}
-	if !emit("response.output_text.done", map[string]any{"item_id": messageID, "output_index": 0, "content_index": 0, "text": text}) ||
-		!emit("response.content_part.done", map[string]any{"item_id": messageID, "output_index": 0, "content_index": 0, "part": donePart}) ||
-		!emit("response.output_item.done", map[string]any{"output_index": 0, "item": doneItem}) {
+	completedOutput := make([]compat.ResponseOutputMessage, nextOutputIndex)
+	if textStarted {
+		donePart := compat.ResponseOutputText{Type: "output_text", Text: text, Annotations: []any{}}
+		doneItem := compat.ResponseOutputMessage{ID: messageID, Type: "message", Status: "completed", Role: "assistant", Content: []compat.ResponseOutputText{donePart}}
+		if !emit("response.output_text.done", map[string]any{"item_id": messageID, "output_index": textOutputIndex, "content_index": 0, "text": text}) || !emit("response.content_part.done", map[string]any{"item_id": messageID, "output_index": textOutputIndex, "content_index": 0, "part": donePart}) || !emit("response.output_item.done", map[string]any{"output_index": textOutputIndex, "item": doneItem}) {
+			return
+		}
+		completedOutput[textOutputIndex] = doneItem
+	}
+	for _, state := range functionOrder {
+		if !validJSONValue(state.Arguments) {
+			emit("error", map[string]any{"error": compat.ErrorResponseFor(compat.ServerError(http.StatusBadGateway, "provider returned invalid function arguments")).Error})
+			return
+		}
+		item := compat.ResponseOutputMessage{ID: state.ItemID, Type: "function_call", Status: "completed", CallID: state.CallID, Name: state.Name, Arguments: state.Arguments}
+		if !emit("response.function_call_arguments.done", map[string]any{"item_id": state.ItemID, "output_index": state.OutputIndex, "arguments": state.Arguments}) || !emit("response.output_item.done", map[string]any{"output_index": state.OutputIndex, "item": item}) {
+			return
+		}
+		completedOutput[state.OutputIndex] = item
+	}
+	if len(completedOutput) == 0 {
+		emit("error", map[string]any{"error": compat.ErrorResponseFor(compat.ServerError(http.StatusBadGateway, "provider returned empty response")).Error})
 		return
 	}
 	completed := *base
 	completed.Status = "completed"
-	completed.Output = []compat.ResponseOutputMessage{doneItem}
+	completed.Output = completedOutput
 	if usage != nil {
 		completed.Usage = &compat.ResponseUsage{InputTokens: usage.PromptTokens, OutputTokens: usage.CompletionTokens, TotalTokens: usage.TotalTokens}
 	}
@@ -171,6 +238,25 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 	doneEvent := s.auditBaseEvent(r, audit.EventStreamDone, routes.ResponsesPath, externalModel)
 	doneEvent.Provider, doneEvent.UpstreamModel, doneEvent.Status = providerName, upstreamModel, http.StatusOK
 	s.audit.Record(r.Context(), doneEvent)
+}
+
+type responseFunctionStreamState struct {
+	ChatIndex, OutputIndex          int
+	ItemID, CallID, Name, Arguments string
+}
+type chatToolCallDelta struct {
+	Index    int    `json:"index"`
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
+func validJSONValue(value string) bool {
+	var raw any
+	return json.Unmarshal([]byte(value), &raw) == nil
 }
 
 func writeTypedSSE(w io.Writer, eventType string, value any) error {

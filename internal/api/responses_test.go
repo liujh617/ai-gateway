@@ -2,7 +2,10 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +14,7 @@ import (
 	"open-ai-gateway/internal/api"
 	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
+	"open-ai-gateway/internal/provider"
 	"open-ai-gateway/internal/provider/fake"
 )
 
@@ -107,6 +111,26 @@ func TestResponsesStreamAuditsTypedEvents(t *testing.T) {
 	}
 }
 
+func TestResponsesStreamFunctionCall(t *testing.T) {
+	p := &functionStreamProvider{}
+	rr := doResponsesJSON(newTestHandler(p), `{"model":"test-model","input":"weather","stream":true,"tools":[{"type":"function","name":"get_weather","parameters":{"type":"object"}}]}`, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	text := rr.Body.String()
+	for _, event := range []string{"response.output_item.added", "response.function_call_arguments.delta", "response.function_call_arguments.done", "response.output_item.done", "response.completed"} {
+		if !strings.Contains(text, "event: "+event+"\n") {
+			t.Fatalf("missing %s: %s", event, text)
+		}
+	}
+	if !strings.Contains(text, `"arguments":"{\"location\":\"Paris\"}"`) || !strings.Contains(text, `"call_id":"call_1"`) {
+		t.Fatalf("stream=%s", text)
+	}
+	if !p.closed {
+		t.Fatal("stream not closed")
+	}
+}
+
 func doResponsesJSON(handler http.Handler, body string, auth bool) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -117,3 +141,35 @@ func doResponsesJSON(handler http.Handler, body string, auth bool) *httptest.Res
 	handler.ServeHTTP(rr, req)
 	return rr
 }
+
+type functionStreamProvider struct{ closed bool }
+
+func (p *functionStreamProvider) ListModels(context.Context) ([]compat.Model, error) { return nil, nil }
+func (p *functionStreamProvider) CreateChatCompletion(context.Context, compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	return nil, errors.New("unused")
+}
+func (p *functionStreamProvider) CreateEmbedding(context.Context, compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("unused")
+}
+func (p *functionStreamProvider) StreamChatCompletion(context.Context, compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
+	return &functionStream{p: p}, nil
+}
+
+type functionStream struct {
+	p     *functionStreamProvider
+	index int
+}
+
+func (s *functionStream) Next(context.Context) (*compat.ChatCompletionChunk, error) {
+	if s.index >= 2 {
+		return nil, io.EOF
+	}
+	arguments := `{"location":`
+	if s.index == 1 {
+		arguments = `"Paris"}`
+	}
+	extra, _ := json.Marshal([]map[string]any{{"index": 0, "id": "call_1", "type": "function", "function": map[string]string{"name": "get_weather", "arguments": arguments}}})
+	s.index++
+	return &compat.ChatCompletionChunk{Choices: []compat.ChatCompletionChunkChoice{{Index: 0, Delta: compat.ChatMessageDelta{Extra: map[string]json.RawMessage{"tool_calls": extra}}}}}, nil
+}
+func (s *functionStream) Close() error { s.p.closed = true; return nil }
