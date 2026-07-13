@@ -353,10 +353,15 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 		return
 	}
 	if willStore {
-		assistant := streamAssistantMessage(text, textStarted, functionOrder)
-		transcript := append(append(append([]compat.ChatMessage(nil), history...), currentMessages...), assistant)
-		if err := s.responseStore.Put(responsestore.Record{ID: responseID, Client: clientFromContext(r.Context()), Model: externalModel, Transcript: transcript}); err != nil {
-			s.logger.Warn("failed to store completed response stream", "error", err)
+		payload, err := json.Marshal(&completed)
+		if err != nil {
+			s.logger.Warn("failed to encode completed response stream", "error", err)
+		} else {
+			assistant := streamAssistantMessage(text, textStarted, functionOrder)
+			transcript := append(append(append([]compat.ChatMessage(nil), history...), currentMessages...), assistant)
+			if err := s.responseStore.Put(responsestore.Record{ID: responseID, Client: clientFromContext(r.Context()), Model: externalModel, Transcript: transcript, Response: payload}); err != nil {
+				s.logger.Warn("failed to store completed response stream", "error", err)
+			}
 		}
 	}
 	doneEvent := s.auditBaseEvent(r, audit.EventStreamDone, routes.ResponsesPath, externalModel)

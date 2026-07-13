@@ -414,6 +414,32 @@ func TestResponsesCompletedStreamCanBeContinued(t *testing.T) {
 	}
 }
 
+func TestRetrieveStoredStreamingResponse(t *testing.T) {
+	p := &responseStateStreamProvider{}
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(p, api.Options{ResponseStore: store})
+	streamed := doResponsesJSON(handler, `{"model":"test-model","input":"hello","stream":true,"store":true}`, true)
+	if streamed.Code != http.StatusOK {
+		t.Fatalf("stream status=%d body=%s", streamed.Code, streamed.Body.String())
+	}
+	completed := completedResponseFromSSE(t, streamed.Body.String())
+
+	rr := retrieveResponse(handler, completed.ID, testAPIKey, http.MethodGet)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var retrieved compat.Response
+	if err := json.Unmarshal(rr.Body.Bytes(), &retrieved); err != nil {
+		t.Fatalf("decode retrieved response: %v", err)
+	}
+	if !reflect.DeepEqual(retrieved, completed) {
+		t.Fatalf("retrieved=%#v completed=%#v", retrieved, completed)
+	}
+	if len(p.requests) != 1 {
+		t.Fatalf("retrieve called provider: requests=%d", len(p.requests))
+	}
+}
+
 func TestResponsesFailedStreamCannotBeContinued(t *testing.T) {
 	p := &responseStateStreamProvider{streamErr: errors.New("stream failed")}
 	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
@@ -428,6 +454,10 @@ func TestResponsesFailedStreamCannotBeContinued(t *testing.T) {
 }
 
 func completedResponseID(t *testing.T, stream string) string {
+	return completedResponseFromSSE(t, stream).ID
+}
+
+func completedResponseFromSSE(t *testing.T, stream string) compat.Response {
 	t.Helper()
 	for _, block := range strings.Split(stream, "\n\n") {
 		if !strings.HasPrefix(block, "event: response.completed\n") {
@@ -440,10 +470,10 @@ func completedResponseID(t *testing.T, stream string) string {
 		if err := json.Unmarshal([]byte(line), &event); err != nil {
 			t.Fatal(err)
 		}
-		return event.Response.ID
+		return event.Response
 	}
 	t.Fatalf("missing response.completed: %s", stream)
-	return ""
+	return compat.Response{}
 }
 
 type responseStateStreamProvider struct {
