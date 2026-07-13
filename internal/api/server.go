@@ -134,6 +134,7 @@ func (s *Server) routeHandlers() map[string]func(http.ResponseWriter, *http.Requ
 		routes.VersionPath:         s.handleVersion,
 		routes.MetricsPath:         s.handleMetrics,
 		routes.ModelsPath:          s.handleModels,
+		routes.ModelsRetrievePath:  s.handleModel,
 		routes.ChatCompletionsPath: s.handleChatCompletions,
 		routes.ResponsesPath:       s.handleResponses,
 		routes.EmbeddingsPath:      s.handleEmbeddings,
@@ -187,6 +188,24 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		Object: "list",
 		Data:   s.modelsForClient(middleware.ClientFromContext(r.Context())),
 	})
+}
+
+func (s *Server) handleModel(w http.ResponseWriter, r *http.Request) {
+	modelID := r.PathValue("model")
+	if !s.modelAllowedForRequest(r, modelID) {
+		s.writeError(w, r, compat.ModelNotFound(modelID))
+		return
+	}
+	model, ok := s.router.Model(modelID)
+	if !ok {
+		s.writeError(w, r, compat.ModelNotFound(modelID))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodHead {
+		return
+	}
+	_ = json.NewEncoder(w).Encode(model)
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {

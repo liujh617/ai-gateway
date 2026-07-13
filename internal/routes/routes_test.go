@@ -26,6 +26,39 @@ func TestResponsesRoute(t *testing.T) {
 	}
 }
 
+func TestRetrieveModelRoute(t *testing.T) {
+	path := "/v1/models/test-model"
+	if got := NormalizePath(path); got != ModelsRetrievePath {
+		t.Fatalf("NormalizePath = %q", got)
+	}
+	if allowed, known := MethodAllowed(path, http.MethodGet); !known || !allowed {
+		t.Fatalf("GET known=%v allowed=%v", known, allowed)
+	}
+	if allowed, known := MethodAllowed(path, http.MethodHead); !known || !allowed {
+		t.Fatalf("HEAD known=%v allowed=%v", known, allowed)
+	}
+	if allowed, known := MethodAllowed(path, http.MethodPost); !known || allowed {
+		t.Fatalf("POST known=%v allowed=%v", known, allowed)
+	}
+	if allow, ok := AllowHeader(path); !ok || allow != "GET, HEAD" {
+		t.Fatalf("AllowHeader = %q, %v", allow, ok)
+	}
+	if IsPublicPath(path) {
+		t.Fatal("retrieve model route must require authentication")
+	}
+}
+
+func TestRetrieveModelRouteRejectsInvalidShapes(t *testing.T) {
+	for _, path := range []string{"/v1/models/", "/v1/models/a/b"} {
+		if got := NormalizePath(path); got != UnknownPathLabel {
+			t.Fatalf("NormalizePath(%q) = %q", path, got)
+		}
+		if _, known := AllowedMethods(path); known {
+			t.Fatalf("AllowedMethods(%q) marked path known", path)
+		}
+	}
+}
+
 func TestPattern(t *testing.T) {
 	if got := Pattern(http.MethodPost, ChatCompletionsPath); got != "POST /v1/chat/completions" {
 		t.Fatalf("pattern = %q", got)

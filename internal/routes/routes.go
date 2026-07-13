@@ -13,6 +13,7 @@ const (
 	VersionPath         = "/version"
 	MetricsPath         = "/metrics"
 	ModelsPath          = "/v1/models"
+	ModelsRetrievePath  = "/v1/models/{model}"
 	ChatCompletionsPath = "/v1/chat/completions"
 	ResponsesPath       = "/v1/responses"
 	EmbeddingsPath      = "/v1/embeddings"
@@ -30,6 +31,7 @@ var definitions = []Route{
 	{Path: VersionPath, Methods: []string{http.MethodGet, http.MethodHead}, Public: true},
 	{Path: MetricsPath, Methods: []string{http.MethodGet, http.MethodHead}, Public: true},
 	{Path: ModelsPath, Methods: []string{http.MethodGet, http.MethodHead}},
+	{Path: ModelsRetrievePath, Methods: []string{http.MethodGet, http.MethodHead}},
 	{Path: ChatCompletionsPath, Methods: []string{http.MethodPost}},
 	{Path: ResponsesPath, Methods: []string{http.MethodPost}},
 	{Path: EmbeddingsPath, Methods: []string{http.MethodPost}},
@@ -78,14 +80,18 @@ func (r Route) RegistrationPattern() string {
 }
 
 func NormalizePath(path string) string {
-	if _, ok := knownPaths[path]; ok {
-		return path
+	if canonical, ok := canonicalPath(path); ok {
+		return canonical
 	}
 	return UnknownPathLabel
 }
 
 func AllowedMethods(path string) ([]string, bool) {
-	methods, ok := methodsByPath[path]
+	canonical, ok := canonicalPath(path)
+	if !ok {
+		return nil, false
+	}
+	methods, ok := methodsByPath[canonical]
 	if !ok {
 		return nil, false
 	}
@@ -93,7 +99,11 @@ func AllowedMethods(path string) ([]string, bool) {
 }
 
 func MethodAllowed(path, method string) (bool, bool) {
-	methods, ok := methodsByPath[path]
+	canonical, ok := canonicalPath(path)
+	if !ok {
+		return false, false
+	}
+	methods, ok := methodsByPath[canonical]
 	if !ok {
 		return false, false
 	}
@@ -106,7 +116,11 @@ func MethodAllowed(path, method string) (bool, bool) {
 }
 
 func AllowHeader(path string) (string, bool) {
-	methods, ok := methodsByPath[path]
+	canonical, ok := canonicalPath(path)
+	if !ok {
+		return "", false
+	}
+	methods, ok := methodsByPath[canonical]
 	if !ok {
 		return "", false
 	}
@@ -114,8 +128,26 @@ func AllowHeader(path string) (string, bool) {
 }
 
 func IsPublicPath(path string) bool {
-	_, ok := publicPaths[path]
+	canonical, ok := canonicalPath(path)
+	if !ok {
+		return false
+	}
+	_, ok = publicPaths[canonical]
 	return ok
+}
+
+func canonicalPath(path string) (string, bool) {
+	if _, ok := knownPaths[path]; ok {
+		return path, true
+	}
+	const prefix = ModelsPath + "/"
+	if strings.HasPrefix(path, prefix) {
+		model := strings.TrimPrefix(path, prefix)
+		if model != "" && !strings.Contains(model, "/") {
+			return ModelsRetrievePath, true
+		}
+	}
+	return "", false
 }
 
 func (r Route) copy() Route {

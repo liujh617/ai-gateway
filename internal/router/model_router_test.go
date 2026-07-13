@@ -70,3 +70,18 @@ func TestResolveReturnsDefensiveCopy(t *testing.T) {
 		t.Fatalf("fallbacks were mutated: %#v", route.Fallbacks)
 	}
 }
+
+func TestModelReturnsConfiguredMetadata(t *testing.T) {
+	modelRouter := router.NewModelRouter([]router.ModelRoute{{ExternalModel: "test-model"}})
+
+	model, ok := modelRouter.Model("test-model")
+	if !ok {
+		t.Fatal("configured model was not found")
+	}
+	if model.ID != "test-model" || model.Object != "model" || model.Created != 0 || model.OwnedBy != "open-ai-gateway" {
+		t.Fatalf("model = %#v", model)
+	}
+	if _, ok := modelRouter.Model("missing"); ok {
+		t.Fatal("missing model was found")
+	}
+}

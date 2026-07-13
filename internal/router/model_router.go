@@ -66,17 +66,31 @@ func (r *ModelRouter) Models() []compat.Model {
 	}
 	models := make([]compat.Model, 0, len(r.routes))
 	for model := range r.routes {
-		models = append(models, compat.Model{
-			ID:      model,
-			Object:  "model",
-			Created: 0,
-			OwnedBy: "open-ai-gateway",
-		})
+		models = append(models, modelMetadata(model))
 	}
 	sort.Slice(models, func(i, j int) bool {
 		return models[i].ID < models[j].ID
 	})
 	return models
+}
+
+func (r *ModelRouter) Model(model string) (compat.Model, bool) {
+	if r == nil {
+		return compat.Model{}, false
+	}
+	if _, ok := r.routes[model]; !ok {
+		return compat.Model{}, false
+	}
+	return modelMetadata(model), true
+}
+
+func modelMetadata(model string) compat.Model {
+	return compat.Model{
+		ID:      model,
+		Object:  "model",
+		Created: 0,
+		OwnedBy: "open-ai-gateway",
+	}
 }
 
 func (r *ModelRouter) ProviderNames() []string {

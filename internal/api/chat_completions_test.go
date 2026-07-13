@@ -959,6 +959,95 @@ func TestModelsOK(t *testing.T) {
 	}
 }
 
+func TestRetrieveModelOK(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodGet, "/v1/models/test-model", nil)
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	var model compat.Model
+	if err := json.Unmarshal(rr.Body.Bytes(), &model); err != nil {
+		t.Fatalf("decode model: %v", err)
+	}
+	if model.ID != "test-model" || model.Object != "model" || model.OwnedBy != "open-ai-gateway" {
+		t.Fatalf("model = %#v", model)
+	}
+}
+
+func TestRetrieveModelHeadOK(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodHead, "/v1/models/test-model", nil)
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK || rr.Body.Len() != 0 {
+		t.Fatalf("status = %d, body = %q", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("content-type = %q", got)
+	}
+}
+
+func TestRetrieveModelRequiresAuth(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodGet, "/v1/models/test-model", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assertError(t, rr, http.StatusUnauthorized, "authentication_error")
+}
+
+func TestRetrieveModelNotFound(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodGet, "/v1/models/missing", nil)
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assertError(t, rr, http.StatusNotFound, "invalid_request_error")
+}
+
+func TestRetrieveModelRespectsClientAllowlist(t *testing.T) {
+	handler, _ := newClientModelAccessTestHandler()
+	for _, tc := range []struct {
+		model string
+		want  int
+	}{{"test-model", http.StatusOK}, {"other-model", http.StatusNotFound}} {
+		req := httptest.NewRequest(http.MethodGet, "/v1/models/"+tc.model, nil)
+		req.Header.Set("Authorization", "Bearer alpha-secret")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != tc.want {
+			t.Fatalf("model %q status = %d, body = %s", tc.model, rr.Code, rr.Body.String())
+		}
+	}
+}
+
+func TestRetrieveModelMethodNotAllowed(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	req := httptest.NewRequest(http.MethodPost, "/v1/models/test-model", nil)
+	req.Header.Set("Authorization", "Bearer "+testAPIKey)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	assertError(t, rr, http.StatusMethodNotAllowed, "invalid_request_error")
+	if got := rr.Header().Get("Allow"); got != "GET, HEAD" {
+		t.Fatalf("allow = %q", got)
+	}
+}
+
 func TestModelsFilteredByClientAccess(t *testing.T) {
 	handler, _ := newClientModelAccessTestHandler()
 
