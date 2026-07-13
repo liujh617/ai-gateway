@@ -6,6 +6,10 @@ All notable changes to this project are documented here.
 
 ### Added
 
+### Changed
+
+- Reduced `/v1/responses` in-memory state store lock hold time by cloning stored transcripts after releasing the store mutex.
+
 ## 0.1.3 - 2026-07-13
 
 ### Added

@@ -143,27 +143,32 @@ func (s *Store) Get(id, client, model string) (Record, MissReason, bool) {
 		return Record{}, MissNotFound, false
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	e, ok := s.entries[id]
 	if !ok {
 		s.misses[MissNotFound]++
+		s.mu.Unlock()
 		return Record{}, MissNotFound, false
 	}
 	if !s.clock.Now().Before(e.expiresAt) {
 		s.removeLocked(e, EvictionExpired)
 		s.misses[MissExpired]++
+		s.mu.Unlock()
 		return Record{}, MissExpired, false
 	}
 	if e.record.Client != client {
 		s.misses[MissClient]++
+		s.mu.Unlock()
 		return Record{}, MissClient, false
 	}
 	if e.record.Model != model {
 		s.misses[MissModel]++
+		s.mu.Unlock()
 		return Record{}, MissModel, false
 	}
 	s.lru.MoveToFront(e.lru)
-	return cloneRecord(e.record), "", true
+	record := e.record
+	s.mu.Unlock()
+	return cloneRecord(record), "", true
 }
 
 func (s *Store) Snapshot() Stats {
