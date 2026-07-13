@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -64,6 +65,118 @@ func TestResponsesNonStreamContinuesStoredResponse(t *testing.T) {
 	messages := p.requests[1].Messages
 	if len(messages) != 3 || messageText(messages[0]) != "hello" || messageText(messages[1]) != "answer-1" || messageText(messages[2]) != "again" {
 		t.Fatalf("continuation messages=%#v", messages)
+	}
+}
+
+func TestRetrieveStoredResponse(t *testing.T) {
+	p := &responseStateProvider{}
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(p, api.Options{ResponseStore: store})
+	createdRecorder := doResponsesJSON(handler, `{"model":"test-model","input":"hello","store":true}`, true)
+	if createdRecorder.Code != http.StatusOK {
+		t.Fatalf("create status=%d body=%s", createdRecorder.Code, createdRecorder.Body.String())
+	}
+	var created compat.Response
+	if err := json.Unmarshal(createdRecorder.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created response: %v", err)
+	}
+
+	rr := retrieveResponse(handler, created.ID, testAPIKey, http.MethodGet)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var retrieved compat.Response
+	if err := json.Unmarshal(rr.Body.Bytes(), &retrieved); err != nil {
+		t.Fatalf("decode retrieved response: %v", err)
+	}
+	if !reflect.DeepEqual(retrieved, created) {
+		t.Fatalf("retrieved=%#v created=%#v", retrieved, created)
+	}
+	if len(p.requests) != 1 {
+		t.Fatalf("retrieve called provider: requests=%d", len(p.requests))
+	}
+}
+
+func TestRetrieveStoredResponseHead(t *testing.T) {
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(&responseStateProvider{}, api.Options{ResponseStore: store})
+	createdRecorder := doResponsesJSON(handler, `{"model":"test-model","input":"hello"}`, true)
+	var created compat.Response
+	if err := json.Unmarshal(createdRecorder.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+
+	rr := retrieveResponse(handler, created.ID, testAPIKey, http.MethodHead)
+	if rr.Code != http.StatusOK || rr.Body.Len() != 0 {
+		t.Fatalf("status=%d body=%q", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("content-type=%q", got)
+	}
+}
+
+func TestRetrieveResponseNotFoundCases(t *testing.T) {
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(&responseStateProvider{}, api.Options{ResponseStore: store})
+	assertResponseNotFound(t, retrieveResponse(handler, "resp_missing", testAPIKey, http.MethodGet))
+
+	unstoredRecorder := doResponsesJSON(handler, `{"model":"test-model","input":"hello","store":false}`, true)
+	var unstored compat.Response
+	if err := json.Unmarshal(unstoredRecorder.Body.Bytes(), &unstored); err != nil {
+		t.Fatal(err)
+	}
+	assertResponseNotFound(t, retrieveResponse(handler, unstored.ID, testAPIKey, http.MethodGet))
+	assertResponseNotFound(t, retrieveResponse(newTestHandler(fake.New()), "resp_missing", testAPIKey, http.MethodGet))
+}
+
+func TestRetrieveResponseIsClientIsolated(t *testing.T) {
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newResponseStateIsolationHandler(&responseStateProvider{}, store)
+	createdRecorder := doResponsesJSONWithKey(handler, `{"model":"test-model","input":"hello"}`, "alpha-secret")
+	var created compat.Response
+	if err := json.Unmarshal(createdRecorder.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	assertResponseNotFound(t, retrieveResponse(handler, created.ID, "beta-secret", http.MethodGet))
+}
+
+func TestRetrieveResponseRequiresAuth(t *testing.T) {
+	rr := retrieveResponse(newTestHandler(fake.New()), "resp_missing", "", http.MethodGet)
+	assertError(t, rr, http.StatusUnauthorized, "authentication_error")
+}
+
+func TestRetrieveResponseMethodNotAllowed(t *testing.T) {
+	handler := newTestHandler(fake.New())
+	for _, method := range []string{http.MethodPost, http.MethodDelete} {
+		rr := retrieveResponse(handler, "resp_1", testAPIKey, method)
+		assertError(t, rr, http.StatusMethodNotAllowed, "invalid_request_error")
+		if got := rr.Header().Get("Allow"); got != "GET, HEAD" {
+			t.Fatalf("%s Allow=%q", method, got)
+		}
+	}
+}
+
+func retrieveResponse(handler http.Handler, id, key, method string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, "/v1/responses/"+id, nil)
+	if key != "" {
+		req.Header.Set("Authorization", "Bearer "+key)
+	}
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	return rr
+}
+
+func assertResponseNotFound(t *testing.T, rr *httptest.ResponseRecorder) {
+	t.Helper()
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var got compat.ErrorResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Error.Type != "invalid_request_error" || got.Error.Param == nil || *got.Error.Param != "response_id" {
+		t.Fatalf("error=%#v", got)
 	}
 }
 

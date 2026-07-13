@@ -26,6 +26,38 @@ func TestResponsesRoute(t *testing.T) {
 	}
 }
 
+func TestRetrieveResponseRoute(t *testing.T) {
+	path := "/v1/responses/resp_123"
+	if got := NormalizePath(path); got != ResponsesRetrievePath {
+		t.Fatalf("NormalizePath = %q", got)
+	}
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		if allowed, known := MethodAllowed(path, method); !known || !allowed {
+			t.Fatalf("%s known=%v allowed=%v", method, known, allowed)
+		}
+	}
+	if allowed, known := MethodAllowed(path, http.MethodDelete); !known || allowed {
+		t.Fatalf("DELETE known=%v allowed=%v", known, allowed)
+	}
+	if allow, ok := AllowHeader(path); !ok || allow != "GET, HEAD" {
+		t.Fatalf("AllowHeader = %q, %v", allow, ok)
+	}
+	if IsPublicPath(path) {
+		t.Fatal("retrieve response route must require authentication")
+	}
+}
+
+func TestRetrieveResponseRouteRejectsInvalidShapes(t *testing.T) {
+	for _, path := range []string{"/v1/responses/", "/v1/responses/a/b"} {
+		if got := NormalizePath(path); got != UnknownPathLabel {
+			t.Fatalf("NormalizePath(%q) = %q", path, got)
+		}
+		if _, known := AllowedMethods(path); known {
+			t.Fatalf("AllowedMethods(%q) marked path known", path)
+		}
+	}
+}
+
 func TestRetrieveModelRoute(t *testing.T) {
 	path := "/v1/models/test-model"
 	if got := NormalizePath(path); got != ModelsRetrievePath {

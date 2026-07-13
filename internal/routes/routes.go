@@ -8,15 +8,16 @@ import (
 const (
 	UnknownPathLabel = "/__unknown__"
 
-	HealthzPath         = "/healthz"
-	ReadyzPath          = "/readyz"
-	VersionPath         = "/version"
-	MetricsPath         = "/metrics"
-	ModelsPath          = "/v1/models"
-	ModelsRetrievePath  = "/v1/models/{model}"
-	ChatCompletionsPath = "/v1/chat/completions"
-	ResponsesPath       = "/v1/responses"
-	EmbeddingsPath      = "/v1/embeddings"
+	HealthzPath           = "/healthz"
+	ReadyzPath            = "/readyz"
+	VersionPath           = "/version"
+	MetricsPath           = "/metrics"
+	ModelsPath            = "/v1/models"
+	ModelsRetrievePath    = "/v1/models/{model}"
+	ChatCompletionsPath   = "/v1/chat/completions"
+	ResponsesPath         = "/v1/responses"
+	ResponsesRetrievePath = "/v1/responses/{response_id}"
+	EmbeddingsPath        = "/v1/embeddings"
 )
 
 type Route struct {
@@ -34,6 +35,7 @@ var definitions = []Route{
 	{Path: ModelsRetrievePath, Methods: []string{http.MethodGet, http.MethodHead}},
 	{Path: ChatCompletionsPath, Methods: []string{http.MethodPost}},
 	{Path: ResponsesPath, Methods: []string{http.MethodPost}},
+	{Path: ResponsesRetrievePath, Methods: []string{http.MethodGet, http.MethodHead}},
 	{Path: EmbeddingsPath, Methods: []string{http.MethodPost}},
 }
 
@@ -140,14 +142,26 @@ func canonicalPath(path string) (string, bool) {
 	if _, ok := knownPaths[path]; ok {
 		return path, true
 	}
-	const prefix = ModelsPath + "/"
-	if strings.HasPrefix(path, prefix) {
-		model := strings.TrimPrefix(path, prefix)
-		if model != "" && !strings.Contains(model, "/") {
-			return ModelsRetrievePath, true
+	for _, dynamic := range []struct {
+		prefix    string
+		canonical string
+	}{
+		{prefix: ModelsPath + "/", canonical: ModelsRetrievePath},
+		{prefix: ResponsesPath + "/", canonical: ResponsesRetrievePath},
+	} {
+		if singlePathSegment(path, dynamic.prefix) {
+			return dynamic.canonical, true
 		}
 	}
 	return "", false
+}
+
+func singlePathSegment(path, prefix string) bool {
+	if !strings.HasPrefix(path, prefix) {
+		return false
+	}
+	value := strings.TrimPrefix(path, prefix)
+	return value != "" && !strings.Contains(value, "/")
 }
 
 func (r Route) copy() Route {

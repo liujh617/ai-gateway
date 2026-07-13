@@ -92,9 +92,16 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 		response.PreviousResponseID = req.PreviousResponseID
 	}
 	shouldStore := req.Store == nil || *req.Store
-	if shouldStore && s.responseStore != nil && s.responseStore.Enabled() {
+	willStore := shouldStore && s.responseStore != nil && s.responseStore.Enabled()
+	response.Store = willStore
+	if willStore {
+		payload, err := json.Marshal(response)
+		if err != nil {
+			s.writeAuditedError(w, r, routes.ResponsesPath, externalModel, compat.ServerError(http.StatusInternalServerError, "failed to store response state"))
+			return
+		}
 		transcript := append(append(append([]compat.ChatMessage(nil), history...), currentMessages...), chatResp.Choices[0].Message)
-		err := s.responseStore.Put(responsestore.Record{ID: response.ID, Client: clientFromContext(r.Context()), Model: externalModel, Transcript: transcript})
+		err = s.responseStore.Put(responsestore.Record{ID: response.ID, Client: clientFromContext(r.Context()), Model: externalModel, Transcript: transcript, Response: payload})
 		if err != nil {
 			if errors.Is(err, responsestore.ErrContextTooLarge) {
 				s.writeAuditedError(w, r, routes.ResponsesPath, externalModel, compat.InvalidRequest("response context is too large", "previous_response_id"))
@@ -103,7 +110,6 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 			s.writeAuditedError(w, r, routes.ResponsesPath, externalModel, compat.ServerError(http.StatusInternalServerError, "failed to store response state"))
 			return
 		}
-		response.Store = true
 	}
 	responseEvent := s.auditBaseEvent(r, audit.EventResponse, routes.ResponsesPath, externalModel)
 	responseEvent.Provider = providerName
@@ -113,6 +119,29 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 	s.audit.Record(r.Context(), responseEvent)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(response)
+}
+
+func (s *Server) handleResponse(w http.ResponseWriter, r *http.Request) {
+	responseID := r.PathValue("response_id")
+	if s.responseStore == nil || !s.responseStore.Enabled() {
+		s.writeError(w, r, responseNotFound())
+		return
+	}
+	record, _, ok := s.responseStore.GetByID(responseID, clientFromContext(r.Context()))
+	if !ok || len(record.Response) == 0 {
+		s.writeError(w, r, responseNotFound())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodHead {
+		return
+	}
+	_, _ = w.Write(record.Response)
+}
+
+func responseNotFound() *compat.Error {
+	param := "response_id"
+	return compat.NewError(http.StatusNotFound, "invalid_request_error", "response not found", &param)
 }
 
 func validResponseToolOutputs(history, current []compat.ChatMessage) bool {
