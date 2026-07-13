@@ -56,6 +56,7 @@ type Record struct {
 	Client     string
 	Model      string
 	Transcript []compat.ChatMessage
+	Response   json.RawMessage
 }
 
 type Stats struct {
@@ -106,7 +107,7 @@ func (s *Store) Put(record Record) error {
 		return ErrDisabled
 	}
 	cloned := cloneRecord(record)
-	size, err := encodedTranscriptSize(cloned.Transcript)
+	size, err := encodedRecordSize(cloned)
 	if err != nil {
 		return err
 	}
@@ -139,6 +140,14 @@ func (s *Store) Put(record Record) error {
 }
 
 func (s *Store) Get(id, client, model string) (Record, MissReason, bool) {
+	return s.get(id, client, &model)
+}
+
+func (s *Store) GetByID(id, client string) (Record, MissReason, bool) {
+	return s.get(id, client, nil)
+}
+
+func (s *Store) get(id, client string, model *string) (Record, MissReason, bool) {
 	if s == nil || !s.config.enabled() {
 		return Record{}, MissNotFound, false
 	}
@@ -160,7 +169,7 @@ func (s *Store) Get(id, client, model string) (Record, MissReason, bool) {
 		s.mu.Unlock()
 		return Record{}, MissClient, false
 	}
-	if e.record.Model != model {
+	if model != nil && e.record.Model != *model {
 		s.misses[MissModel]++
 		s.mu.Unlock()
 		return Record{}, MissModel, false
@@ -211,8 +220,16 @@ func encodedTranscriptSize(transcript []compat.ChatMessage) (int64, error) {
 	return int64(len(data)), err
 }
 
+func encodedRecordSize(record Record) (int64, error) {
+	transcriptSize, err := encodedTranscriptSize(record.Transcript)
+	if err != nil {
+		return 0, err
+	}
+	return transcriptSize + int64(len(record.Response)), nil
+}
+
 func cloneRecord(record Record) Record {
-	cloned := Record{ID: record.ID, Client: record.Client, Model: record.Model}
+	cloned := Record{ID: record.ID, Client: record.Client, Model: record.Model, Response: cloneRaw(record.Response)}
 	if record.Transcript == nil {
 		return cloned
 	}

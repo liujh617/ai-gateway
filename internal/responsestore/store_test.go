@@ -61,6 +61,51 @@ func TestPutGetReturnsDeepCopy(t *testing.T) {
 	}
 }
 
+func TestStoreGetByIDReturnsClonedResponse(t *testing.T) {
+	store := newTestStore(nil, nil)
+	const want = `{"id":"resp_1","object":"response","store":true}`
+	record := Record{ID: "resp_1", Client: "alpha", Model: "test-model", Response: json.RawMessage(want)}
+	if err := store.Put(record); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	record.Response[0] = 'x'
+
+	got, reason, ok := store.GetByID("resp_1", "alpha")
+	if !ok || reason != "" {
+		t.Fatalf("GetByID ok=%v reason=%q", ok, reason)
+	}
+	if string(got.Response) != want {
+		t.Fatalf("response = %s", got.Response)
+	}
+	got.Response[0] = 'x'
+	again, _, _ := store.GetByID("resp_1", "alpha")
+	if string(again.Response) != want {
+		t.Fatalf("stored response mutated: %s", again.Response)
+	}
+}
+
+func TestStoreGetByIDEnforcesClient(t *testing.T) {
+	store := newTestStore(nil, nil)
+	if err := store.Put(Record{ID: "resp_1", Client: "alpha", Model: "test-model", Response: json.RawMessage(`{"id":"resp_1"}`)}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, reason, ok := store.GetByID("resp_1", "beta"); ok || reason != MissClient {
+		t.Fatalf("GetByID ok=%v reason=%q", ok, reason)
+	}
+}
+
+func TestResponseBytesCountTowardRecordLimit(t *testing.T) {
+	record := Record{ID: "resp_1", Client: "alpha", Model: "test-model", Response: json.RawMessage(`{"id":"resp_1"}`)}
+	transcriptSize, err := encodedTranscriptSize(record.Transcript)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := newTestStore(nil, func(c *Config) { c.MaxContextBytes = transcriptSize + int64(len(record.Response)) - 1 })
+	if err := store.Put(record); !errors.Is(err, ErrContextTooLarge) {
+		t.Fatalf("Put error = %v", err)
+	}
+}
+
 func TestGetMissReasonsAndExpiry(t *testing.T) {
 	clock := &fakeClock{now: time.Unix(100, 0)}
 	store := newTestStore(clock, func(c *Config) { c.TTL = time.Minute })
