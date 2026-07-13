@@ -38,6 +38,7 @@ Upstream Model Service
 职责：
 
 - 注册 `/v1/*` 路由。
+- 从静态 model router 列出或查询单个 client 可见模型，不调用上游 provider。
 - 解析请求 body。
 - 根据 `stream` 字段选择 JSON 或 SSE 响应。
 - 写入 OpenAI-compatible response。

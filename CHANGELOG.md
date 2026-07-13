@@ -6,6 +6,8 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- Added authenticated single-model metadata retrieval through `GET` and `HEAD /v1/models/{model}`, including client allowlist enforcement and normalized observability paths.
+
 ### Changed
 
 - Reduced `/v1/responses` in-memory state store lock hold time by cloning stored transcripts after releasing the store mutex.

@@ -151,6 +151,7 @@ curl -sS http://127.0.0.1:8080/healthz
 第一阶段只实现最小可用代理：
 
 - `GET /v1/models`
+- `GET /v1/models/{model}`
 - `POST /v1/chat/completions`
 - `POST /v1/responses`（文本、function tools 和进程内 `previous_response_id` 续接子集）
 - `POST /v1/embeddings`
