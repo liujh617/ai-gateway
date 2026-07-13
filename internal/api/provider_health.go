@@ -11,7 +11,7 @@ type ProviderHealthOptions struct {
 }
 
 type providerHealth struct {
-	mu               sync.Mutex
+	mu               sync.RWMutex
 	failureThreshold int
 	cooldown         time.Duration
 	now              func() time.Time
@@ -56,9 +56,24 @@ func (h *providerHealth) Healthy(provider string) bool {
 	if h == nil || provider == "" {
 		return true
 	}
+	h.mu.RLock()
+	state := h.states[provider]
+	if state != nil {
+		unhealthyUntil := state.unhealthyUntil
+		if unhealthyUntil.IsZero() {
+			h.mu.RUnlock()
+			return true
+		}
+		if h.now().Before(unhealthyUntil) {
+			h.mu.RUnlock()
+			return false
+		}
+	}
+	h.mu.RUnlock()
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	state := h.stateLocked(provider)
+	state = h.stateLocked(provider)
 	now := h.now()
 	if state.unhealthyUntil.IsZero() {
 		return true

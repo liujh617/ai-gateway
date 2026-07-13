@@ -9,6 +9,7 @@ All notable changes to this project are documented here.
 ### Changed
 
 - Reduced `/v1/responses` in-memory state store lock hold time by cloning stored transcripts after releasing the store mutex.
+- Reduced provider-health hot-path lock contention by using a read lock for non-mutating health checks.
 
 ## 0.1.3 - 2026-07-13
 
