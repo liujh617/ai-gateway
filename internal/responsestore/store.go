@@ -208,11 +208,39 @@ func (s *Store) removeExpiredLocked(now time.Time) {
 	}
 }
 
+func (s *Store) DeleteByID(id, client string) (MissReason, bool) {
+	if s == nil || !s.config.enabled() {
+		return MissNotFound, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.entries[id]
+	if !ok {
+		s.misses[MissNotFound]++
+		return MissNotFound, false
+	}
+	if !s.clock.Now().Before(e.expiresAt) {
+		s.removeLocked(e, EvictionExpired)
+		s.misses[MissExpired]++
+		return MissExpired, false
+	}
+	if e.record.Client != client {
+		s.misses[MissClient]++
+		return MissClient, false
+	}
+	s.removeEntryLocked(e)
+	return "", true
+}
+
 func (s *Store) removeLocked(e *entry, reason EvictionReason) {
+	s.removeEntryLocked(e)
+	s.evictions[reason]++
+}
+
+func (s *Store) removeEntryLocked(e *entry) {
 	delete(s.entries, e.record.ID)
 	s.lru.Remove(e.lru)
 	s.bytes -= e.bytes
-	s.evictions[reason]++
 }
 
 func encodedTranscriptSize(transcript []compat.ChatMessage) (int64, error) {

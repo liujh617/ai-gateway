@@ -229,3 +229,95 @@ func TestSnapshotAndConcurrentAccess(t *testing.T) {
 		t.Fatalf("unexpected stats: %+v", stats)
 	}
 }
+
+func TestDeleteByIDRemovesRecordWithoutEviction(t *testing.T) {
+	store := newTestStore(nil, nil)
+	record := Record{
+		ID: "resp_1", Client: "alpha", Model: "test-model",
+		Transcript: []compat.ChatMessage{message("user", "hello")},
+		Response:   json.RawMessage(`{"id":"resp_1"}`),
+	}
+	if err := store.Put(record); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	before := store.Snapshot()
+
+	reason, ok := store.DeleteByID("resp_1", "alpha")
+	if !ok || reason != "" {
+		t.Fatalf("DeleteByID ok=%v reason=%q", ok, reason)
+	}
+	if _, reason, ok := store.GetByID("resp_1", "alpha"); ok || reason != MissNotFound {
+		t.Fatalf("GetByID after delete ok=%v reason=%q", ok, reason)
+	}
+	after := store.Snapshot()
+	if before.Entries != 1 || before.Bytes <= 0 || after.Entries != 0 || after.Bytes != 0 {
+		t.Fatalf("before=%+v after=%+v", before, after)
+	}
+	if after.Evictions[EvictionExpired] != 0 || after.Evictions[EvictionCapacity] != 0 {
+		t.Fatalf("explicit delete counted as eviction: %+v", after.Evictions)
+	}
+}
+
+func TestDeleteByIDEnforcesClient(t *testing.T) {
+	store := newTestStore(nil, nil)
+	if err := store.Put(Record{ID: "resp_1", Client: "alpha", Model: "test-model", Response: json.RawMessage(`{"id":"resp_1"}`)}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if reason, ok := store.DeleteByID("resp_1", "beta"); ok || reason != MissClient {
+		t.Fatalf("cross-client delete ok=%v reason=%q", ok, reason)
+	}
+	if _, _, ok := store.GetByID("resp_1", "alpha"); !ok {
+		t.Fatal("cross-client delete removed the record")
+	}
+}
+
+func TestDeleteByIDMissesAndExpiry(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(100, 0)}
+	store := newTestStore(clock, func(c *Config) { c.TTL = time.Minute })
+	if err := store.Put(Record{ID: "resp_1", Client: "alpha", Model: "test-model", Response: json.RawMessage(`{"id":"resp_1"}`)}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if reason, ok := store.DeleteByID("missing", "alpha"); ok || reason != MissNotFound {
+		t.Fatalf("missing delete ok=%v reason=%q", ok, reason)
+	}
+	clock.Advance(time.Minute)
+	if reason, ok := store.DeleteByID("resp_1", "alpha"); ok || reason != MissExpired {
+		t.Fatalf("expired delete ok=%v reason=%q", ok, reason)
+	}
+	stats := store.Snapshot()
+	if stats.Evictions[EvictionExpired] != 1 || stats.Misses[MissExpired] != 1 {
+		t.Fatalf("stats=%+v", stats)
+	}
+	if reason, ok := store.DeleteByID("resp_1", "alpha"); ok || reason != MissNotFound {
+		t.Fatalf("repeated delete ok=%v reason=%q", ok, reason)
+	}
+}
+
+func TestConcurrentDeleteByID(t *testing.T) {
+	store := newTestStore(nil, func(c *Config) { c.MaxEntries = 100 })
+	for i := 0; i < 50; i++ {
+		id := fmt.Sprintf("resp_%d", i)
+		if err := store.Put(Record{ID: id, Client: "alpha", Model: "test-model", Response: json.RawMessage(`{"object":"response"}`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		id := fmt.Sprintf("resp_%d", i)
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			_, _, _ = store.GetByID(id, "alpha")
+		}()
+		go func() {
+			defer wg.Done()
+			if reason, ok := store.DeleteByID(id, "alpha"); !ok {
+				t.Errorf("DeleteByID(%s) reason=%q", id, reason)
+			}
+		}()
+	}
+	wg.Wait()
+	if stats := store.Snapshot(); stats.Entries != 0 || stats.Bytes != 0 {
+		t.Fatalf("stats=%+v", stats)
+	}
+}
