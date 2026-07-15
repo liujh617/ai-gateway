@@ -35,7 +35,7 @@ var definitions = []Route{
 	{Path: ModelsRetrievePath, Methods: []string{http.MethodGet, http.MethodHead}},
 	{Path: ChatCompletionsPath, Methods: []string{http.MethodPost}},
 	{Path: ResponsesPath, Methods: []string{http.MethodPost}},
-	{Path: ResponsesRetrievePath, Methods: []string{http.MethodGet, http.MethodHead}},
+	{Path: ResponsesRetrievePath, Methods: []string{http.MethodGet, http.MethodHead, http.MethodDelete}},
 	{Path: EmbeddingsPath, Methods: []string{http.MethodPost}},
 }
 
@@ -78,7 +78,13 @@ func All() []Route {
 }
 
 func (r Route) RegistrationPattern() string {
-	return Pattern(r.registrationMethod(), r.Path)
+	method := r.registrationMethod()
+	for _, item := range r.Methods {
+		if item != http.MethodHead && item != method {
+			return r.Path
+		}
+	}
+	return Pattern(method, r.Path)
 }
 
 func NormalizePath(path string) string {

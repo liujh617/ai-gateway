@@ -201,3 +201,13 @@ func TestResponseRequestRejectsInvalidPreviousResponseID(t *testing.T) {
 		}
 	}
 }
+
+func TestDeletedResponseJSON(t *testing.T) {
+	payload, err := json.Marshal(DeletedResponse{ID: "resp_123", Object: "response", Deleted: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(payload), `{"id":"resp_123","object":"response","deleted":true}`; got != want {
+		t.Fatalf("payload=%s want=%s", got, want)
+	}
+}

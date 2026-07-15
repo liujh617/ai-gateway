@@ -31,15 +31,12 @@ func TestRetrieveResponseRoute(t *testing.T) {
 	if got := NormalizePath(path); got != ResponsesRetrievePath {
 		t.Fatalf("NormalizePath = %q", got)
 	}
-	for _, method := range []string{http.MethodGet, http.MethodHead} {
+	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodDelete} {
 		if allowed, known := MethodAllowed(path, method); !known || !allowed {
 			t.Fatalf("%s known=%v allowed=%v", method, known, allowed)
 		}
 	}
-	if allowed, known := MethodAllowed(path, http.MethodDelete); !known || allowed {
-		t.Fatalf("DELETE known=%v allowed=%v", known, allowed)
-	}
-	if allow, ok := AllowHeader(path); !ok || allow != "GET, HEAD" {
+	if allow, ok := AllowHeader(path); !ok || allow != "GET, HEAD, DELETE" {
 		t.Fatalf("AllowHeader = %q, %v", allow, ok)
 	}
 	if IsPublicPath(path) {
@@ -127,6 +124,11 @@ func TestRegistrationPattern(t *testing.T) {
 	chat := Route{Path: ChatCompletionsPath, Methods: []string{http.MethodPost}}
 	if got := chat.RegistrationPattern(); got != "POST /v1/chat/completions" {
 		t.Fatalf("chat pattern = %q", got)
+	}
+
+	responses := Route{Path: ResponsesRetrievePath, Methods: []string{http.MethodGet, http.MethodHead, http.MethodDelete}}
+	if got := responses.RegistrationPattern(); got != ResponsesRetrievePath {
+		t.Fatalf("responses pattern = %q", got)
 	}
 }
 

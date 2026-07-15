@@ -123,6 +123,10 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleResponse(w http.ResponseWriter, r *http.Request) {
 	responseID := r.PathValue("response_id")
+	if r.Method == http.MethodDelete {
+		s.deleteResponse(w, r, responseID)
+		return
+	}
 	if s.responseStore == nil || !s.responseStore.Enabled() {
 		s.writeError(w, r, responseNotFound())
 		return
@@ -137,6 +141,19 @@ func (s *Server) handleResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = w.Write(record.Response)
+}
+
+func (s *Server) deleteResponse(w http.ResponseWriter, r *http.Request, responseID string) {
+	if s.responseStore == nil || !s.responseStore.Enabled() {
+		s.writeError(w, r, responseNotFound())
+		return
+	}
+	if _, ok := s.responseStore.DeleteByID(responseID, clientFromContext(r.Context())); !ok {
+		s.writeError(w, r, responseNotFound())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(compat.DeletedResponse{ID: responseID, Object: "response", Deleted: true})
 }
 
 func responseNotFound() *compat.Error {

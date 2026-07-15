@@ -349,6 +349,12 @@ type Response struct {
 	Usage              *ResponseUsage          `json:"usage"`
 }
 
+type DeletedResponse struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Deleted bool   `json:"deleted"`
+}
+
 type ResponseOutputMessage struct {
 	ID        string               `json:"id"`
 	Type      string               `json:"type"`

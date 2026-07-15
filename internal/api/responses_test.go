@@ -147,13 +147,136 @@ func TestRetrieveResponseRequiresAuth(t *testing.T) {
 
 func TestRetrieveResponseMethodNotAllowed(t *testing.T) {
 	handler := newTestHandler(fake.New())
-	for _, method := range []string{http.MethodPost, http.MethodDelete} {
+	for _, method := range []string{http.MethodPost, http.MethodPut} {
 		rr := retrieveResponse(handler, "resp_1", testAPIKey, method)
 		assertError(t, rr, http.StatusMethodNotAllowed, "invalid_request_error")
-		if got := rr.Header().Get("Allow"); got != "GET, HEAD" {
+		if got := rr.Header().Get("Allow"); got != "GET, HEAD, DELETE" {
 			t.Fatalf("%s Allow=%q", method, got)
 		}
 	}
+}
+
+func TestDeleteStoredResponse(t *testing.T) {
+	p := &responseStateProvider{}
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(p, api.Options{ResponseStore: store})
+	createdRecorder := doResponsesJSON(handler, `{"model":"test-model","input":"hello"}`, true)
+	var created compat.Response
+	if err := json.Unmarshal(createdRecorder.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+
+	rr := retrieveResponse(handler, created.ID, testAPIKey, http.MethodDelete)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("content-type=%q", got)
+	}
+	var deleted compat.DeletedResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &deleted); err != nil {
+		t.Fatal(err)
+	}
+	if deleted.ID != created.ID || deleted.Object != "response" || !deleted.Deleted {
+		t.Fatalf("deleted=%#v", deleted)
+	}
+	assertResponseNotFound(t, retrieveResponse(handler, created.ID, testAPIKey, http.MethodGet))
+	if len(p.requests) != 1 {
+		t.Fatalf("delete called provider: requests=%d", len(p.requests))
+	}
+}
+
+func TestDeletedResponseCannotBeContinued(t *testing.T) {
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(&responseStateProvider{}, api.Options{ResponseStore: store})
+	createdRecorder := doResponsesJSON(handler, `{"model":"test-model","input":"hello"}`, true)
+	var created compat.Response
+	if err := json.Unmarshal(createdRecorder.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if rr := retrieveResponse(handler, created.ID, testAPIKey, http.MethodDelete); rr.Code != http.StatusOK {
+		t.Fatalf("delete status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	continued := doResponsesJSON(handler, `{"model":"test-model","input":"again","previous_response_id":"`+created.ID+`"}`, true)
+	assertError(t, continued, http.StatusNotFound, "invalid_request_error")
+}
+
+func TestDeleteResponseDoesNotCascadeToDescendant(t *testing.T) {
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(&responseStateProvider{}, api.Options{ResponseStore: store})
+	firstRecorder := doResponsesJSON(handler, `{"model":"test-model","input":"first"}`, true)
+	var first compat.Response
+	if err := json.Unmarshal(firstRecorder.Body.Bytes(), &first); err != nil {
+		t.Fatal(err)
+	}
+	secondRecorder := doResponsesJSON(handler, `{"model":"test-model","input":"second","previous_response_id":"`+first.ID+`"}`, true)
+	var second compat.Response
+	if err := json.Unmarshal(secondRecorder.Body.Bytes(), &second); err != nil {
+		t.Fatal(err)
+	}
+	if rr := retrieveResponse(handler, first.ID, testAPIKey, http.MethodDelete); rr.Code != http.StatusOK {
+		t.Fatalf("delete status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if rr := retrieveResponse(handler, second.ID, testAPIKey, http.MethodGet); rr.Code != http.StatusOK {
+		t.Fatalf("descendant GET status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	continued := doResponsesJSON(handler, `{"model":"test-model","input":"third","previous_response_id":"`+second.ID+`"}`, true)
+	if continued.Code != http.StatusOK {
+		t.Fatalf("descendant continuation status=%d body=%s", continued.Code, continued.Body.String())
+	}
+}
+
+func TestDeleteResponseNotFoundCases(t *testing.T) {
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(&responseStateProvider{}, api.Options{ResponseStore: store})
+	assertResponseNotFound(t, retrieveResponse(handler, "resp_missing", testAPIKey, http.MethodDelete))
+	assertResponseNotFound(t, retrieveResponse(newTestHandler(fake.New()), "resp_missing", testAPIKey, http.MethodDelete))
+
+	createdRecorder := doResponsesJSON(handler, `{"model":"test-model","input":"hello"}`, true)
+	var created compat.Response
+	if err := json.Unmarshal(createdRecorder.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if rr := retrieveResponse(handler, created.ID, testAPIKey, http.MethodDelete); rr.Code != http.StatusOK {
+		t.Fatalf("first delete status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	assertResponseNotFound(t, retrieveResponse(handler, created.ID, testAPIKey, http.MethodDelete))
+}
+
+func TestDeleteResponseIsClientIsolated(t *testing.T) {
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newResponseStateIsolationHandler(&responseStateProvider{}, store)
+	createdRecorder := doResponsesJSONWithKey(handler, `{"model":"test-model","input":"hello"}`, "alpha-secret")
+	var created compat.Response
+	if err := json.Unmarshal(createdRecorder.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	assertResponseNotFound(t, retrieveResponse(handler, created.ID, "beta-secret", http.MethodDelete))
+	if rr := retrieveResponse(handler, created.ID, "alpha-secret", http.MethodGet); rr.Code != http.StatusOK {
+		t.Fatalf("owner GET status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestDeleteResponseRequiresAuth(t *testing.T) {
+	rr := retrieveResponse(newTestHandler(fake.New()), "resp_missing", "", http.MethodDelete)
+	assertError(t, rr, http.StatusUnauthorized, "authentication_error")
+}
+
+type responseStoreClock struct{ now time.Time }
+
+func (c *responseStoreClock) Now() time.Time { return c.now }
+
+func TestDeleteExpiredResponseReturnsNotFound(t *testing.T) {
+	clock := &responseStoreClock{now: time.Unix(100, 0)}
+	store := responsestore.New(responsestore.Config{TTL: time.Minute, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, clock)
+	handler := newTestHandlerWithOptions(&responseStateProvider{}, api.Options{ResponseStore: store})
+	createdRecorder := doResponsesJSON(handler, `{"model":"test-model","input":"hello"}`, true)
+	var created compat.Response
+	if err := json.Unmarshal(createdRecorder.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	clock.now = clock.now.Add(time.Minute)
+	assertResponseNotFound(t, retrieveResponse(handler, created.ID, testAPIKey, http.MethodDelete))
 }
 
 func retrieveResponse(handler http.Handler, id, key, method string) *httptest.ResponseRecorder {
