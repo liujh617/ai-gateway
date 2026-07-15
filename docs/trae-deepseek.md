@@ -120,4 +120,4 @@ Model: deepseek-v4-flash
 - ChatGPT Plus 订阅不能作为 DeepSeek 或 OpenAI API key 使用。
 - DeepSeek API key 只应提供给网关进程，不应提交到仓库。
 - 本地代理建议只监听 `127.0.0.1`，避免暴露到局域网或公网。
-- 当前网关第一阶段支持 `/v1/models`、`/v1/chat/completions` 和 `/v1/embeddings`；客户端如果强制依赖其他接口，需要先补齐对应兼容层。
+- 当前网关第一阶段支持 `/v1/models`、`/v1/models/{model}`、`/v1/chat/completions`、`/v1/responses`、`/v1/responses/{response_id}` 和 `/v1/embeddings`；各路径支持的 HTTP method 和兼容子集见 [OpenAI-compatible Proxy Spec](../openai-compatible-proxy-spec.md)。客户端如果强制依赖其他接口，需要先补齐对应兼容层。

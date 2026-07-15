@@ -133,7 +133,7 @@ Responses API 首期由 Compat Mapper 转换为现有 `ChatCompletionRequest`，
 
 Function tools 也由 Compat Mapper 双向转换：Responses function definition 和 Items 映射为 chat `tools`、assistant `tool_calls` 与 tool messages；chat tool calls 和 indexed stream deltas 映射回 Responses function Items/events。每个流式调用按 chat index 独立累计 arguments，provider adapter 仍只处理 Chat Completions wire format。
 
-`internal/responsestore` 为 Responses continuation 和完整 Response 读取提供独立的进程内状态边界。每条记录同时保存规范化 Chat transcript 和最终 Response JSON：API 层通过 model-aware `Get` 读取 `previous_response_id`，把历史 transcript 与本轮 input 合并后交给既有 Compat Mapper；`GET /v1/responses/{response_id}` 通过 client-aware `GetByID` 返回原始 Response 字段和值。两种读取共享绝对 TTL、LRU、条目数和 byte 上限，byte 统计覆盖 transcript 与 Response JSON。store 在写入和读取时返回深拷贝，不启动后台 goroutine；只有完整成功的响应产生记录。读取端点不调用 provider，provider adapter 和 router 保持无状态，store 也不参与 readiness。
+`internal/responsestore` 为 Responses continuation 和完整 Response 读取提供独立的进程内状态边界。每条记录同时保存规范化 Chat transcript 和最终 Response JSON：API 层通过 model-aware `Get` 读取 `previous_response_id`，把历史 transcript 与本轮 input 合并后交给既有 Compat Mapper；`GET /v1/responses/{response_id}` 通过 client-aware `GetByID` 返回原始 Response 字段和值。两种读取共享绝对 TTL、LRU、条目数和 byte 上限，byte 统计覆盖 transcript 与 Response JSON。store 在写入和读取时返回深拷贝，不启动后台 goroutine；只有完整成功的响应产生记录。读取端点不调用 provider，provider adapter 和 router 保持无状态，store 也不参与 readiness。Store 还提供按 client 原子删除单条 Response 的能力；显式删除复用底层 map/LRU/byte 清理，但不计入 expired/capacity eviction，且不会级联到已经保存为独立快照的 descendant Responses。
 
 ### Model Router
 
