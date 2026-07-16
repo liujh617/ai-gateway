@@ -6,6 +6,12 @@ All notable changes to this project are documented here.
 
 ### Added
 
+### Changed
+
+## 0.1.4 - 2026-07-16
+
+### Added
+
 - Added authenticated retrieval of completed, locally stored Responses through `GET` and `HEAD /v1/responses/{response_id}` with client isolation and normalized observability paths.
 - Added authenticated single-model metadata retrieval through `GET` and `HEAD /v1/models/{model}`, including client allowlist enforcement and normalized observability paths.
 - Added authenticated deletion of locally stored Responses through `DELETE /v1/responses/{response_id}`, with client isolation, non-cascading semantics, and correct store accounting.
