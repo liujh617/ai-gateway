@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+## 0.1.5 - 2026-07-20
+
 ### Added
 
 - Added `POST /v1/completions` endpoint with JSON and SSE streaming support, using existing model router, provider fallback, circuit breaker, and metrics infrastructure.
