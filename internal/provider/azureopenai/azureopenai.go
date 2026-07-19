@@ -135,6 +135,62 @@ func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequ
 	return &out, nil
 }
 
+func (p *Provider) CreateCompletion(ctx context.Context, req compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+	req.Stream = false
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint(req.Model, "completions"), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	p.setJSONHeaders(httpReq)
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, httpx.UpstreamError(resp)
+	}
+	if err := httpx.RequireJSONResponse(resp); err != nil {
+		return nil, err
+	}
+	var out compat.CompletionsResponse
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (p *Provider) StreamCompletion(ctx context.Context, req compat.CompletionsRequest) (provider.CompletionStream, error) {
+	req.Stream = true
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint(req.Model, "completions"), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	p.setJSONHeaders(httpReq)
+	httpReq.Header.Set("Accept", "text/event-stream")
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, httpx.TransportError(err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer resp.Body.Close()
+		return nil, httpx.UpstreamError(resp)
+	}
+	if err := httpx.RequireEventStreamResponse(resp); err != nil {
+		resp.Body.Close()
+		return nil, err
+	}
+	return httpx.NewCompletionStream(resp.Body), nil
+}
+
 func (p *Provider) endpoint(deployment, operation string) string {
 	escapedDeployment := url.PathEscape(deployment)
 	values := url.Values{}

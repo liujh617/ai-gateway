@@ -81,7 +81,44 @@ func (p *Provider) StreamChatCompletion(ctx context.Context, req compat.ChatComp
 		return nil, p.StreamErr
 	}
 	parts := append([]string(nil), p.StreamParts...)
-	return &stream{provider: p, model: req.Model, parts: parts, toolMode: len(req.Extra["tools"]) > 0}, nil
+	return &chatStream{provider: p, model: req.Model, parts: parts, toolMode: len(req.Extra["tools"]) > 0}, nil
+}
+
+func (p *Provider) CreateCompletion(ctx context.Context, req compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.CompletionsResponse{
+		ID:      "cmpl_fake",
+		Object:  "text_completion",
+		Created: time.Now().Unix(),
+		Model:   req.Model,
+		Choices: []compat.CompletionsChoice{{
+			Text:         p.ResponseText,
+			Index:        0,
+			Logprobs:     nil,
+			FinishReason: "stop",
+		}},
+		Usage: &compat.Usage{
+			PromptTokens:     1,
+			CompletionTokens: 1,
+			TotalTokens:      2,
+		},
+	}, nil
+}
+
+func (p *Provider) StreamCompletion(ctx context.Context, req compat.CompletionsRequest) (provider.CompletionStream, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.StreamErr != nil {
+		return nil, p.StreamErr
+	}
+	parts := append([]string(nil), p.StreamParts...)
+	return &completionStream{provider: p, model: req.Model, parts: parts}, nil
 }
 
 func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
@@ -106,7 +143,7 @@ func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequ
 	}, nil
 }
 
-type stream struct {
+type chatStream struct {
 	provider *Provider
 	model    string
 	parts    []string
@@ -114,7 +151,7 @@ type stream struct {
 	toolMode bool
 }
 
-func (s *stream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) {
+func (s *chatStream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -150,6 +187,44 @@ func (s *stream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) 
 	}, nil
 }
 
+func (s *chatStream) Close() error {
+	s.provider.Closed.Store(true)
+	return nil
+}
+
+type completionStream struct {
+	provider *Provider
+	model    string
+	parts    []string
+	index    int
+}
+
+func (s *completionStream) Next(ctx context.Context) (*compat.CompletionsChunk, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.index >= len(s.parts) {
+		return nil, io.EOF
+	}
+	part := s.parts[s.index]
+	s.index++
+	return &compat.CompletionsChunk{
+		ID:      "cmpl_fake",
+		Object:  "text_completion.chunk",
+		Created: time.Now().Unix(),
+		Model:   s.model,
+		Choices: []compat.CompletionsChunkChoice{{
+			Text:  part,
+			Index: 0,
+		}},
+	}, nil
+}
+
+func (s *completionStream) Close() error {
+	s.provider.Closed.Store(true)
+	return nil
+}
+
 func fakeToolResult(req compat.ChatCompletionRequest) (string, bool) {
 	for i := len(req.Messages) - 1; i >= 0; i-- {
 		if req.Messages[i].Role != "tool" {
@@ -161,9 +236,4 @@ func fakeToolResult(req compat.ChatCompletionRequest) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-func (s *stream) Close() error {
-	s.provider.Closed.Store(true)
-	return nil
 }

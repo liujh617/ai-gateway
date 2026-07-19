@@ -17,6 +17,7 @@ import (
 
 const MaxResponseBodyBytes = 10 << 20
 
+// ChatCompletionStream parses SSE events for /v1/chat/completions.
 type ChatCompletionStream struct {
 	body          io.ReadCloser
 	reader        *bufio.Reader
@@ -36,7 +37,6 @@ func (s *ChatCompletionStream) Next(ctx context.Context) (*compat.ChatCompletion
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-
 		payload, err := s.nextPayload()
 		if err != nil {
 			return nil, err
@@ -47,7 +47,6 @@ func (s *ChatCompletionStream) Next(ctx context.Context) (*compat.ChatCompletion
 		if payload == "[DONE]" {
 			return nil, io.EOF
 		}
-
 		var chunk compat.ChatCompletionChunk
 		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
 			return nil, err
@@ -60,11 +59,76 @@ func (s *ChatCompletionStream) Close() error {
 	return s.body.Close()
 }
 
+// CompletionStream parses SSE events for /v1/completions.
+type CompletionStream struct {
+	body          io.ReadCloser
+	reader        *bufio.Reader
+	seenFirstLine bool
+	skipNextLF    bool
+}
+
+func NewCompletionStream(body io.ReadCloser) *CompletionStream {
+	return &CompletionStream{
+		body:   body,
+		reader: bufio.NewReader(body),
+	}
+}
+
+func (s *CompletionStream) Next(ctx context.Context) (*compat.CompletionsChunk, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		payload, err := s.nextPayload()
+		if err != nil {
+			return nil, err
+		}
+		if payload == "" {
+			continue
+		}
+		if payload == "[DONE]" {
+			return nil, io.EOF
+		}
+		var chunk compat.CompletionsChunk
+		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
+			return nil, err
+		}
+		return &chunk, nil
+	}
+}
+
+func (s *CompletionStream) Close() error {
+	return s.body.Close()
+}
+
+// Internal helpers for ChatCompletionStream
+
 func (s *ChatCompletionStream) nextPayload() (string, error) {
+	return readSSEPayload(s.reader, &s.seenFirstLine, &s.skipNextLF)
+}
+
+func (s *ChatCompletionStream) readSSELine() (string, error) {
+	var line strings.Builder
+	return readRawSSELine(s.reader, &s.skipNextLF, &line)
+}
+
+// Internal helpers for CompletionStream
+
+func (s *CompletionStream) nextPayload() (string, error) {
+	return readSSEPayload(s.reader, &s.seenFirstLine, &s.skipNextLF)
+}
+
+func (s *CompletionStream) readSSELine() (string, error) {
+	var line strings.Builder
+	return readRawSSELine(s.reader, &s.skipNextLF, &line)
+}
+
+func readSSEPayload(reader *bufio.Reader, seenFirstLine *bool, skipNextLF *bool) (string, error) {
 	var data []string
 	eventBytes := 0
 	for {
-		line, err := s.readSSELine()
+		var b strings.Builder
+		line, err := readRawSSELine(reader, skipNextLF, &b)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				if line == "" {
@@ -78,8 +142,8 @@ func (s *ChatCompletionStream) nextPayload() (string, error) {
 		}
 
 		line = strings.TrimRight(line, "\r\n")
-		if !s.seenFirstLine {
-			s.seenFirstLine = true
+		if !*seenFirstLine {
+			*seenFirstLine = true
 			line = strings.TrimPrefix(line, "\ufeff")
 		}
 		if line == "" {
@@ -111,10 +175,9 @@ func (s *ChatCompletionStream) nextPayload() (string, error) {
 	}
 }
 
-func (s *ChatCompletionStream) readSSELine() (string, error) {
-	var line strings.Builder
+func readRawSSELine(reader *bufio.Reader, skipNextLF *bool, line *strings.Builder) (string, error) {
 	for {
-		b, err := s.reader.ReadByte()
+		b, err := reader.ReadByte()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				if line.Len() == 0 {
@@ -124,8 +187,8 @@ func (s *ChatCompletionStream) readSSELine() (string, error) {
 			}
 			return "", TransportError(err)
 		}
-		if s.skipNextLF {
-			s.skipNextLF = false
+		if *skipNextLF {
+			*skipNextLF = false
 			if b == '\n' {
 				continue
 			}
@@ -138,7 +201,7 @@ func (s *ChatCompletionStream) readSSELine() (string, error) {
 			return line.String(), nil
 		}
 		if b == '\r' {
-			s.skipNextLF = true
+			*skipNextLF = true
 			return line.String(), nil
 		}
 	}

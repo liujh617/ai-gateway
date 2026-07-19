@@ -153,6 +153,7 @@ curl -sS http://127.0.0.1:8080/healthz
 - `GET /v1/models`
 - `GET /v1/models/{model}`
 - `POST /v1/chat/completions`
+- `POST /v1/completions`
 - `POST /v1/responses`（文本、function tools 和进程内 `previous_response_id` 续接子集）
 - `GET /v1/responses/{response_id}`（读取同一 gateway client 成功保存且尚未过期的完整 Response）
 - `DELETE /v1/responses/{response_id}`（删除同一 gateway client 保存的目标 Response，不级联删除后续 Response）

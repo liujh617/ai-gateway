@@ -422,6 +422,56 @@ data: [DONE]
 - request context 取消时必须关闭上游流。
 - 上游流异常时，如果响应头尚未发送，返回 JSON 错误；如果已经开始 SSE，则发送兼容的错误 chunk 或直接结束连接，并记录日志。
 
+## `POST /v1/completions`
+
+创建 text completion。支持非流式和流式两种模式，与 Chat Completions 共用 model router、provider fallback、circuit breaker 和 metrics。
+
+### Request
+
+必须支持字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `model` | string | 是 | 网关配置的模型名称 |
+| `prompt` | string 或 string 数组 | 是 | 请求 prompt |
+| `stream` | boolean | 否 | 默认 `false` |
+| `temperature` | number | 否 | 采样温度 0–2 |
+| `top_p` | number | 否 |nucleus sampling |
+| `max_tokens` | integer | 否 | 最大生成 token 数 |
+| `stop` | string 或 string 数组 | 否 | 停止序列 |
+| `user` | string | 否 | 终端用户标识 |
+
+路由使用 `completions` capability。`model` 缺失、`prompt` 为空或 null 数组返回 `400 invalid_request_error`。
+
+### Response
+
+非流式返回 `200 application/json`：
+
+```json
+{
+  "id": "cmpl_...",
+  "object": "text_completion",
+  "created": 1699000000,
+  "model": "test-model",
+  "choices": [{
+    "text": "...",
+    "index": 0,
+    "logprobs": null,
+    "finish_reason": "stop"
+  }],
+  "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+}
+```
+
+### Streaming
+
+`stream: true` 时返回 `text/event-stream`，每行形如 `data: <chunk JSON>`，以 `data: [DONE]` 结束。每个 chunk 中 `choices[].text` 携带增量文本，`choices[].finish_reason` 在最后一个 chunk 中填充。
+
+### 行为
+
+- handler 不支持 `logprobs`、`best_of`、`echo`、`suffix` 等参数，但通过 Extra 透传到上游。
+- Content-Type 校验、鉴权、超时、metrics、audit、provider health 和 fallback 行为与 Chat Completions 一致。
+
 ## `POST /v1/embeddings`
 
 创建 embeddings。第一阶段支持 OpenAI-compatible embeddings 基础请求和响应。
@@ -523,7 +573,8 @@ models:
 
 模型能力通过 `capabilities` 声明：
 
-- `chat`: 可用于 `/v1/chat/completions`
+- `chat`: 可用于 `/v1/chat/completions` 和 `/v1/responses`
+- `completions`: 可用于 `/v1/completions`
 - `embeddings`: 可用于 `/v1/embeddings`
 
 未声明 `capabilities` 时默认同时支持 `chat` 和 `embeddings`，用于兼容早期配置。请求使用不支持该能力的模型时，返回 `404 invalid_request_error`。

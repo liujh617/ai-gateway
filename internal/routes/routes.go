@@ -17,7 +17,8 @@ const (
 	ChatCompletionsPath   = "/v1/chat/completions"
 	ResponsesPath         = "/v1/responses"
 	ResponsesRetrievePath = "/v1/responses/{response_id}"
-	EmbeddingsPath        = "/v1/embeddings"
+	CompletionsPath      = "/v1/completions"
+	EmbeddingsPath       = "/v1/embeddings"
 )
 
 type Route struct {
@@ -36,6 +37,7 @@ var definitions = []Route{
 	{Path: ChatCompletionsPath, Methods: []string{http.MethodPost}},
 	{Path: ResponsesPath, Methods: []string{http.MethodPost}},
 	{Path: ResponsesRetrievePath, Methods: []string{http.MethodGet, http.MethodHead, http.MethodDelete}},
+	{Path: CompletionsPath, Methods: []string{http.MethodPost}},
 	{Path: EmbeddingsPath, Methods: []string{http.MethodPost}},
 }
 

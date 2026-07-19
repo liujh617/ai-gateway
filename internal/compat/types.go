@@ -424,3 +424,151 @@ func cloneRawMessage(raw json.RawMessage) json.RawMessage {
 	copy(cloned, raw)
 	return cloned
 }
+
+// Completions
+
+type CompletionsRequest struct {
+	Model       string                     `json:"model"`
+	Prompt      json.RawMessage            `json:"prompt"`
+	Stream      bool                       `json:"stream,omitempty"`
+	Temperature *float64                   `json:"temperature,omitempty"`
+	TopP        *float64                   `json:"top_p,omitempty"`
+	MaxTokens   *int                       `json:"max_tokens,omitempty"`
+	Stop        json.RawMessage            `json:"stop,omitempty"`
+	User        string                     `json:"user,omitempty"`
+	Extra       map[string]json.RawMessage `json:"-"`
+}
+
+type completionsRequestJSON struct {
+	Model       string          `json:"model"`
+	Prompt      json.RawMessage `json:"prompt"`
+	Stream      bool            `json:"stream,omitempty"`
+	Temperature *float64        `json:"temperature,omitempty"`
+	TopP        *float64        `json:"top_p,omitempty"`
+	MaxTokens   *int            `json:"max_tokens,omitempty"`
+	Stop        json.RawMessage `json:"stop,omitempty"`
+	User        string          `json:"user,omitempty"`
+}
+
+var completionsRequestKnownFields = []string{
+	"model",
+	"prompt",
+	"stream",
+	"temperature",
+	"top_p",
+	"max_tokens",
+	"stop",
+	"user",
+}
+
+func (r *CompletionsRequest) UnmarshalJSON(data []byte) error {
+	var known completionsRequestJSON
+	if err := json.Unmarshal(data, &known); err != nil {
+		return err
+	}
+	extra, err := decodeExtraFields(data, completionsRequestKnownFields)
+	if err != nil {
+		return err
+	}
+	*r = CompletionsRequest{
+		Model:       known.Model,
+		Prompt:      known.Prompt,
+		Stream:      known.Stream,
+		Temperature: known.Temperature,
+		TopP:        known.TopP,
+		MaxTokens:   known.MaxTokens,
+		Stop:        known.Stop,
+		User:        known.User,
+		Extra:       extra,
+	}
+	return nil
+}
+
+func (r CompletionsRequest) MarshalJSON() ([]byte, error) {
+	fields := copyRawFields(r.Extra, completionsRequestKnownFields)
+	if err := putJSONField(fields, "model", r.Model); err != nil {
+		return nil, err
+	}
+	if len(r.Prompt) > 0 {
+		fields["prompt"] = cloneRawMessage(r.Prompt)
+	}
+	if r.Stream {
+		if err := putJSONField(fields, "stream", r.Stream); err != nil {
+			return nil, err
+		}
+	}
+	if r.Temperature != nil {
+		if err := putJSONField(fields, "temperature", r.Temperature); err != nil {
+			return nil, err
+		}
+	}
+	if r.TopP != nil {
+		if err := putJSONField(fields, "top_p", r.TopP); err != nil {
+			return nil, err
+		}
+	}
+	if r.MaxTokens != nil {
+		if err := putJSONField(fields, "max_tokens", r.MaxTokens); err != nil {
+			return nil, err
+		}
+	}
+	if len(r.Stop) > 0 {
+		fields["stop"] = cloneRawMessage(r.Stop)
+	}
+	if r.User != "" {
+		if err := putJSONField(fields, "user", r.User); err != nil {
+			return nil, err
+		}
+	}
+	return json.Marshal(fields)
+}
+
+func (r CompletionsRequest) Validate() *Error {
+	if strings.TrimSpace(r.Model) == "" {
+		return InvalidRequest("missing required field: model", "model")
+	}
+	if !hasProcessableCompletionsPrompt(r.Prompt) {
+		return InvalidRequest("missing required field: prompt", "prompt")
+	}
+	return nil
+}
+
+func hasProcessableCompletionsPrompt(raw json.RawMessage) bool {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" || trimmed == "[]" {
+		return false
+	}
+	return true
+}
+
+type CompletionsResponse struct {
+	ID      string              `json:"id"`
+	Object  string              `json:"object"`
+	Created int64               `json:"created"`
+	Model   string              `json:"model"`
+	Choices []CompletionsChoice `json:"choices"`
+	Usage   *Usage              `json:"usage,omitempty"`
+}
+
+type CompletionsChoice struct {
+	Text         string `json:"text"`
+	Index        int    `json:"index"`
+	Logprobs     any    `json:"logprobs"`
+	FinishReason string `json:"finish_reason"`
+}
+
+type CompletionsChunk struct {
+	ID      string                   `json:"id"`
+	Object  string                   `json:"object"`
+	Created int64                    `json:"created"`
+	Model   string                   `json:"model"`
+	Choices []CompletionsChunkChoice `json:"choices"`
+	Usage   *Usage                   `json:"usage,omitempty"`
+}
+
+type CompletionsChunkChoice struct {
+	Text         string  `json:"text"`
+	Index        int     `json:"index"`
+	Logprobs     any     `json:"logprobs"`
+	FinishReason *string `json:"finish_reason"`
+}
