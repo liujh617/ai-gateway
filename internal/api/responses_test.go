@@ -484,6 +484,12 @@ func (p *responseStateProvider) StreamChatCompletion(context.Context, compat.Cha
 func (p *responseStateProvider) CreateEmbedding(context.Context, compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
 	return nil, errors.New("unused")
 }
+func (p *responseStateProvider) CreateCompletion(context.Context, compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+	return nil, errors.New("unused")
+}
+func (p *responseStateProvider) StreamCompletion(context.Context, compat.CompletionsRequest) (provider.CompletionStream, error) {
+	return nil, errors.New("unused")
+}
 
 func messageText(message compat.ChatMessage) string {
 	var text string
@@ -616,6 +622,12 @@ func (p *responseStateStreamProvider) StreamChatCompletion(_ context.Context, re
 	return &responseStateStream{err: p.streamErr}, nil
 }
 func (p *responseStateStreamProvider) CreateEmbedding(context.Context, compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("unused")
+}
+func (p *responseStateStreamProvider) CreateCompletion(context.Context, compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+	return nil, errors.New("unused")
+}
+func (p *responseStateStreamProvider) StreamCompletion(context.Context, compat.CompletionsRequest) (provider.CompletionStream, error) {
 	return nil, errors.New("unused")
 }
 
