@@ -2013,6 +2013,14 @@ func (p *blockingProvider) CreateEmbedding(ctx context.Context, req compat.Embed
 	return nil, errors.New("not implemented")
 }
 
+func (p *blockingProvider) CreateCompletion(ctx context.Context, req compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *blockingProvider) StreamCompletion(ctx context.Context, req compat.CompletionsRequest) (provider.CompletionStream, error) {
+	return nil, errors.New("not implemented")
+}
+
 type captureProvider struct {
 	chatReq      compat.ChatCompletionRequest
 	embeddingReq compat.EmbeddingRequest
@@ -2055,6 +2063,14 @@ func (p *captureProvider) CreateEmbedding(ctx context.Context, req compat.Embedd
 			Embedding: []float64{0.1, 0.2},
 		}},
 	}, nil
+}
+
+func (p *captureProvider) CreateCompletion(ctx context.Context, req compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *captureProvider) StreamCompletion(ctx context.Context, req compat.CompletionsRequest) (provider.CompletionStream, error) {
+	return nil, errors.New("not implemented")
 }
 
 type countingProvider struct {
@@ -2128,6 +2144,14 @@ func (p *countingProvider) CreateEmbedding(ctx context.Context, req compat.Embed
 	}, nil
 }
 
+func (p *countingProvider) CreateCompletion(ctx context.Context, req compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *countingProvider) StreamCompletion(ctx context.Context, req compat.CompletionsRequest) (provider.CompletionStream, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (p *countingProvider) SetError(err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -2161,6 +2185,14 @@ func (p *usageStreamProvider) StreamChatCompletion(ctx context.Context, req comp
 }
 
 func (p *usageStreamProvider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *usageStreamProvider) CreateCompletion(ctx context.Context, req compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *usageStreamProvider) StreamCompletion(ctx context.Context, req compat.CompletionsRequest) (provider.CompletionStream, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -2251,6 +2283,14 @@ func (p *slowProvider) CreateEmbedding(ctx context.Context, req compat.Embedding
 	return nil, ctx.Err()
 }
 
+func (p *slowProvider) CreateCompletion(ctx context.Context, req compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *slowProvider) StreamCompletion(ctx context.Context, req compat.CompletionsRequest) (provider.CompletionStream, error) {
+	return nil, errors.New("not implemented")
+}
+
 type delayedStreamProvider struct{}
 
 func (p *delayedStreamProvider) ListModels(ctx context.Context) ([]compat.Model, error) {
@@ -2266,6 +2306,14 @@ func (p *delayedStreamProvider) StreamChatCompletion(ctx context.Context, req co
 }
 
 func (p *delayedStreamProvider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *delayedStreamProvider) CreateCompletion(ctx context.Context, req compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *delayedStreamProvider) StreamCompletion(ctx context.Context, req compat.CompletionsRequest) (provider.CompletionStream, error) {
 	return nil, errors.New("not implemented")
 }
 
