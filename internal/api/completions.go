@@ -135,7 +135,7 @@ func (s *Server) streamCompletion(w http.ResponseWriter, r *http.Request, route 
 		chunk, nextErr := stream.Next(ctx)
 		if nextErr != nil {
 			if errors.Is(nextErr, io.EOF) {
-				writeSSE(w, "[DONE]")
+				_, _ = io.WriteString(w, "data: [DONE]\n\n")
 				flusher.Flush()
 				doneEvent := s.auditBaseEvent(r, audit.EventStreamDone, routes.CompletionsPath, externalModel)
 				doneEvent.Provider, doneEvent.UpstreamModel, doneEvent.Status = providerName, upstreamModel, http.StatusOK

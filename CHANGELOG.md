@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added
+
+- Populated `duration_ms` in audit events (response, stream_done, error) by capturing request start time in the RequestID middleware and computing elapsed milliseconds in `auditBaseEvent`.
+
+### Fixed
+
+- Fixed completions streaming `[DONE]` sentinel being JSON-encoded with quotes (`data: "[DONE]"`) instead of the OpenAI-compatible plain form (`data: [DONE]`).
+- Fixed `countingCompletionProvider` test helper field/method name conflict (`calls` field vs `calls()` method) that prevented compilation.
+- Fixed completions 503 tests that incorrectly expected 200 from always-failing providers before the circuit breaker opened.
+- Added missing `CreateCompletion`/`StreamCompletion` stubs to `responseFunctionStateProvider` and `functionStreamProvider` test mocks.
+
 ## 0.1.5 - 2026-07-20
 
 ### Added

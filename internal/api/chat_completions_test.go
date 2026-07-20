@@ -2349,3 +2349,133 @@ func (s *delayedStream) Next(ctx context.Context) (*compat.ChatCompletionChunk, 
 func (s *delayedStream) Close() error {
 	return nil
 }
+
+// sleepyChatProvider sleeps before returning so audit DurationMS is reliably
+// non-zero. When err is set it returns the error after sleeping.
+type sleepyChatProvider struct {
+	delay time.Duration
+	err   error
+}
+
+func (p *sleepyChatProvider) ListModels(context.Context) ([]compat.Model, error) {
+	return nil, nil
+}
+
+func (p *sleepyChatProvider) CreateChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	select {
+	case <-time.After(p.delay):
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	if p.err != nil {
+		return nil, p.err
+	}
+	content, _ := json.Marshal("ok")
+	return &compat.ChatCompletionResponse{
+		ID:      "chatcmpl_sleepy",
+		Object:  "chat.completion",
+		Created: 1,
+		Model:   req.Model,
+		Choices: []compat.ChatCompletionChoice{{
+			Index:   0,
+			Message: compat.ChatMessage{Role: "assistant", Content: content},
+		}},
+	}, nil
+}
+
+func (p *sleepyChatProvider) StreamChatCompletion(context.Context, compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *sleepyChatProvider) CreateCompletion(context.Context, compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *sleepyChatProvider) StreamCompletion(context.Context, compat.CompletionsRequest) (provider.CompletionStream, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *sleepyChatProvider) CreateEmbedding(context.Context, compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func TestAuditDurationMSNonStreamResponse(t *testing.T) {
+	rec := &memoryAuditRecorder{}
+	handler := newTestHandlerWithOptions(&sleepyChatProvider{delay: 15 * time.Millisecond}, api.Options{Audit: rec})
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	events := rec.Events()
+	var responseEvent *audit.Event
+	for i := range events {
+		if events[i].Event == audit.EventResponse {
+			responseEvent = &events[i]
+			break
+		}
+	}
+	if responseEvent == nil {
+		t.Fatalf("no response audit event; events = %#v", events)
+	}
+	if responseEvent.DurationMS <= 0 {
+		t.Fatalf("response DurationMS = %d, want > 0", responseEvent.DurationMS)
+	}
+}
+
+func TestAuditDurationMSStreamDone(t *testing.T) {
+	rec := &memoryAuditRecorder{}
+	handler := newTestHandlerWithOptions(&delayedStreamProvider{}, api.Options{Audit: rec})
+	body := `{"model":"test-model","stream":true,"messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	events := rec.Events()
+	var doneEvent *audit.Event
+	for i := range events {
+		if events[i].Event == audit.EventStreamDone {
+			doneEvent = &events[i]
+			break
+		}
+	}
+	if doneEvent == nil {
+		t.Fatalf("no stream_done audit event; events = %#v", events)
+	}
+	if doneEvent.DurationMS <= 0 {
+		t.Fatalf("stream_done DurationMS = %d, want > 0", doneEvent.DurationMS)
+	}
+}
+
+func TestAuditDurationMSError(t *testing.T) {
+	rec := &memoryAuditRecorder{}
+	handler := newTestHandlerWithOptions(&sleepyChatProvider{
+		delay: 15 * time.Millisecond,
+		err:   compat.InvalidRequest("upstream rejected", "body"),
+	}, api.Options{Audit: rec})
+	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
+
+	rr := doJSON(handler, body, true)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	events := rec.Events()
+	var errorEvent *audit.Event
+	for i := range events {
+		if events[i].Event == audit.EventError {
+			errorEvent = &events[i]
+			break
+		}
+	}
+	if errorEvent == nil {
+		t.Fatalf("no error audit event; events = %#v", events)
+	}
+	if errorEvent.DurationMS <= 0 {
+		t.Fatalf("error DurationMS = %d, want > 0", errorEvent.DurationMS)
+	}
+}

@@ -805,7 +805,7 @@ JSONL event 示例：
 
 ```json
 {"timestamp":"2026-07-11T00:00:00Z","event":"request","request_id":"req_1","trace_id":"agent-run-1","path":"/v1/chat/completions","client":"default","external_model":"test-model","body":{"model":"test-model","messages":[{"role":"user","content":"hello"}]}}
-{"timestamp":"2026-07-11T00:00:01Z","event":"response","request_id":"req_1","trace_id":"agent-run-1","path":"/v1/chat/completions","client":"default","external_model":"test-model","provider":"fake","upstream_model":"upstream-test-model","status":200,"body":{"id":"chatcmpl_fake","object":"chat.completion","choices":[]}}
+{"timestamp":"2026-07-11T00:00:01Z","event":"response","request_id":"req_1","trace_id":"agent-run-1","path":"/v1/chat/completions","client":"default","external_model":"test-model","provider":"fake","upstream_model":"upstream-test-model","status":200,"duration_ms":42,"body":{"id":"chatcmpl_fake","object":"chat.completion","choices":[]}}
 ```
 
 支持的 `event`：
@@ -815,6 +815,8 @@ JSONL event 示例：
 - `stream_chunk`: 流式 chat completions 或 completions chunk。
 - `stream_done`: 流式 chat completions 或 completions 正常结束。
 - `error`: 模型请求错误响应或流式读取错误。
+
+`duration_ms` 字段记录从请求进入网关到该事件发生时刻的耗时（毫秒）。`request` 事件因在请求开始时记录，`duration_ms` 接近 0，受 `omitempty` 影响通常省略；`response`、`stream_done` 和 `error` 事件携带从请求开始到事件发生的累计耗时。
 
 安全约束：
 

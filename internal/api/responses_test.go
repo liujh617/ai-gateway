@@ -444,6 +444,12 @@ func (p *responseFunctionStateProvider) CreateChatCompletion(_ context.Context, 
 func (p *responseFunctionStateProvider) StreamChatCompletion(context.Context, compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
 	return nil, errors.New("unused")
 }
+func (p *responseFunctionStateProvider) CreateCompletion(context.Context, compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+	return nil, errors.New("unused")
+}
+func (p *responseFunctionStateProvider) StreamCompletion(context.Context, compat.CompletionsRequest) (provider.CompletionStream, error) {
+	return nil, errors.New("unused")
+}
 func (p *responseFunctionStateProvider) CreateEmbedding(context.Context, compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
 	return nil, errors.New("unused")
 }
@@ -803,6 +809,12 @@ func (p *functionStreamProvider) CreateChatCompletion(_ context.Context, req com
 	return &compat.ChatCompletionResponse{Choices: []compat.ChatCompletionChoice{{Index: 0, Message: compat.ChatMessage{Role: "assistant", Content: json.RawMessage(`"done"`)}, FinishReason: "stop"}}}, nil
 }
 func (p *functionStreamProvider) CreateEmbedding(context.Context, compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("unused")
+}
+func (p *functionStreamProvider) CreateCompletion(context.Context, compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+	return nil, errors.New("unused")
+}
+func (p *functionStreamProvider) StreamCompletion(context.Context, compat.CompletionsRequest) (provider.CompletionStream, error) {
 	return nil, errors.New("unused")
 }
 func (p *functionStreamProvider) StreamChatCompletion(_ context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {

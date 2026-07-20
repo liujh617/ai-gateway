@@ -163,7 +163,7 @@ func (s *Server) writeAuditedError(w http.ResponseWriter, r *http.Request, path 
 }
 
 func (s *Server) auditBaseEvent(r *http.Request, event string, path string, externalModel string) audit.Event {
-	return audit.Event{
+	ev := audit.Event{
 		Event:         event,
 		RequestID:     requestctx.RequestID(r.Context()),
 		TraceID:       audit.TraceIDFromRequest(r),
@@ -171,6 +171,10 @@ func (s *Server) auditBaseEvent(r *http.Request, event string, path string, exte
 		Client:        clientFromContext(r.Context()),
 		ExternalModel: externalModel,
 	}
+	if started := requestctx.StartedAt(r.Context()); !started.IsZero() {
+		ev.DurationMS = time.Since(started).Milliseconds()
+	}
+	return ev
 }
 
 func rawBody(value any) json.RawMessage {

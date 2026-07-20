@@ -320,7 +320,7 @@ func TestCompletionsSkipsUnhealthyProvider(t *testing.T) {
 			t.Fatalf("request %d status = %d, body = %s", i, rr.Code, rr.Body.String())
 		}
 	}
-	if calls := primary.calls(); calls != 2 {
+	if calls := primary.callCount(); calls != 2 {
 		t.Fatalf("primary calls before circuit = %d, want 2", calls)
 	}
 
@@ -328,7 +328,7 @@ func TestCompletionsSkipsUnhealthyProvider(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
 	}
-	if calls := primary.calls(); calls != 2 {
+	if calls := primary.callCount(); calls != 2 {
 		t.Fatalf("primary was called while unhealthy: calls = %d", calls)
 	}
 	assertMetricsContains(t, handler, `open_ai_gateway_provider_circuit_open_total{path="/v1/completions",model="test-model",provider="primary-provider",client="default"} 1`)
@@ -342,11 +342,13 @@ func TestCompletionsAllProvidersUnhealthyReturns503(t *testing.T) {
 	handler := newFallbackTestHandler(primary.provider(), fallback.provider())
 	body := `{"model":"test-model","prompt":"hello"}`
 
-	// Trigger circuit breaker on both providers.
+	// Both providers fail on each request; after 2 failures each the circuit
+	// breaker opens. The first 2 requests fail with 502 while the circuits
+	// are still closed.
 	for i := 0; i < 2; i++ {
 		rr := doCompletionsJSON(handler, body, true)
-		if rr.Code != http.StatusOK {
-			t.Fatalf("request %d status = %d, body = %s", i, rr.Code, rr.Body.String())
+		if rr.Code != http.StatusBadGateway {
+			t.Fatalf("request %d status = %d, want 502, body = %s", i, rr.Code, rr.Body.String())
 		}
 	}
 
@@ -361,11 +363,13 @@ func TestCompletionsStreamAllProvidersUnhealthyReturns503(t *testing.T) {
 	handler := newFallbackTestHandler(primary.provider(), fallback.provider())
 	body := `{"model":"test-model","stream":true,"prompt":"hello"}`
 
-	// Trigger circuit breaker on both providers.
+	// Both providers fail on each request; after 2 failures each the circuit
+	// breaker opens. The first 2 requests fail with 502 while the circuits
+	// are still closed.
 	for i := 0; i < 2; i++ {
 		rr := doCompletionsJSON(handler, body, true)
-		if rr.Code != http.StatusOK {
-			t.Fatalf("request %d status = %d, body = %s", i, rr.Code, rr.Body.String())
+		if rr.Code != http.StatusBadGateway {
+			t.Fatalf("request %d status = %d, want 502, body = %s", i, rr.Code, rr.Body.String())
 		}
 	}
 
@@ -447,11 +451,9 @@ func TestCompletionsRejectsChatOnlyModel(t *testing.T) {
 }
 
 func TestCompletionsRejectsClientDisallowedModel(t *testing.T) {
-	handler, provider := newClientModelAccessTestHandler()
+	handler, _ := newClientModelAccessTestHandler()
 	body := `{"model":"other-model","prompt":"hello"}`
 
-	rr := doJSONWithKey(handler, body, "alpha-secret")
-	_ = provider
 	// Re-route to /v1/completions path by issuing a fresh request instead.
 	completionsReq := httptest.NewRequest(http.MethodPost, "/v1/completions", bytes.NewBufferString(body))
 	completionsReq.Header.Set("Content-Type", "application/json")
@@ -603,7 +605,7 @@ func (p *countingCompletionProvider) CreateEmbedding(context.Context, compat.Emb
 	return nil, errors.New("not implemented")
 }
 
-func (p *countingCompletionProvider) calls() int {
+func (p *countingCompletionProvider) callCount() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.calls

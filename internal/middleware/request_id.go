@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"strings"
+	"time"
 
 	"open-ai-gateway/internal/requestctx"
 )
@@ -16,12 +17,14 @@ const (
 
 func RequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
 		id := normalizeRequestID(r.Header.Get(requestctx.RequestIDHeader))
 		if id == "" {
 			id = newRequestID()
 		}
 		w.Header().Set(requestctx.RequestIDHeader, id)
 		ctx := requestctx.WithRequestID(r.Context(), id)
+		ctx = requestctx.WithStartedAt(ctx, started)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
