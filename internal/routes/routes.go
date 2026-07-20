@@ -17,8 +17,8 @@ const (
 	ChatCompletionsPath   = "/v1/chat/completions"
 	ResponsesPath         = "/v1/responses"
 	ResponsesRetrievePath = "/v1/responses/{response_id}"
-	CompletionsPath      = "/v1/completions"
-	EmbeddingsPath       = "/v1/embeddings"
+	CompletionsPath       = "/v1/completions"
+	EmbeddingsPath        = "/v1/embeddings"
 )
 
 type Route struct {

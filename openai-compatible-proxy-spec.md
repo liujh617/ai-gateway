@@ -810,10 +810,10 @@ JSONL event 示例：
 
 支持的 `event`：
 
-- `request`: chat completions 或 embeddings 请求体。
+- `request`: chat completions、completions 或 embeddings 请求体。
 - `response`: 非流式成功响应体。
-- `stream_chunk`: 流式 chat completions chunk。
-- `stream_done`: 流式 chat completions 正常结束。
+- `stream_chunk`: 流式 chat completions 或 completions chunk。
+- `stream_done`: 流式 chat completions 或 completions 正常结束。
 - `error`: 模型请求错误响应或流式读取错误。
 
 安全约束：

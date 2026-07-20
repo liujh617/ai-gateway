@@ -138,7 +138,7 @@ func (s *Server) routeHandlers() map[string]func(http.ResponseWriter, *http.Requ
 		routes.ChatCompletionsPath:   s.handleChatCompletions,
 		routes.ResponsesPath:         s.handleResponses,
 		routes.ResponsesRetrievePath: s.handleResponse,
-		routes.CompletionsPath:      s.handleCompletions,
+		routes.CompletionsPath:       s.handleCompletions,
 		routes.EmbeddingsPath:        s.handleEmbeddings,
 	}
 }
