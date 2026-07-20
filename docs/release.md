@@ -13,7 +13,7 @@ MAJOR.MINOR.PATCH
 示例：
 
 ```text
-0.1.5
+0.1.6
 ```
 
 ## Preflight
@@ -21,7 +21,7 @@ MAJOR.MINOR.PATCH
 在 WSL `Ubuntu-24.04` 中执行：
 
 ```bash
-make release-check VERSION=0.1.5
+make release-check VERSION=0.1.6
 ```
 
 `release-check` 会执行：
@@ -49,13 +49,13 @@ make release-check VERSION=0.1.5
 构建二进制：
 
 ```bash
-make build VERSION=0.1.5
+make build VERSION=0.1.6
 ```
 
 构建镜像：
 
 ```bash
-make docker-build VERSION=0.1.5 IMAGE=open-ai-gateway:0.1.5
+make docker-build VERSION=0.1.6 IMAGE=open-ai-gateway:0.1.6
 ```
 
 ## Verify Runtime Version
@@ -75,8 +75,8 @@ curl -sS http://127.0.0.1:8080/version
 ## Git Tag
 
 ```bash
-git tag -a v0.1.5 -m "Release v0.1.5"
-git push origin v0.1.5
+git tag -a v0.1.6 -m "Release v0.1.6"
+git push origin v0.1.6
 ```
 
 ## Notes

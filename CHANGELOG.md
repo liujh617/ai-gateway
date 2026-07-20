@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+## 0.1.6 - 2026-07-21
+
 ### Added
 
 - Populated `duration_ms` in audit events (response, stream_done, error) by capturing request start time in the RequestID middleware and computing elapsed milliseconds in `auditBaseEvent`.
