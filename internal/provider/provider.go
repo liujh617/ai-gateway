@@ -15,6 +15,7 @@ type Provider interface {
 	StreamCompletion(ctx context.Context, req compat.CompletionsRequest) (CompletionStream, error)
 	CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error)
 	CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error)
+	CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error)
 }
 
 type ChatCompletionStream interface {

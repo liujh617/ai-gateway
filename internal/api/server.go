@@ -140,6 +140,7 @@ func (s *Server) routeHandlers() map[string]func(http.ResponseWriter, *http.Requ
 		routes.ResponsesRetrievePath: s.handleResponse,
 		routes.CompletionsPath:       s.handleCompletions,
 		routes.ImageGenerationsPath:  s.handleImageGenerations,
+		routes.ModerationsPath:       s.handleModerations,
 		routes.EmbeddingsPath:        s.handleEmbeddings,
 	}
 }

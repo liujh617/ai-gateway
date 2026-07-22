@@ -19,6 +19,7 @@ const (
 	ResponsesRetrievePath = "/v1/responses/{response_id}"
 	CompletionsPath       = "/v1/completions"
 	ImageGenerationsPath  = "/v1/images/generations"
+	ModerationsPath       = "/v1/moderations"
 	EmbeddingsPath        = "/v1/embeddings"
 )
 
@@ -40,6 +41,7 @@ var definitions = []Route{
 	{Path: ResponsesRetrievePath, Methods: []string{http.MethodGet, http.MethodHead, http.MethodDelete}},
 	{Path: CompletionsPath, Methods: []string{http.MethodPost}},
 	{Path: ImageGenerationsPath, Methods: []string{http.MethodPost}},
+	{Path: ModerationsPath, Methods: []string{http.MethodPost}},
 	{Path: EmbeddingsPath, Methods: []string{http.MethodPost}},
 }
 

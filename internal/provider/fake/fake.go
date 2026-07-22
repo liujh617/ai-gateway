@@ -88,6 +88,24 @@ func (p *Provider) CreateImage(ctx context.Context, req compat.ImageGenerationRe
 	}, nil
 }
 
+func (p *Provider) CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.ModerationResponse{
+		ID:    "modr_fake",
+		Model: req.Model,
+		Results: []compat.ModerationResult{{
+			Categories:     map[string]bool{"hate": false, "self-harm": false, "sexual": false, "violence": false},
+			CategoryScores: map[string]float64{"hate": 0.01, "self-harm": 0.01, "sexual": 0.01, "violence": 0.01},
+			Flagged:        false,
+		}},
+	}, nil
+}
+
 func (p *Provider) StreamChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

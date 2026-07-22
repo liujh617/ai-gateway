@@ -255,6 +255,34 @@ func (p *Provider) CreateImage(ctx context.Context, req compat.ImageGenerationRe
 	return &out, nil
 }
 
+func (p *Provider) CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint("/moderations"), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	p.setJSONHeaders(httpReq)
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, httpx.UpstreamError(resp)
+	}
+	if err := httpx.RequireJSONResponse(resp); err != nil {
+		return nil, err
+	}
+	var out compat.ModerationResponse
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (p *Provider) endpoint(path string) string {
 	return p.baseURL + path
 }

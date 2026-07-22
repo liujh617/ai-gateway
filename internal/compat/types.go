@@ -690,3 +690,76 @@ type ImageGenerationData struct {
 }
 
 func intPtr(v int) *int { return &v }
+
+// Moderations
+
+type ModerationRequest struct {
+	Model string                     `json:"model"`
+	Input json.RawMessage            `json:"input"`
+	Extra map[string]json.RawMessage `json:"-"`
+}
+
+type moderationRequestJSON struct {
+	Model string          `json:"model"`
+	Input json.RawMessage `json:"input"`
+}
+
+var moderationRequestKnownFields = []string{"model", "input"}
+
+func (r *ModerationRequest) UnmarshalJSON(data []byte) error {
+	var known moderationRequestJSON
+	if err := json.Unmarshal(data, &known); err != nil {
+		return err
+	}
+	extra, err := decodeExtraFields(data, moderationRequestKnownFields)
+	if err != nil {
+		return err
+	}
+	*r = ModerationRequest{Model: known.Model, Input: known.Input, Extra: extra}
+	return nil
+}
+
+func (r ModerationRequest) MarshalJSON() ([]byte, error) {
+	fields := copyRawFields(r.Extra, moderationRequestKnownFields)
+	if err := putJSONField(fields, "model", r.Model); err != nil {
+		return nil, err
+	}
+	if len(r.Input) > 0 {
+		fields["input"] = cloneRawMessage(r.Input)
+	}
+	return json.Marshal(fields)
+}
+
+func (r ModerationRequest) Validate() *Error {
+	if strings.TrimSpace(r.Model) == "" {
+		return InvalidRequest("missing required field: model", "model")
+	}
+	if !hasProcessableModerationInput(r.Input) {
+		return InvalidRequest("missing required field: input", "input")
+	}
+	return nil
+}
+
+func hasProcessableModerationInput(raw json.RawMessage) bool {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" || trimmed == "[]" {
+		return false
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return strings.TrimSpace(s) != ""
+	}
+	return true
+}
+
+type ModerationResponse struct {
+	ID      string             `json:"id"`
+	Model   string             `json:"model"`
+	Results []ModerationResult `json:"results"`
+}
+
+type ModerationResult struct {
+	Categories     map[string]bool    `json:"categories"`
+	CategoryScores map[string]float64 `json:"category_scores"`
+	Flagged        bool               `json:"flagged"`
+}
