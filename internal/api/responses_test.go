@@ -458,6 +458,10 @@ func (p *responseFunctionStateProvider) CreateImage(ctx context.Context, req com
 	return nil, errors.New("not implemented")
 }
 
+func (p *responseFunctionStateProvider) CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 func newResponseStateIsolationHandler(p provider.Provider, store *responsestore.Store) http.Handler {
 	modelRouter := router.NewModelRouter([]router.ModelRoute{
 		{ExternalModel: "test-model", UpstreamModel: "upstream-test-model", ProviderName: "fake-provider", Provider: p},
@@ -502,6 +506,10 @@ func (p *responseStateProvider) StreamCompletion(context.Context, compat.Complet
 }
 
 func (p *responseStateProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *responseStateProvider) CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -646,6 +654,10 @@ func (p *responseStateStreamProvider) StreamCompletion(context.Context, compat.C
 }
 
 func (p *responseStateStreamProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *responseStateStreamProvider) CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -830,6 +842,10 @@ func (p *functionStreamProvider) StreamCompletion(context.Context, compat.Comple
 	return nil, errors.New("unused")
 }
 func (p *functionStreamProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *functionStreamProvider) CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error) {
 	return nil, errors.New("not implemented")
 }
 func (p *functionStreamProvider) StreamChatCompletion(_ context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
