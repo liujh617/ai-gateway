@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added
+
+- Added `POST /v1/images/generations` endpoint with JSON request/response, reusing existing model router, provider fallback, circuit breaker, and metrics infrastructure.
+
 ## 0.1.6 - 2026-07-21
 
 ### Added

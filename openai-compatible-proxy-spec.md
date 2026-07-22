@@ -472,6 +472,44 @@ data: [DONE]
 - handler 不支持 `logprobs`、`best_of`、`echo`、`suffix` 等参数，但通过 Extra 透传到上游。
 - Content-Type 校验、鉴权、超时、metrics、audit、provider health 和 fallback 行为与 Chat Completions 一致。
 
+## `POST /v1/images/generations`
+
+创建图像。复用 model router、provider fallback、circuit breaker 和 metrics。
+
+### Request
+
+JSON body，`Content-Type: application/json`：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `model` | string | 是 | 模型名称 |
+| `prompt` | string | 是 | 图像描述 |
+| `n` | integer | 否 | 生成数量，默认 1 |
+| `size` | string | 否 | 图像尺寸 |
+| `quality` | string | 否 | 图像质量 |
+| `response_format` | string | 否 | `url` 或 `b64_json` |
+| `style` | string | 否 | 风格 |
+| `user` | string | 否 | 终端用户标识 |
+
+路由使用 `images` capability。`model` 缺失或 `prompt` 为空返回 `400 invalid_request_error`。
+
+### Response
+
+返回 `200 application/json`：
+
+```json
+{
+  "created": 1699000000,
+  "data": [{"url": "https://...", "b64_json": null, "revised_prompt": "..."}]
+}
+```
+
+### 行为
+
+- Handler 不覆盖 `created` 字段。
+- 不支持 `/v1/images/edits` 和 `/v1/images/variations`（需 multipart form-data）。
+- 鉴权、超时、metrics、audit、provider health 和 fallback 行为与其他端点一致。
+
 ## `POST /v1/embeddings`
 
 创建 embeddings。第一阶段支持 OpenAI-compatible embeddings 基础请求和响应。
@@ -575,6 +613,7 @@ models:
 
 - `chat`: 可用于 `/v1/chat/completions` 和 `/v1/responses`
 - `completions`: 可用于 `/v1/completions`
+- `images`: 可用于 `/v1/images/generations`
 - `embeddings`: 可用于 `/v1/embeddings`
 
 未声明 `capabilities` 时默认同时支持 `chat` 和 `embeddings`，用于兼容早期配置。请求使用不支持该能力的模型时，返回 `404 invalid_request_error`。
