@@ -7,6 +7,7 @@ All notable changes to this project are documented here.
 ### Added
 
 - Added `POST /v1/images/generations` endpoint with JSON request/response, reusing existing model router, provider fallback, circuit breaker, and metrics infrastructure.
+- Added `POST /v1/moderations` endpoint with JSON request/response.
 
 ## 0.1.6 - 2026-07-21
 
