@@ -356,7 +356,7 @@ func Default() *Config {
 			"test-model": {
 				Provider:      "fake",
 				UpstreamModel: "test-model",
-				Capabilities:  []string{"chat", "completions", "embeddings"},
+				Capabilities:  []string{"chat", "completions", "embeddings", "images"},
 			},
 		},
 	}
@@ -518,7 +518,7 @@ func (c *Config) Validate() error {
 		}
 		for _, capability := range model.Capabilities {
 			switch capability {
-			case "chat", "completions", "embeddings":
+			case "chat", "completions", "embeddings", "images":
 			default:
 				return fmt.Errorf("model %q has unsupported capability %q", externalModel, capability)
 			}
@@ -663,7 +663,7 @@ func (c *Config) applyDefaults() {
 	}
 	for name, model := range c.Models {
 		if len(model.Capabilities) == 0 {
-			model.Capabilities = []string{"chat", "completions", "embeddings"}
+			model.Capabilities = []string{"chat", "completions", "embeddings", "images"}
 		}
 		c.Models[name] = model
 	}

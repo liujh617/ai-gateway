@@ -73,6 +73,21 @@ func (p *Provider) CreateChatCompletion(ctx context.Context, req compat.ChatComp
 	}, nil
 }
 
+func (p *Provider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.ImageGenerationResponse{
+		Created: time.Now().Unix(),
+		Data: []compat.ImageGenerationData{{
+			URL: "https://example.com/fake-image.png",
+		}},
+	}, nil
+}
+
 func (p *Provider) StreamChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

@@ -387,7 +387,7 @@ func TestLoadConfigDefaultsCapabilities(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 	got := cfg.Models["test-model"].Capabilities
-	if len(got) != 3 || got[0] != "chat" || got[1] != "completions" || got[2] != "embeddings" {
+	if len(got) != 4 || got[0] != "chat" || got[1] != "completions" || got[2] != "embeddings" || got[3] != "images" {
 		t.Fatalf("capabilities = %#v", got)
 	}
 }

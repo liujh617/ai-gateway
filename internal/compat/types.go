@@ -572,3 +572,121 @@ type CompletionsChunkChoice struct {
 	Logprobs     any     `json:"logprobs"`
 	FinishReason *string `json:"finish_reason"`
 }
+
+// Images
+
+type ImageGenerationRequest struct {
+	Model          string                     `json:"model"`
+	Prompt         string                     `json:"prompt"`
+	N              *int                       `json:"n,omitempty"`
+	Size           string                     `json:"size,omitempty"`
+	Quality        string                     `json:"quality,omitempty"`
+	ResponseFormat string                     `json:"response_format,omitempty"`
+	Style          string                     `json:"style,omitempty"`
+	User           string                     `json:"user,omitempty"`
+	Extra          map[string]json.RawMessage `json:"-"`
+}
+
+type imageGenerationRequestJSON struct {
+	Model          string `json:"model"`
+	Prompt         string `json:"prompt"`
+	N              *int   `json:"n,omitempty"`
+	Size           string `json:"size,omitempty"`
+	Quality        string `json:"quality,omitempty"`
+	ResponseFormat string `json:"response_format,omitempty"`
+	Style          string `json:"style,omitempty"`
+	User           string `json:"user,omitempty"`
+}
+
+var imageGenerationRequestKnownFields = []string{
+	"model", "prompt", "n", "size", "quality", "response_format", "style", "user",
+}
+
+func (r *ImageGenerationRequest) UnmarshalJSON(data []byte) error {
+	var known imageGenerationRequestJSON
+	if err := json.Unmarshal(data, &known); err != nil {
+		return err
+	}
+	extra, err := decodeExtraFields(data, imageGenerationRequestKnownFields)
+	if err != nil {
+		return err
+	}
+	*r = ImageGenerationRequest{
+		Model:          known.Model,
+		Prompt:         known.Prompt,
+		N:              known.N,
+		Size:           known.Size,
+		Quality:        known.Quality,
+		ResponseFormat: known.ResponseFormat,
+		Style:          known.Style,
+		User:           known.User,
+		Extra:          extra,
+	}
+	return nil
+}
+
+func (r ImageGenerationRequest) MarshalJSON() ([]byte, error) {
+	fields := copyRawFields(r.Extra, imageGenerationRequestKnownFields)
+	if err := putJSONField(fields, "model", r.Model); err != nil {
+		return nil, err
+	}
+	if r.Prompt != "" {
+		if err := putJSONField(fields, "prompt", r.Prompt); err != nil {
+			return nil, err
+		}
+	}
+	if r.N != nil {
+		if err := putJSONField(fields, "n", r.N); err != nil {
+			return nil, err
+		}
+	}
+	if r.Size != "" {
+		if err := putJSONField(fields, "size", r.Size); err != nil {
+			return nil, err
+		}
+	}
+	if r.Quality != "" {
+		if err := putJSONField(fields, "quality", r.Quality); err != nil {
+			return nil, err
+		}
+	}
+	if r.ResponseFormat != "" {
+		if err := putJSONField(fields, "response_format", r.ResponseFormat); err != nil {
+			return nil, err
+		}
+	}
+	if r.Style != "" {
+		if err := putJSONField(fields, "style", r.Style); err != nil {
+			return nil, err
+		}
+	}
+	if r.User != "" {
+		if err := putJSONField(fields, "user", r.User); err != nil {
+			return nil, err
+		}
+	}
+	return json.Marshal(fields)
+}
+
+func (r ImageGenerationRequest) Validate() *Error {
+	if strings.TrimSpace(r.Model) == "" {
+		return InvalidRequest("missing required field: model", "model")
+	}
+	if strings.TrimSpace(r.Prompt) == "" {
+		return InvalidRequest("missing required field: prompt", "prompt")
+	}
+	return nil
+}
+
+type ImageGenerationResponse struct {
+	Created int64                 `json:"created"`
+	Data    []ImageGenerationData `json:"data"`
+}
+
+type ImageGenerationData struct {
+	URL           string `json:"url,omitempty"`
+	B64JSON       string `json:"b64_json,omitempty"`
+	RevisedPrompt string `json:"revised_prompt,omitempty"`
+}
+
+func intPtr(v int) *int { return &v }

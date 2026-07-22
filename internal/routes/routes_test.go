@@ -214,3 +214,22 @@ func TestAllowedMethodsReturnsCopy(t *testing.T) {
 		t.Fatalf("methods were mutated: %v", again)
 	}
 }
+
+func TestImageGenerationsRoute(t *testing.T) {
+	path := "/v1/images/generations"
+	if got := NormalizePath(path); got != ImageGenerationsPath {
+		t.Fatalf("NormalizePath = %q", got)
+	}
+	if allowed, known := MethodAllowed(path, http.MethodPost); !known || !allowed {
+		t.Fatalf("POST known=%v allowed=%v", known, allowed)
+	}
+	if allowed, known := MethodAllowed(path, http.MethodGet); !known || allowed {
+		t.Fatalf("GET known=%v allowed=%v", known, allowed)
+	}
+	if allow, ok := AllowHeader(path); !ok || allow != "POST" {
+		t.Fatalf("AllowHeader = %q, %v", allow, ok)
+	}
+	if IsPublicPath(path) {
+		t.Fatal("images route must require authentication")
+	}
+}

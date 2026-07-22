@@ -223,6 +223,38 @@ func (p *Provider) StreamCompletion(ctx context.Context, req compat.CompletionsR
 	return httpx.NewCompletionStream(resp.Body), nil
 }
 
+func (p *Provider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint("/images/generations"), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	p.setJSONHeaders(httpReq)
+
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, httpx.UpstreamError(resp)
+	}
+	if err := httpx.RequireJSONResponse(resp); err != nil {
+		return nil, err
+	}
+
+	var out compat.ImageGenerationResponse
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (p *Provider) endpoint(path string) string {
 	return p.baseURL + path
 }
