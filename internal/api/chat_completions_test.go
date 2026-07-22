@@ -2021,6 +2021,10 @@ func (p *blockingProvider) StreamCompletion(ctx context.Context, req compat.Comp
 	return nil, errors.New("not implemented")
 }
 
+func (p *blockingProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 type captureProvider struct {
 	chatReq      compat.ChatCompletionRequest
 	embeddingReq compat.EmbeddingRequest
@@ -2070,6 +2074,10 @@ func (p *captureProvider) CreateCompletion(ctx context.Context, req compat.Compl
 }
 
 func (p *captureProvider) StreamCompletion(ctx context.Context, req compat.CompletionsRequest) (provider.CompletionStream, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *captureProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -2152,6 +2160,10 @@ func (p *countingProvider) StreamCompletion(ctx context.Context, req compat.Comp
 	return nil, errors.New("not implemented")
 }
 
+func (p *countingProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (p *countingProvider) SetError(err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -2193,6 +2205,10 @@ func (p *usageStreamProvider) CreateCompletion(ctx context.Context, req compat.C
 }
 
 func (p *usageStreamProvider) StreamCompletion(ctx context.Context, req compat.CompletionsRequest) (provider.CompletionStream, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *usageStreamProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -2291,6 +2307,10 @@ func (p *slowProvider) StreamCompletion(ctx context.Context, req compat.Completi
 	return nil, errors.New("not implemented")
 }
 
+func (p *slowProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 type delayedStreamProvider struct{}
 
 func (p *delayedStreamProvider) ListModels(ctx context.Context) ([]compat.Model, error) {
@@ -2314,6 +2334,10 @@ func (p *delayedStreamProvider) CreateCompletion(ctx context.Context, req compat
 }
 
 func (p *delayedStreamProvider) StreamCompletion(ctx context.Context, req compat.CompletionsRequest) (provider.CompletionStream, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *delayedStreamProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -2396,6 +2420,10 @@ func (p *sleepyChatProvider) StreamCompletion(context.Context, compat.Completion
 }
 
 func (p *sleepyChatProvider) CreateEmbedding(context.Context, compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *sleepyChatProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
 	return nil, errors.New("not implemented")
 }
 

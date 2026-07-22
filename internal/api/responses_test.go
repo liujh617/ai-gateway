@@ -454,6 +454,10 @@ func (p *responseFunctionStateProvider) CreateEmbedding(context.Context, compat.
 	return nil, errors.New("unused")
 }
 
+func (p *responseFunctionStateProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 func newResponseStateIsolationHandler(p provider.Provider, store *responsestore.Store) http.Handler {
 	modelRouter := router.NewModelRouter([]router.ModelRoute{
 		{ExternalModel: "test-model", UpstreamModel: "upstream-test-model", ProviderName: "fake-provider", Provider: p},
@@ -495,6 +499,10 @@ func (p *responseStateProvider) CreateCompletion(context.Context, compat.Complet
 }
 func (p *responseStateProvider) StreamCompletion(context.Context, compat.CompletionsRequest) (provider.CompletionStream, error) {
 	return nil, errors.New("unused")
+}
+
+func (p *responseStateProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	return nil, errors.New("not implemented")
 }
 
 func messageText(message compat.ChatMessage) string {
@@ -635,6 +643,10 @@ func (p *responseStateStreamProvider) CreateCompletion(context.Context, compat.C
 }
 func (p *responseStateStreamProvider) StreamCompletion(context.Context, compat.CompletionsRequest) (provider.CompletionStream, error) {
 	return nil, errors.New("unused")
+}
+
+func (p *responseStateStreamProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	return nil, errors.New("not implemented")
 }
 
 type responseStateStream struct {
@@ -816,6 +828,9 @@ func (p *functionStreamProvider) CreateCompletion(context.Context, compat.Comple
 }
 func (p *functionStreamProvider) StreamCompletion(context.Context, compat.CompletionsRequest) (provider.CompletionStream, error) {
 	return nil, errors.New("unused")
+}
+func (p *functionStreamProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	return nil, errors.New("not implemented")
 }
 func (p *functionStreamProvider) StreamChatCompletion(_ context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
 	p.requests = append(p.requests, req)

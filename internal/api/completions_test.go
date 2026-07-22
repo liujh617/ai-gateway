@@ -540,6 +540,10 @@ func (p *captureCompletionProvider) CreateEmbedding(context.Context, compat.Embe
 	return nil, errors.New("not implemented")
 }
 
+func (p *captureCompletionProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 // countingCompletionProvider tracks CreateCompletion calls and returns the
 // configured error, used to drive circuit-breaker tests.
 type countingCompletionProvider struct {
@@ -605,6 +609,10 @@ func (p *countingCompletionProvider) CreateEmbedding(context.Context, compat.Emb
 	return nil, errors.New("not implemented")
 }
 
+func (p *countingCompletionProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (p *countingCompletionProvider) callCount() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -635,6 +643,10 @@ func (p *slowCompletionProvider) StreamCompletion(context.Context, compat.Comple
 }
 
 func (p *slowCompletionProvider) CreateEmbedding(context.Context, compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *slowCompletionProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -669,6 +681,10 @@ func (p *blockingCompletionProvider) StreamCompletion(context.Context, compat.Co
 }
 
 func (p *blockingCompletionProvider) CreateEmbedding(context.Context, compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *blockingCompletionProvider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
