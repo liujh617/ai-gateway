@@ -3,7 +3,6 @@ package compat
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 )
@@ -126,14 +125,6 @@ func (r ResponseRequest) MarshalJSON() ([]byte, error) {
 }
 
 func (r ResponseRequest) Validate() *Error {
-	if len(r.Extra) > 0 {
-		keys := make([]string, 0, len(r.Extra))
-		for key := range r.Extra {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		return InvalidRequest("unsupported field: "+keys[0], keys[0])
-	}
 	if strings.TrimSpace(r.Model) == "" {
 		return InvalidRequest("missing required field: model", "model")
 	}
