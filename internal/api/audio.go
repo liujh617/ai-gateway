@@ -246,6 +246,7 @@ func (s *Server) createTranscriptionWithFallback(ctx context.Context, r *http.Re
 		if !s.providerHealth.Healthy(attempt.ProviderName) {
 			s.observeProviderHealth(attempt.ProviderName)
 			s.observeProviderCircuitOpen(r.Context(), routes.AudioTranscriptionsPath, externalModel, attempt.ProviderName)
+				s.logger.Warn("transcription provider circuit open; trying fallback", "provider", attempt.ProviderName)
 			if skippedFrom == "" {
 				skippedFrom = attempt.ProviderName
 			}
@@ -274,7 +275,11 @@ func (s *Server) createTranscriptionWithFallback(ctx context.Context, r *http.Re
 		}
 		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
 			s.observeProviderFallback(r.Context(), routes.AudioTranscriptionsPath, externalModel, attempt.ProviderName, nextProviderName)
+				s.logger.Warn("transcription provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
 		}
+	}
+	if skippedFrom != "" {
+		return nil, "", "", providerUnavailableError()
 	}
 	return nil, "", "", lastErr
 }
@@ -287,6 +292,7 @@ func (s *Server) createTranslationWithFallback(ctx context.Context, r *http.Requ
 		if !s.providerHealth.Healthy(attempt.ProviderName) {
 			s.observeProviderHealth(attempt.ProviderName)
 			s.observeProviderCircuitOpen(r.Context(), routes.AudioTranslationsPath, externalModel, attempt.ProviderName)
+				s.logger.Warn("translation provider circuit open; trying fallback", "provider", attempt.ProviderName)
 			if skippedFrom == "" {
 				skippedFrom = attempt.ProviderName
 			}
@@ -315,7 +321,11 @@ func (s *Server) createTranslationWithFallback(ctx context.Context, r *http.Requ
 		}
 		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
 			s.observeProviderFallback(r.Context(), routes.AudioTranslationsPath, externalModel, attempt.ProviderName, nextProviderName)
+				s.logger.Warn("translation provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
 		}
+	}
+	if skippedFrom != "" {
+		return nil, "", "", providerUnavailableError()
 	}
 	return nil, "", "", lastErr
 }
@@ -328,6 +338,7 @@ func (s *Server) createSpeechWithFallback(ctx context.Context, r *http.Request, 
 		if !s.providerHealth.Healthy(attempt.ProviderName) {
 			s.observeProviderHealth(attempt.ProviderName)
 			s.observeProviderCircuitOpen(r.Context(), routes.AudioSpeechPath, externalModel, attempt.ProviderName)
+				s.logger.Warn("speech provider circuit open; trying fallback", "provider", attempt.ProviderName)
 			if skippedFrom == "" {
 				skippedFrom = attempt.ProviderName
 			}
@@ -356,7 +367,11 @@ func (s *Server) createSpeechWithFallback(ctx context.Context, r *http.Request, 
 		}
 		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
 			s.observeProviderFallback(r.Context(), routes.AudioSpeechPath, externalModel, attempt.ProviderName, nextProviderName)
+				s.logger.Warn("speech provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
 		}
+	}
+	if skippedFrom != "" {
+		return nil, "", "", providerUnavailableError()
 	}
 	return nil, "", "", lastErr
 }

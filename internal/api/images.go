@@ -67,6 +67,7 @@ func (s *Server) createImageWithFallback(ctx context.Context, r *http.Request, r
 		if !s.providerHealth.Healthy(attempt.ProviderName) {
 			s.observeProviderHealth(attempt.ProviderName)
 			s.observeProviderCircuitOpen(r.Context(), routes.ImageGenerationsPath, externalModel, attempt.ProviderName)
+			s.logger.Warn("image generation provider circuit open; trying fallback", "provider", attempt.ProviderName)
 			if skippedFrom == "" {
 				skippedFrom = attempt.ProviderName
 			}
@@ -95,7 +96,11 @@ func (s *Server) createImageWithFallback(ctx context.Context, r *http.Request, r
 		}
 		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
 			s.observeProviderFallback(r.Context(), routes.ImageGenerationsPath, externalModel, attempt.ProviderName, nextProviderName)
+			s.logger.Warn("image generation provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
 		}
+	}
+	if skippedFrom != "" {
+		return nil, "", "", providerUnavailableError()
 	}
 	return nil, "", "", lastErr
 }
