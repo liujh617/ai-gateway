@@ -254,3 +254,97 @@ func chatRequest() compat.ChatCompletionRequest {
 		}},
 	}
 }
+
+func TestCreateSpeechForwardsAzureRequest(t *testing.T) {
+	var got compat.SpeechRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/openai/deployments/tts-deployment/audio/speech" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("api-version") != "2024-02-15-preview" {
+			t.Fatalf("api-version = %s", r.URL.Query().Get("api-version"))
+		}
+		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
+			t.Fatalf("content-type = %q", ct)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "audio/mpeg")
+		w.Write([]byte("azure-audio-data"))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL)
+	resp, err := p.CreateSpeech(context.Background(), compat.SpeechRequest{
+		Model: "tts-deployment",
+		Input: "hello azure",
+		Voice: "nova",
+	})
+	if err != nil {
+		t.Fatalf("CreateSpeech: %v", err)
+	}
+	if string(resp.Data) != "azure-audio-data" {
+		t.Fatalf("data = %q", resp.Data)
+	}
+	if resp.ContentType != "audio/mpeg" {
+		t.Fatalf("content-type = %q", resp.ContentType)
+	}
+}
+
+func TestCreateTranscriptionForwardsAzureRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/openai/deployments/whisper-deployment/audio/transcriptions" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("api-version") != "2024-02-15-preview" {
+			t.Fatalf("api-version = %s", r.URL.Query().Get("api-version"))
+		}
+		if !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+			t.Fatalf("content-type = %q", r.Header.Get("Content-Type"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"text":"azure transcription"}`))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL)
+	resp, err := p.CreateTranscription(context.Background(), compat.AudioTranscriptionRequest{
+		Model:    "whisper-deployment",
+		File:     []byte("audio-data"),
+		Filename: "test.mp3",
+	})
+	if err != nil {
+		t.Fatalf("CreateTranscription: %v", err)
+	}
+	if resp.Text != "azure transcription" {
+		t.Fatalf("text = %q", resp.Text)
+	}
+}
+
+func TestCreateTranslationForwardsAzureRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/openai/deployments/whisper-deployment/audio/translations" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("api-version") != "2024-02-15-preview" {
+			t.Fatalf("api-version = %s", r.URL.Query().Get("api-version"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"text":"azure translation"}`))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL)
+	resp, err := p.CreateTranslation(context.Background(), compat.AudioTranslationRequest{
+		Model:    "whisper-deployment",
+		File:     []byte("audio-data"),
+		Filename: "test.mp3",
+	})
+	if err != nil {
+		t.Fatalf("CreateTranslation: %v", err)
+	}
+	if resp.Text != "azure translation" {
+		t.Fatalf("text = %q", resp.Text)
+	}
+}

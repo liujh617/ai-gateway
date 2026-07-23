@@ -1220,3 +1220,152 @@ func chatRequest() compat.ChatCompletionRequest {
 		}},
 	}
 }
+
+func TestCreateSpeechForwardsRequest(t *testing.T) {
+	var got compat.SpeechRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/audio/speech" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
+			t.Fatalf("content-type = %q", ct)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "audio/mpeg")
+		w.Write([]byte("fake-mp3-data"))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	resp, err := p.CreateSpeech(context.Background(), compat.SpeechRequest{
+		Model: "tts-1",
+		Input: "hello world",
+		Voice: "alloy",
+	})
+	if err != nil {
+		t.Fatalf("CreateSpeech: %v", err)
+	}
+	if string(resp.Data) != "fake-mp3-data" {
+		t.Fatalf("data = %q", resp.Data)
+	}
+	if resp.ContentType != "audio/mpeg" {
+		t.Fatalf("content-type = %q", resp.ContentType)
+	}
+	if got.Model != "tts-1" || got.Input != "hello world" || got.Voice != "alloy" {
+		t.Fatalf("request = %#v", got)
+	}
+}
+
+func TestCreateSpeechUsesUpstreamContentType(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/ogg")
+		w.Write([]byte("audio-data"))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	resp, err := p.CreateSpeech(context.Background(), compat.SpeechRequest{Model: "tts-1", Input: "hi", Voice: "alloy"})
+	if err != nil {
+		t.Fatalf("CreateSpeech: %v", err)
+	}
+	if resp.ContentType != "audio/ogg" {
+		t.Fatalf("content-type = %q, want audio/ogg", resp.ContentType)
+	}
+}
+
+func TestCreateSpeechMapsUpstreamError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"error":{"message":"rate limit","type":"rate_limit_error","code":"rate_limit"}}`))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.CreateSpeech(context.Background(), compat.SpeechRequest{Model: "tts-1", Input: "hi", Voice: "alloy"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	compatErr, ok := err.(*compat.Error)
+	if !ok {
+		t.Fatalf("error type = %T", err)
+	}
+	if compatErr.Status != http.StatusTooManyRequests {
+		t.Fatalf("status = %d", compatErr.Status)
+	}
+}
+
+func TestCreateTranscriptionForwardsMultipartRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/audio/transcriptions" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+			t.Fatalf("content-type = %q", r.Header.Get("Content-Type"))
+		}
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			t.Fatalf("ParseMultipartForm: %v", err)
+		}
+		if v := r.FormValue("model"); v != "whisper-1" {
+			t.Fatalf("model = %q", v)
+		}
+		if v := r.FormValue("language"); v != "en" {
+			t.Fatalf("language = %q", v)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"text":"transcribed text"}`))
+	}))
+	defer server.Close()
+
+	temp := 0.5
+	p := newProvider(t, server.URL+"/v1")
+	resp, err := p.CreateTranscription(context.Background(), compat.AudioTranscriptionRequest{
+		Model:          "whisper-1",
+		File:           []byte("audio-data"),
+		Filename:       "test.wav",
+		Language:       "en",
+		Temperature:    &temp,
+	})
+	if err != nil {
+		t.Fatalf("CreateTranscription: %v", err)
+	}
+	if resp.Text != "transcribed text" {
+		t.Fatalf("text = %q", resp.Text)
+	}
+}
+
+func TestCreateTranslationForwardsMultipartRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/audio/translations" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			t.Fatalf("ParseMultipartForm: %v", err)
+		}
+		// Translation should NOT include language field
+		if v := r.FormValue("language"); v != "" {
+			t.Fatalf("language unexpectedly present: %q", v)
+		}
+		if v := r.FormValue("model"); v != "whisper-1" {
+			t.Fatalf("model = %q", v)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"text":"translated text"}`))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	resp, err := p.CreateTranslation(context.Background(), compat.AudioTranslationRequest{
+		Model:    "whisper-1",
+		File:     []byte("audio-data"),
+		Filename: "test.wav",
+	})
+	if err != nil {
+		t.Fatalf("CreateTranslation: %v", err)
+	}
+	if resp.Text != "translated text" {
+		t.Fatalf("text = %q", resp.Text)
+	}
+}
