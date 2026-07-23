@@ -68,32 +68,8 @@ func (p *Provider) ListModels(ctx context.Context) ([]compat.Model, error) {
 
 func (p *Provider) CreateChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
 	req.Stream = false
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint("/chat/completions"), bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	p.setJSONHeaders(httpReq)
-
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return nil, httpx.TransportError(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, httpx.UpstreamError(resp)
-	}
-	if err := httpx.RequireJSONResponse(resp); err != nil {
-		return nil, err
-	}
-
 	var out compat.ChatCompletionResponse
-	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+	if err := p.doJSONRequest(ctx, "/chat/completions", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -130,32 +106,8 @@ func (p *Provider) StreamChatCompletion(ctx context.Context, req compat.ChatComp
 }
 
 func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint("/embeddings"), bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	p.setJSONHeaders(httpReq)
-
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return nil, httpx.TransportError(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, httpx.UpstreamError(resp)
-	}
-	if err := httpx.RequireJSONResponse(resp); err != nil {
-		return nil, err
-	}
-
 	var out compat.EmbeddingResponse
-	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+	if err := p.doJSONRequest(ctx, "/embeddings", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -163,32 +115,8 @@ func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequ
 
 func (p *Provider) CreateCompletion(ctx context.Context, req compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
 	req.Stream = false
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint("/completions"), bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	p.setJSONHeaders(httpReq)
-
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return nil, httpx.TransportError(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, httpx.UpstreamError(resp)
-	}
-	if err := httpx.RequireJSONResponse(resp); err != nil {
-		return nil, err
-	}
-
 	var out compat.CompletionsResponse
-	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+	if err := p.doJSONRequest(ctx, "/completions", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -225,60 +153,16 @@ func (p *Provider) StreamCompletion(ctx context.Context, req compat.CompletionsR
 }
 
 func (p *Provider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint("/images/generations"), bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	p.setJSONHeaders(httpReq)
-
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return nil, httpx.TransportError(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, httpx.UpstreamError(resp)
-	}
-	if err := httpx.RequireJSONResponse(resp); err != nil {
-		return nil, err
-	}
-
 	var out compat.ImageGenerationResponse
-	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+	if err := p.doJSONRequest(ctx, "/images/generations", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
 func (p *Provider) CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint("/moderations"), bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	p.setJSONHeaders(httpReq)
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return nil, httpx.TransportError(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, httpx.UpstreamError(resp)
-	}
-	if err := httpx.RequireJSONResponse(resp); err != nil {
-		return nil, err
-	}
 	var out compat.ModerationResponse
-	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+	if err := p.doJSONRequest(ctx, "/moderations", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -372,6 +256,30 @@ func (p *Provider) CreateSpeech(ctx context.Context, req compat.SpeechRequest) (
 		Data:        audioData,
 		ContentType: contentType,
 	}, nil
+}
+
+func (p *Provider) doJSONRequest(ctx context.Context, path string, reqBody, respBody any) error {
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint(path), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	p.setJSONHeaders(httpReq)
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return httpx.UpstreamError(resp)
+	}
+	if err := httpx.RequireJSONResponse(resp); err != nil {
+		return err
+	}
+	return httpx.DecodeLimited(resp.Body, respBody)
 }
 
 func (p *Provider) endpoint(path string) string {
