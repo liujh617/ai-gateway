@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -249,6 +250,96 @@ func (p *Provider) CreateModeration(ctx context.Context, req compat.ModerationRe
 		return nil, err
 	}
 	return &out, nil
+}
+
+func (p *Provider) CreateTranscription(ctx context.Context, req compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, error) {
+	body, contentType, err := httpx.BuildAudioMultipartBody(req.File, req.Filename, req.Model, req.Language, req.Prompt, req.ResponseFormat, req.Temperature)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint(req.Model, "audio/transcriptions"), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	p.setHeaders(httpReq)
+	httpReq.Header.Set("Content-Type", contentType)
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, httpx.UpstreamError(resp)
+	}
+	if err := httpx.RequireJSONResponse(resp); err != nil {
+		return nil, err
+	}
+	var out compat.AudioTranscriptionResponse
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (p *Provider) CreateTranslation(ctx context.Context, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, error) {
+	body, contentType, err := httpx.BuildAudioMultipartBody(req.File, req.Filename, req.Model, "", req.Prompt, req.ResponseFormat, req.Temperature)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint(req.Model, "audio/translations"), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	p.setHeaders(httpReq)
+	httpReq.Header.Set("Content-Type", contentType)
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, httpx.UpstreamError(resp)
+	}
+	if err := httpx.RequireJSONResponse(resp); err != nil {
+		return nil, err
+	}
+	var out compat.AudioTranslationResponse
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (p *Provider) CreateSpeech(ctx context.Context, req compat.SpeechRequest) (*compat.SpeechResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint(req.Model, "audio/speech"), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	p.setJSONHeaders(httpReq)
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, httpx.UpstreamError(resp)
+	}
+	audioData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "audio/mpeg"
+	}
+	return &compat.SpeechResponse{
+		Data:        audioData,
+		ContentType: contentType,
+	}, nil
 }
 
 func (p *Provider) endpoint(deployment, operation string) string {

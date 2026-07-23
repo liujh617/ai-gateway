@@ -352,7 +352,7 @@ func TestLoadConfigValidatesCapabilities(t *testing.T) {
 		"models": {
 			"bad-model": {
 				"provider": "fake",
-				"capabilities": ["images"]
+				"capabilities": ["nonexistent"]
 			}
 		}
 	}`)

@@ -548,6 +548,18 @@ func (p *captureCompletionProvider) CreateModeration(ctx context.Context, req co
 	return nil, errors.New("not implemented")
 }
 
+func (p *captureCompletionProvider) CreateTranscription(ctx context.Context, req compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *captureCompletionProvider) CreateTranslation(ctx context.Context, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *captureCompletionProvider) CreateSpeech(ctx context.Context, req compat.SpeechRequest) (*compat.SpeechResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 // countingCompletionProvider tracks CreateCompletion calls and returns the
 // configured error, used to drive circuit-breaker tests.
 type countingCompletionProvider struct {
@@ -621,6 +633,18 @@ func (p *countingCompletionProvider) CreateModeration(ctx context.Context, req c
 	return nil, errors.New("not implemented")
 }
 
+func (p *countingCompletionProvider) CreateTranscription(ctx context.Context, req compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *countingCompletionProvider) CreateTranslation(ctx context.Context, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *countingCompletionProvider) CreateSpeech(ctx context.Context, req compat.SpeechRequest) (*compat.SpeechResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (p *countingCompletionProvider) callCount() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -659,6 +683,18 @@ func (p *slowCompletionProvider) CreateImage(ctx context.Context, req compat.Ima
 }
 
 func (p *slowCompletionProvider) CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *slowCompletionProvider) CreateTranscription(ctx context.Context, req compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *slowCompletionProvider) CreateTranslation(ctx context.Context, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *slowCompletionProvider) CreateSpeech(ctx context.Context, req compat.SpeechRequest) (*compat.SpeechResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -701,6 +737,18 @@ func (p *blockingCompletionProvider) CreateImage(ctx context.Context, req compat
 }
 
 func (p *blockingCompletionProvider) CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *blockingCompletionProvider) CreateTranscription(ctx context.Context, req compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *blockingCompletionProvider) CreateTranslation(ctx context.Context, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *blockingCompletionProvider) CreateSpeech(ctx context.Context, req compat.SpeechRequest) (*compat.SpeechResponse, error) {
 	return nil, errors.New("not implemented")
 }
 

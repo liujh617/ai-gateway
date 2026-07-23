@@ -763,3 +763,135 @@ type ModerationResult struct {
 	CategoryScores map[string]float64 `json:"category_scores"`
 	Flagged        bool               `json:"flagged"`
 }
+
+// Audio
+
+type AudioTranscriptionRequest struct {
+	Model          string                     `json:"model"`
+	File           []byte                     `json:"-"`
+	Filename       string                     `json:"-"`
+	Language       string                     `json:"language,omitempty"`
+	Prompt         string                     `json:"prompt,omitempty"`
+	ResponseFormat string                     `json:"response_format,omitempty"`
+	Temperature    *float64                   `json:"temperature,omitempty"`
+	Extra          map[string]json.RawMessage `json:"-"`
+}
+
+func (r AudioTranscriptionRequest) ValidateTextOnly() *Error {
+	if strings.TrimSpace(r.Model) == "" {
+		return InvalidRequest("missing required field: model", "model")
+	}
+	if len(r.File) == 0 {
+		return InvalidRequest("missing required field: file", "file")
+	}
+	return nil
+}
+
+type AudioTranscriptionResponse struct {
+	Text string `json:"text"`
+}
+
+type AudioTranslationRequest struct {
+	Model          string                     `json:"model"`
+	File           []byte                     `json:"-"`
+	Filename       string                     `json:"-"`
+	Prompt         string                     `json:"prompt,omitempty"`
+	ResponseFormat string                     `json:"response_format,omitempty"`
+	Temperature    *float64                   `json:"temperature,omitempty"`
+	Extra          map[string]json.RawMessage `json:"-"`
+}
+
+func (r AudioTranslationRequest) ValidateTextOnly() *Error {
+	if strings.TrimSpace(r.Model) == "" {
+		return InvalidRequest("missing required field: model", "model")
+	}
+	if len(r.File) == 0 {
+		return InvalidRequest("missing required field: file", "file")
+	}
+	return nil
+}
+
+type AudioTranslationResponse struct {
+	Text string `json:"text"`
+}
+
+type SpeechRequest struct {
+	Model          string                     `json:"model"`
+	Input          string                     `json:"input"`
+	Voice          string                     `json:"voice"`
+	ResponseFormat string                     `json:"response_format,omitempty"`
+	Speed          *float64                   `json:"speed,omitempty"`
+	Extra          map[string]json.RawMessage `json:"-"`
+}
+
+type speechRequestJSON struct {
+	Model          string   `json:"model"`
+	Input          string   `json:"input"`
+	Voice          string   `json:"voice"`
+	ResponseFormat string   `json:"response_format,omitempty"`
+	Speed          *float64 `json:"speed,omitempty"`
+}
+
+var speechRequestKnownFields = []string{"model", "input", "voice", "response_format", "speed"}
+
+func (r *SpeechRequest) UnmarshalJSON(data []byte) error {
+	var known speechRequestJSON
+	if err := json.Unmarshal(data, &known); err != nil {
+		return err
+	}
+	extra, err := decodeExtraFields(data, speechRequestKnownFields)
+	if err != nil {
+		return err
+	}
+	*r = SpeechRequest{
+		Model:          known.Model,
+		Input:          known.Input,
+		Voice:          known.Voice,
+		ResponseFormat: known.ResponseFormat,
+		Speed:          known.Speed,
+		Extra:          extra,
+	}
+	return nil
+}
+
+func (r SpeechRequest) MarshalJSON() ([]byte, error) {
+	fields := copyRawFields(r.Extra, speechRequestKnownFields)
+	if err := putJSONField(fields, "model", r.Model); err != nil {
+		return nil, err
+	}
+	if err := putJSONField(fields, "input", r.Input); err != nil {
+		return nil, err
+	}
+	if err := putJSONField(fields, "voice", r.Voice); err != nil {
+		return nil, err
+	}
+	if r.ResponseFormat != "" {
+		if err := putJSONField(fields, "response_format", r.ResponseFormat); err != nil {
+			return nil, err
+		}
+	}
+	if r.Speed != nil {
+		if err := putJSONField(fields, "speed", r.Speed); err != nil {
+			return nil, err
+		}
+	}
+	return json.Marshal(fields)
+}
+
+func (r SpeechRequest) Validate() *Error {
+	if strings.TrimSpace(r.Model) == "" {
+		return InvalidRequest("missing required field: model", "model")
+	}
+	if strings.TrimSpace(r.Input) == "" {
+		return InvalidRequest("missing required field: input", "input")
+	}
+	if strings.TrimSpace(r.Voice) == "" {
+		return InvalidRequest("missing required field: voice", "voice")
+	}
+	return nil
+}
+
+type SpeechResponse struct {
+	Data        []byte
+	ContentType string
+}

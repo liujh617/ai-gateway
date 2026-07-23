@@ -8,19 +8,22 @@ import (
 const (
 	UnknownPathLabel = "/__unknown__"
 
-	HealthzPath           = "/healthz"
-	ReadyzPath            = "/readyz"
-	VersionPath           = "/version"
-	MetricsPath           = "/metrics"
-	ModelsPath            = "/v1/models"
-	ModelsRetrievePath    = "/v1/models/{model}"
-	ChatCompletionsPath   = "/v1/chat/completions"
-	ResponsesPath         = "/v1/responses"
-	ResponsesRetrievePath = "/v1/responses/{response_id}"
-	CompletionsPath       = "/v1/completions"
-	ImageGenerationsPath  = "/v1/images/generations"
-	ModerationsPath       = "/v1/moderations"
-	EmbeddingsPath        = "/v1/embeddings"
+	HealthzPath             = "/healthz"
+	ReadyzPath              = "/readyz"
+	VersionPath             = "/version"
+	MetricsPath             = "/metrics"
+	ModelsPath              = "/v1/models"
+	ModelsRetrievePath      = "/v1/models/{model}"
+	ChatCompletionsPath     = "/v1/chat/completions"
+	ResponsesPath           = "/v1/responses"
+	ResponsesRetrievePath   = "/v1/responses/{response_id}"
+	CompletionsPath         = "/v1/completions"
+	ImageGenerationsPath    = "/v1/images/generations"
+	ModerationsPath         = "/v1/moderations"
+	EmbeddingsPath          = "/v1/embeddings"
+	AudioTranscriptionsPath = "/v1/audio/transcriptions"
+	AudioTranslationsPath   = "/v1/audio/translations"
+	AudioSpeechPath         = "/v1/audio/speech"
 )
 
 type Route struct {
@@ -43,6 +46,9 @@ var definitions = []Route{
 	{Path: ImageGenerationsPath, Methods: []string{http.MethodPost}},
 	{Path: ModerationsPath, Methods: []string{http.MethodPost}},
 	{Path: EmbeddingsPath, Methods: []string{http.MethodPost}},
+	{Path: AudioTranscriptionsPath, Methods: []string{http.MethodPost}},
+	{Path: AudioTranslationsPath, Methods: []string{http.MethodPost}},
+	{Path: AudioSpeechPath, Methods: []string{http.MethodPost}},
 }
 
 var knownPaths = func() map[string]struct{} {

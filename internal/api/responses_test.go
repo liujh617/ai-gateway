@@ -462,6 +462,18 @@ func (p *responseFunctionStateProvider) CreateModeration(ctx context.Context, re
 	return nil, errors.New("not implemented")
 }
 
+func (p *responseFunctionStateProvider) CreateTranscription(ctx context.Context, req compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *responseFunctionStateProvider) CreateTranslation(ctx context.Context, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *responseFunctionStateProvider) CreateSpeech(ctx context.Context, req compat.SpeechRequest) (*compat.SpeechResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 func newResponseStateIsolationHandler(p provider.Provider, store *responsestore.Store) http.Handler {
 	modelRouter := router.NewModelRouter([]router.ModelRoute{
 		{ExternalModel: "test-model", UpstreamModel: "upstream-test-model", ProviderName: "fake-provider", Provider: p},
@@ -510,6 +522,18 @@ func (p *responseStateProvider) CreateImage(ctx context.Context, req compat.Imag
 }
 
 func (p *responseStateProvider) CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *responseStateProvider) CreateTranscription(ctx context.Context, req compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *responseStateProvider) CreateTranslation(ctx context.Context, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *responseStateProvider) CreateSpeech(ctx context.Context, req compat.SpeechRequest) (*compat.SpeechResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -658,6 +682,18 @@ func (p *responseStateStreamProvider) CreateImage(ctx context.Context, req compa
 }
 
 func (p *responseStateStreamProvider) CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *responseStateStreamProvider) CreateTranscription(ctx context.Context, req compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *responseStateStreamProvider) CreateTranslation(ctx context.Context, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *responseStateStreamProvider) CreateSpeech(ctx context.Context, req compat.SpeechRequest) (*compat.SpeechResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -846,6 +882,18 @@ func (p *functionStreamProvider) CreateImage(ctx context.Context, req compat.Ima
 }
 
 func (p *functionStreamProvider) CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *functionStreamProvider) CreateTranscription(ctx context.Context, req compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *functionStreamProvider) CreateTranslation(ctx context.Context, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (p *functionStreamProvider) CreateSpeech(ctx context.Context, req compat.SpeechRequest) (*compat.SpeechResponse, error) {
 	return nil, errors.New("not implemented")
 }
 func (p *functionStreamProvider) StreamChatCompletion(_ context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {

@@ -106,6 +106,43 @@ func (p *Provider) CreateModeration(ctx context.Context, req compat.ModerationRe
 	}, nil
 }
 
+func (p *Provider) CreateTranscription(ctx context.Context, req compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.AudioTranscriptionResponse{
+		Text: p.ResponseText,
+	}, nil
+}
+
+func (p *Provider) CreateTranslation(ctx context.Context, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.AudioTranslationResponse{
+		Text: p.ResponseText,
+	}, nil
+}
+
+func (p *Provider) CreateSpeech(ctx context.Context, req compat.SpeechRequest) (*compat.SpeechResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.SpeechResponse{
+		Data:        []byte("fake-audio-data"),
+		ContentType: "audio/mpeg",
+	}, nil
+}
+
 func (p *Provider) StreamChatCompletion(ctx context.Context, req compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

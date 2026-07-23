@@ -129,19 +129,22 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) routeHandlers() map[string]func(http.ResponseWriter, *http.Request) {
 	return map[string]func(http.ResponseWriter, *http.Request){
-		routes.HealthzPath:           s.handleHealthz,
-		routes.ReadyzPath:            s.handleReadyz,
-		routes.VersionPath:           s.handleVersion,
-		routes.MetricsPath:           s.handleMetrics,
-		routes.ModelsPath:            s.handleModels,
-		routes.ModelsRetrievePath:    s.handleModel,
-		routes.ChatCompletionsPath:   s.handleChatCompletions,
-		routes.ResponsesPath:         s.handleResponses,
-		routes.ResponsesRetrievePath: s.handleResponse,
-		routes.CompletionsPath:       s.handleCompletions,
-		routes.ImageGenerationsPath:  s.handleImageGenerations,
-		routes.ModerationsPath:       s.handleModerations,
-		routes.EmbeddingsPath:        s.handleEmbeddings,
+		routes.HealthzPath:             s.handleHealthz,
+		routes.ReadyzPath:              s.handleReadyz,
+		routes.VersionPath:             s.handleVersion,
+		routes.MetricsPath:             s.handleMetrics,
+		routes.ModelsPath:              s.handleModels,
+		routes.ModelsRetrievePath:      s.handleModel,
+		routes.ChatCompletionsPath:     s.handleChatCompletions,
+		routes.ResponsesPath:           s.handleResponses,
+		routes.ResponsesRetrievePath:   s.handleResponse,
+		routes.CompletionsPath:         s.handleCompletions,
+		routes.ImageGenerationsPath:    s.handleImageGenerations,
+		routes.ModerationsPath:         s.handleModerations,
+		routes.EmbeddingsPath:          s.handleEmbeddings,
+		routes.AudioTranscriptionsPath: s.handleAudioTranscriptions,
+		routes.AudioTranslationsPath:   s.handleAudioTranslations,
+		routes.AudioSpeechPath:         s.handleAudioSpeech,
 	}
 }
 
