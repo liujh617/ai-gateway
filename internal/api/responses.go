@@ -350,7 +350,7 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 		completedOutput[textOutputIndex] = doneItem
 	}
 	for _, state := range functionOrder {
-		if !validJSONValue(state.Arguments) {
+		if !compat.ValidJSONString(state.Arguments) {
 			emit("error", map[string]any{"error": compat.ErrorResponseFor(compat.ServerError(http.StatusBadGateway, "provider returned invalid function arguments")).Error})
 			return
 		}
@@ -430,11 +430,6 @@ type chatToolCallDelta struct {
 		Name      string `json:"name"`
 		Arguments string `json:"arguments"`
 	} `json:"function"`
-}
-
-func validJSONValue(value string) bool {
-	var raw any
-	return json.Unmarshal([]byte(value), &raw) == nil
 }
 
 func writeTypedSSE(w io.Writer, eventType string, value any) error {

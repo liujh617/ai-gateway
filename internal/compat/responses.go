@@ -181,7 +181,7 @@ func (r ResponseRequest) ChatRequest() (ChatCompletionRequest, *Error) {
 		_ = json.Unmarshal(raw, &header)
 		if header.Type == "function_call" {
 			var item responseFunctionCallInput
-			if json.Unmarshal(raw, &item) != nil || strings.TrimSpace(item.CallID) == "" || strings.TrimSpace(item.Name) == "" || !validJSONString(item.Arguments) || (item.Status != "" && item.Status != "completed") || seenCalls[item.CallID] {
+			if json.Unmarshal(raw, &item) != nil || strings.TrimSpace(item.CallID) == "" || strings.TrimSpace(item.Name) == "" || !ValidJSONString(item.Arguments) || (item.Status != "" && item.Status != "completed") || seenCalls[item.CallID] {
 				return ChatCompletionRequest{}, InvalidRequest(fmt.Sprintf("invalid function_call at input index %d", i), "input")
 			}
 			seenCalls[item.CallID] = true
@@ -295,7 +295,7 @@ func (r ResponseRequest) chatToolFields() (map[string]json.RawMessage, map[strin
 	return extra, names, nil
 }
 
-func validJSONString(value string) bool {
+func ValidJSONString(value string) bool {
 	var raw any
 	return json.Unmarshal([]byte(value), &raw) == nil
 }
@@ -410,7 +410,7 @@ func NewResponseEnvelope(externalModel string, chat *ChatCompletionResponse, now
 		}
 		seen := map[string]bool{}
 		for i, call := range calls {
-			if strings.TrimSpace(call.ID) == "" || seen[call.ID] || call.Type != "function" || strings.TrimSpace(call.Function.Name) == "" || !validJSONString(call.Function.Arguments) {
+			if strings.TrimSpace(call.ID) == "" || seen[call.ID] || call.Type != "function" || strings.TrimSpace(call.Function.Name) == "" || !ValidJSONString(call.Function.Arguments) {
 				return nil, ServerError(502, "provider returned unsupported function calls")
 			}
 			seen[call.ID] = true
