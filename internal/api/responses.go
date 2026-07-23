@@ -220,6 +220,10 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	streamRequestEvent := s.auditBaseEvent(r, audit.EventRequest, routes.ResponsesPath, externalModel)
+	streamRequestEvent.PreviousResponseID = responseReq.PreviousResponseID
+	streamRequestEvent.Body = rawBody(responseReq)
+	s.audit.Record(r.Context(), streamRequestEvent)
 	responseID, messageID := responseIdentifier("resp"), responseIdentifier("msg")
 	created := time.Now()
 	sequence := 0
@@ -373,11 +377,17 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 		payload, err := json.Marshal(&completed)
 		if err != nil {
 			s.logger.Warn("failed to encode completed response stream", "error", err)
+				storeErrEvent := s.auditBaseEvent(r, audit.EventError, routes.ResponsesPath, externalModel)
+				storeErrEvent.Error = "response_store_encode_failed"
+				s.audit.Record(r.Context(), storeErrEvent)
 		} else {
 			assistant := streamAssistantMessage(text, textStarted, functionOrder)
 			transcript := append(append(append([]compat.ChatMessage(nil), history...), currentMessages...), assistant)
 			if err := s.responseStore.Put(responsestore.Record{ID: responseID, Client: clientFromContext(r.Context()), Model: externalModel, Transcript: transcript, Response: payload}); err != nil {
 				s.logger.Warn("failed to store completed response stream", "error", err)
+					storeErrEvent := s.auditBaseEvent(r, audit.EventError, routes.ResponsesPath, externalModel)
+					storeErrEvent.Error = "response_store_put_failed"
+					s.audit.Record(r.Context(), storeErrEvent)
 			}
 		}
 	}

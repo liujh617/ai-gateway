@@ -23,18 +23,18 @@ func (s *Server) handleModerations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if validationErr := req.Validate(); validationErr != nil {
-		s.writeError(w, r, validationErr)
+		s.writeAuditedError(w, r, routes.ModerationsPath, req.Model, validationErr)
 		return
 	}
 	if !s.modelAllowedForRequest(r, req.Model) {
 		middleware.SetLogRoute(r.Context(), req.Model, "", "")
-		s.writeError(w, r, compat.ModelNotFound(req.Model))
+		s.writeAuditedError(w, r, routes.ModerationsPath, req.Model, compat.ModelNotFound(req.Model))
 		return
 	}
 	route, resolveErr := s.router.ResolveFor(req.Model, "moderations")
 	if resolveErr != nil {
 		middleware.SetLogRoute(r.Context(), req.Model, "", "")
-		s.writeError(w, r, resolveErr)
+		s.writeAuditedError(w, r, routes.ModerationsPath, req.Model, resolveErr)
 		return
 	}
 	externalModel := req.Model

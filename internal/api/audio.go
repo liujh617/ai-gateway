@@ -24,18 +24,18 @@ func (s *Server) handleAudioTranscriptions(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if validationErr := req.ValidateTextOnly(); validationErr != nil {
-		s.writeError(w, r, validationErr)
+		s.writeAuditedError(w, r, routes.AudioTranscriptionsPath, req.Model, validationErr)
 		return
 	}
 	if !s.modelAllowedForRequest(r, req.Model) {
 		middleware.SetLogRoute(r.Context(), req.Model, "", "")
-		s.writeError(w, r, compat.ModelNotFound(req.Model))
+		s.writeAuditedError(w, r, routes.AudioTranscriptionsPath, req.Model, compat.ModelNotFound(req.Model))
 		return
 	}
 	route, resolveErr := s.router.ResolveFor(req.Model, "transcriptions")
 	if resolveErr != nil {
 		middleware.SetLogRoute(r.Context(), req.Model, "", "")
-		s.writeError(w, r, resolveErr)
+		s.writeAuditedError(w, r, routes.AudioTranscriptionsPath, req.Model, resolveErr)
 		return
 	}
 	externalModel := req.Model
@@ -75,18 +75,18 @@ func (s *Server) handleAudioTranslations(w http.ResponseWriter, r *http.Request)
 		Temperature:    req.Temperature,
 	}
 	if validationErr := translationReq.ValidateTextOnly(); validationErr != nil {
-		s.writeError(w, r, validationErr)
+		s.writeAuditedError(w, r, routes.AudioTranslationsPath, translationReq.Model, validationErr)
 		return
 	}
 	if !s.modelAllowedForRequest(r, translationReq.Model) {
 		middleware.SetLogRoute(r.Context(), translationReq.Model, "", "")
-		s.writeError(w, r, compat.ModelNotFound(translationReq.Model))
+		s.writeAuditedError(w, r, routes.AudioTranslationsPath, translationReq.Model, compat.ModelNotFound(translationReq.Model))
 		return
 	}
 	route, resolveErr := s.router.ResolveFor(translationReq.Model, "translations")
 	if resolveErr != nil {
 		middleware.SetLogRoute(r.Context(), translationReq.Model, "", "")
-		s.writeError(w, r, resolveErr)
+		s.writeAuditedError(w, r, routes.AudioTranslationsPath, translationReq.Model, resolveErr)
 		return
 	}
 	externalModel := translationReq.Model
@@ -122,18 +122,18 @@ func (s *Server) handleAudioSpeech(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if validationErr := req.Validate(); validationErr != nil {
-		s.writeError(w, r, validationErr)
+		s.writeAuditedError(w, r, routes.AudioSpeechPath, req.Model, validationErr)
 		return
 	}
 	if !s.modelAllowedForRequest(r, req.Model) {
 		middleware.SetLogRoute(r.Context(), req.Model, "", "")
-		s.writeError(w, r, compat.ModelNotFound(req.Model))
+		s.writeAuditedError(w, r, routes.AudioSpeechPath, req.Model, compat.ModelNotFound(req.Model))
 		return
 	}
 	route, resolveErr := s.router.ResolveFor(req.Model, "speech")
 	if resolveErr != nil {
 		middleware.SetLogRoute(r.Context(), req.Model, "", "")
-		s.writeError(w, r, resolveErr)
+		s.writeAuditedError(w, r, routes.AudioSpeechPath, req.Model, resolveErr)
 		return
 	}
 	externalModel := req.Model
