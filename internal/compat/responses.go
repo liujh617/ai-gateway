@@ -24,11 +24,11 @@ type ResponseRequest struct {
 func (r *ResponseRequest) UnmarshalJSON(data []byte) error {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	if raw, ok := fields["model"]; ok {
 		if err := json.Unmarshal(raw, &r.Model); err != nil {
-			return err
+			return fmt.Errorf("unmarshal: %w", err)
 		}
 		delete(fields, "model")
 	}
@@ -38,20 +38,20 @@ func (r *ResponseRequest) UnmarshalJSON(data []byte) error {
 	}
 	if raw, ok := fields["instructions"]; ok {
 		if err := json.Unmarshal(raw, &r.Instructions); err != nil {
-			return err
+			return fmt.Errorf("unmarshal: %w", err)
 		}
 		delete(fields, "instructions")
 	}
 	if raw, ok := fields["stream"]; ok {
 		if err := json.Unmarshal(raw, &r.Stream); err != nil {
-			return err
+			return fmt.Errorf("unmarshal: %w", err)
 		}
 		delete(fields, "stream")
 	}
 	if raw, ok := fields["store"]; ok {
 		var store bool
 		if err := json.Unmarshal(raw, &store); err != nil {
-			return err
+			return fmt.Errorf("unmarshal: %w", err)
 		}
 		r.Store = &store
 		delete(fields, "store")
@@ -60,7 +60,7 @@ func (r *ResponseRequest) UnmarshalJSON(data []byte) error {
 		r.previousResponseIDSet = true
 		if string(raw) != "null" {
 			if err := json.Unmarshal(raw, &r.PreviousResponseID); err != nil {
-				return err
+				return fmt.Errorf("unmarshal: %w", err)
 			}
 		}
 		delete(fields, "previous_response_id")
@@ -76,7 +76,7 @@ func (r *ResponseRequest) UnmarshalJSON(data []byte) error {
 	if raw, ok := fields["parallel_tool_calls"]; ok {
 		var value bool
 		if err := json.Unmarshal(raw, &value); err != nil {
-			return err
+			return fmt.Errorf("unmarshal: %w", err)
 		}
 		r.ParallelToolCalls = &value
 		delete(fields, "parallel_tool_calls")

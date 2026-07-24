@@ -2,6 +2,7 @@ package compat
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -26,11 +27,11 @@ type ChatMessage struct {
 func (m *ChatMessage) UnmarshalJSON(data []byte) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	if v, ok := raw["role"]; ok {
 		if err := json.Unmarshal(v, &m.Role); err != nil {
-			return err
+			return fmt.Errorf("unmarshal: %w", err)
 		}
 		delete(raw, "role")
 	}
@@ -83,11 +84,11 @@ var chatCompletionRequestKnownFields = []string{
 func (r *ChatCompletionRequest) UnmarshalJSON(data []byte) error {
 	var known chatCompletionRequestJSON
 	if err := json.Unmarshal(data, &known); err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	extra, err := decodeExtraFields(data, chatCompletionRequestKnownFields)
 	if err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	*r = ChatCompletionRequest{
 		Model:       known.Model,
@@ -227,17 +228,17 @@ type ChatMessageDelta struct {
 func (d *ChatMessageDelta) UnmarshalJSON(data []byte) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	if v, ok := raw["role"]; ok {
 		if err := json.Unmarshal(v, &d.Role); err != nil {
-			return err
+			return fmt.Errorf("unmarshal: %w", err)
 		}
 		delete(raw, "role")
 	}
 	if v, ok := raw["content"]; ok {
 		if err := json.Unmarshal(v, &d.Content); err != nil {
-			return err
+			return fmt.Errorf("unmarshal: %w", err)
 		}
 		delete(raw, "content")
 	}
@@ -306,11 +307,11 @@ var embeddingRequestKnownFields = []string{
 func (r *EmbeddingRequest) UnmarshalJSON(data []byte) error {
 	var known embeddingRequestJSON
 	if err := json.Unmarshal(data, &known); err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	extra, err := decodeExtraFields(data, embeddingRequestKnownFields)
 	if err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	*r = EmbeddingRequest{
 		Model:          known.Model,
@@ -410,7 +411,7 @@ func copyRawFields(src map[string]json.RawMessage, knownFields []string) map[str
 func putJSONField(fields map[string]json.RawMessage, key string, value any) error {
 	data, err := json.Marshal(value)
 	if err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	fields[key] = data
 	return nil
@@ -464,11 +465,11 @@ var completionsRequestKnownFields = []string{
 func (r *CompletionsRequest) UnmarshalJSON(data []byte) error {
 	var known completionsRequestJSON
 	if err := json.Unmarshal(data, &known); err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	extra, err := decodeExtraFields(data, completionsRequestKnownFields)
 	if err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	*r = CompletionsRequest{
 		Model:       known.Model,
@@ -605,11 +606,11 @@ var imageGenerationRequestKnownFields = []string{
 func (r *ImageGenerationRequest) UnmarshalJSON(data []byte) error {
 	var known imageGenerationRequestJSON
 	if err := json.Unmarshal(data, &known); err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	extra, err := decodeExtraFields(data, imageGenerationRequestKnownFields)
 	if err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	*r = ImageGenerationRequest{
 		Model:          known.Model,
@@ -709,11 +710,11 @@ var moderationRequestKnownFields = []string{"model", "input"}
 func (r *ModerationRequest) UnmarshalJSON(data []byte) error {
 	var known moderationRequestJSON
 	if err := json.Unmarshal(data, &known); err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	extra, err := decodeExtraFields(data, moderationRequestKnownFields)
 	if err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	*r = ModerationRequest{Model: known.Model, Input: known.Input, Extra: extra}
 	return nil
@@ -837,11 +838,11 @@ var speechRequestKnownFields = []string{"model", "input", "voice", "response_for
 func (r *SpeechRequest) UnmarshalJSON(data []byte) error {
 	var known speechRequestJSON
 	if err := json.Unmarshal(data, &known); err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	extra, err := decodeExtraFields(data, speechRequestKnownFields)
 	if err != nil {
-		return err
+		return fmt.Errorf("unmarshal: %w", err)
 	}
 	*r = SpeechRequest{
 		Model:          known.Model,
