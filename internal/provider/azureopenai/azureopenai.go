@@ -391,3 +391,130 @@ func (p *Provider) CancelBatch(ctx context.Context, batchID string) (*compat.Bat
 	}
 	return &out, nil
 }
+
+func (p *Provider) UploadFile(ctx context.Context, req compat.FileUploadRequest) (*compat.FileObject, error) {
+	body, contentType, err := httpx.BuildAudioMultipartBody(req.File, req.Filename, "", "", req.Purpose, "", nil)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/files?api-version="+p.apiVersion, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	p.setHeaders(httpReq)
+	httpReq.Header.Set("Content-Type", contentType)
+	httpReq.Header.Set("Purpose", req.Purpose)
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, httpx.UpstreamError(resp)
+	}
+	if err := httpx.RequireJSONResponse(resp); err != nil {
+		return nil, err
+	}
+	var out compat.FileObject
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (p *Provider) ListFiles(ctx context.Context) (*compat.FileList, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/files?api-version="+p.apiVersion, nil)
+	if err != nil {
+		return nil, err
+	}
+	p.setHeaders(httpReq)
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, httpx.UpstreamError(resp)
+	}
+	if err := httpx.RequireJSONResponse(resp); err != nil {
+		return nil, err
+	}
+	var out compat.FileList
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (p *Provider) RetrieveFile(ctx context.Context, fileID string) (*compat.FileObject, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/files/"+fileID+"?api-version="+p.apiVersion, nil)
+	if err != nil {
+		return nil, err
+	}
+	p.setHeaders(httpReq)
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, httpx.UpstreamError(resp)
+	}
+	if err := httpx.RequireJSONResponse(resp); err != nil {
+		return nil, err
+	}
+	var out compat.FileObject
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (p *Provider) DeleteFile(ctx context.Context, fileID string) (*compat.FileDeleteResponse, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, p.baseURL+"/files/"+fileID+"?api-version="+p.apiVersion, nil)
+	if err != nil {
+		return nil, err
+	}
+	p.setHeaders(httpReq)
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, httpx.UpstreamError(resp)
+	}
+	if err := httpx.RequireJSONResponse(resp); err != nil {
+		return nil, err
+	}
+	var out compat.FileDeleteResponse
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (p *Provider) DownloadFile(ctx context.Context, fileID string) ([]byte, string, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/files/"+fileID+"/content?api-version="+p.apiVersion, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	p.setHeaders(httpReq)
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, "", httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, "", httpx.UpstreamError(resp)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", err
+	}
+	ct := resp.Header.Get("Content-Type")
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+	return data, ct, nil
+}

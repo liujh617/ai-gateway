@@ -2654,3 +2654,45 @@ func (p *sleepyChatProvider) CreateBatch(ctx context.Context, req compat.BatchRe
 func (p *sleepyChatProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
 func (p *sleepyChatProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
 func (p *sleepyChatProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+
+func (p *blockingProvider) UploadFile(ctx context.Context, req compat.FileUploadRequest) (*compat.FileObject, error) { return nil, errors.New("not implemented") }
+func (p *blockingProvider) ListFiles(ctx context.Context) (*compat.FileList, error) { return nil, errors.New("not implemented") }
+func (p *blockingProvider) RetrieveFile(ctx context.Context, fileID string) (*compat.FileObject, error) { return nil, errors.New("not implemented") }
+func (p *blockingProvider) DeleteFile(ctx context.Context, fileID string) (*compat.FileDeleteResponse, error) { return nil, errors.New("not implemented") }
+func (p *blockingProvider) DownloadFile(ctx context.Context, fileID string) ([]byte, string, error) { return nil, "", errors.New("not implemented") }
+
+func (p *captureProvider) UploadFile(ctx context.Context, req compat.FileUploadRequest) (*compat.FileObject, error) { return nil, errors.New("not implemented") }
+func (p *captureProvider) ListFiles(ctx context.Context) (*compat.FileList, error) { return nil, errors.New("not implemented") }
+func (p *captureProvider) RetrieveFile(ctx context.Context, fileID string) (*compat.FileObject, error) { return nil, errors.New("not implemented") }
+func (p *captureProvider) DeleteFile(ctx context.Context, fileID string) (*compat.FileDeleteResponse, error) { return nil, errors.New("not implemented") }
+func (p *captureProvider) DownloadFile(ctx context.Context, fileID string) ([]byte, string, error) { return nil, "", errors.New("not implemented") }
+
+func (p *countingProvider) UploadFile(ctx context.Context, req compat.FileUploadRequest) (*compat.FileObject, error) { return nil, errors.New("not implemented") }
+func (p *countingProvider) ListFiles(ctx context.Context) (*compat.FileList, error) { return nil, errors.New("not implemented") }
+func (p *countingProvider) RetrieveFile(ctx context.Context, fileID string) (*compat.FileObject, error) { return nil, errors.New("not implemented") }
+func (p *countingProvider) DeleteFile(ctx context.Context, fileID string) (*compat.FileDeleteResponse, error) { return nil, errors.New("not implemented") }
+func (p *countingProvider) DownloadFile(ctx context.Context, fileID string) ([]byte, string, error) { return nil, "", errors.New("not implemented") }
+
+func (p *usageStreamProvider) UploadFile(ctx context.Context, req compat.FileUploadRequest) (*compat.FileObject, error) { return nil, errors.New("not implemented") }
+func (p *usageStreamProvider) ListFiles(ctx context.Context) (*compat.FileList, error) { return nil, errors.New("not implemented") }
+func (p *usageStreamProvider) RetrieveFile(ctx context.Context, fileID string) (*compat.FileObject, error) { return nil, errors.New("not implemented") }
+func (p *usageStreamProvider) DeleteFile(ctx context.Context, fileID string) (*compat.FileDeleteResponse, error) { return nil, errors.New("not implemented") }
+func (p *usageStreamProvider) DownloadFile(ctx context.Context, fileID string) ([]byte, string, error) { return nil, "", errors.New("not implemented") }
+
+func (p *slowProvider) UploadFile(ctx context.Context, req compat.FileUploadRequest) (*compat.FileObject, error) { return nil, errors.New("not implemented") }
+func (p *slowProvider) ListFiles(ctx context.Context) (*compat.FileList, error) { return nil, errors.New("not implemented") }
+func (p *slowProvider) RetrieveFile(ctx context.Context, fileID string) (*compat.FileObject, error) { return nil, errors.New("not implemented") }
+func (p *slowProvider) DeleteFile(ctx context.Context, fileID string) (*compat.FileDeleteResponse, error) { return nil, errors.New("not implemented") }
+func (p *slowProvider) DownloadFile(ctx context.Context, fileID string) ([]byte, string, error) { return nil, "", errors.New("not implemented") }
+
+func (p *delayedStreamProvider) UploadFile(ctx context.Context, req compat.FileUploadRequest) (*compat.FileObject, error) { return nil, errors.New("not implemented") }
+func (p *delayedStreamProvider) ListFiles(ctx context.Context) (*compat.FileList, error) { return nil, errors.New("not implemented") }
+func (p *delayedStreamProvider) RetrieveFile(ctx context.Context, fileID string) (*compat.FileObject, error) { return nil, errors.New("not implemented") }
+func (p *delayedStreamProvider) DeleteFile(ctx context.Context, fileID string) (*compat.FileDeleteResponse, error) { return nil, errors.New("not implemented") }
+func (p *delayedStreamProvider) DownloadFile(ctx context.Context, fileID string) ([]byte, string, error) { return nil, "", errors.New("not implemented") }
+
+func (p *sleepyChatProvider) UploadFile(ctx context.Context, req compat.FileUploadRequest) (*compat.FileObject, error) { return nil, errors.New("not implemented") }
+func (p *sleepyChatProvider) ListFiles(ctx context.Context) (*compat.FileList, error) { return nil, errors.New("not implemented") }
+func (p *sleepyChatProvider) RetrieveFile(ctx context.Context, fileID string) (*compat.FileObject, error) { return nil, errors.New("not implemented") }
+func (p *sleepyChatProvider) DeleteFile(ctx context.Context, fileID string) (*compat.FileDeleteResponse, error) { return nil, errors.New("not implemented") }
+func (p *sleepyChatProvider) DownloadFile(ctx context.Context, fileID string) ([]byte, string, error) { return nil, "", errors.New("not implemented") }

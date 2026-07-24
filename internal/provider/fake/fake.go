@@ -363,3 +363,61 @@ func (p *Provider) CancelBatch(ctx context.Context, batchID string) (*compat.Bat
 		Status:  "cancelling",
 	}, nil
 }
+
+func (p *Provider) UploadFile(ctx context.Context, req compat.FileUploadRequest) (*compat.FileObject, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.FileObject{
+		ID:        "file_fake",
+		Object:    "file",
+		Bytes:     len(req.File),
+		CreatedAt: time.Now().Unix(),
+		Filename:  req.Filename,
+		Purpose:   req.Purpose,
+		Status:    "uploaded",
+	}, nil
+}
+
+func (p *Provider) ListFiles(ctx context.Context) (*compat.FileList, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.FileList{Object: "list", Data: []compat.FileObject{}}, nil
+}
+
+func (p *Provider) RetrieveFile(ctx context.Context, fileID string) (*compat.FileObject, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.FileObject{ID: fileID, Object: "file", Filename: "test.jsonl", Purpose: "fine-tune", Bytes: 100, CreatedAt: time.Now().Unix(), Status: "processed"}, nil
+}
+
+func (p *Provider) DeleteFile(ctx context.Context, fileID string) (*compat.FileDeleteResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.FileDeleteResponse{ID: fileID, Object: "file", Deleted: true}, nil
+}
+
+func (p *Provider) DownloadFile(ctx context.Context, fileID string) ([]byte, string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, "", err
+	}
+	if p.Err != nil {
+		return nil, "", p.Err
+	}
+	return []byte("fake-file-content"), "application/octet-stream", nil
+}

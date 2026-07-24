@@ -27,6 +27,9 @@ const (
 	BatchesPath             = "/v1/batches"
 	BatchesRetrievePath     = "/v1/batches/{batch_id}"
 	BatchesCancelPath       = "/v1/batches/{batch_id}/cancel"
+	FilesPath               = "/v1/files"
+	FilesRetrievePath       = "/v1/files/{file_id}"
+	FilesContentPath        = "/v1/files/{file_id}/content"
 )
 
 type Route struct {
@@ -55,6 +58,9 @@ var definitions = []Route{
 	{Path: BatchesPath, Methods: []string{http.MethodPost, http.MethodGet}},
 	{Path: BatchesRetrievePath, Methods: []string{http.MethodGet}},
 	{Path: BatchesCancelPath, Methods: []string{http.MethodPost}},
+	{Path: FilesPath, Methods: []string{http.MethodPost, http.MethodGet}},
+	{Path: FilesRetrievePath, Methods: []string{http.MethodGet, http.MethodDelete}},
+	{Path: FilesContentPath, Methods: []string{http.MethodGet}},
 }
 
 var knownPaths = func() map[string]struct{} {
@@ -177,6 +183,7 @@ func canonicalPath(path string) (string, bool) {
 		prefix    string
 		canonical string
 	}{
+		{prefix: FilesPath + "/", canonical: FilesRetrievePath},
 		{prefix: BatchesPath + "/", canonical: BatchesRetrievePath},
 		{prefix: ModelsPath + "/", canonical: ModelsRetrievePath},
 		{prefix: ResponsesPath + "/", canonical: ResponsesRetrievePath},

@@ -23,6 +23,11 @@ type Provider interface {
 	ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error)
 	RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error)
 	CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error)
+	UploadFile(ctx context.Context, req compat.FileUploadRequest) (*compat.FileObject, error)
+	ListFiles(ctx context.Context) (*compat.FileList, error)
+	RetrieveFile(ctx context.Context, fileID string) (*compat.FileObject, error)
+	DeleteFile(ctx context.Context, fileID string) (*compat.FileDeleteResponse, error)
+	DownloadFile(ctx context.Context, fileID string) ([]byte, string, error)
 }
 
 type ChatCompletionStream interface {

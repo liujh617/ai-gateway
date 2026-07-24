@@ -518,7 +518,7 @@ func (c *Config) Validate() error {
 		}
 		for _, capability := range model.Capabilities {
 			switch capability {
-			case "chat", "completions", "embeddings", "images", "moderations", "transcriptions", "translations", "speech", "batches":
+			case "chat", "completions", "embeddings", "images", "moderations", "transcriptions", "translations", "speech", "batches", "files":
 			default:
 				return fmt.Errorf("model %q has unsupported capability %q", externalModel, capability)
 			}

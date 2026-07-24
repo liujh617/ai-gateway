@@ -148,6 +148,9 @@ func (s *Server) routeHandlers() map[string]func(http.ResponseWriter, *http.Requ
 		routes.BatchesPath:             s.handleBatches,
 		routes.BatchesRetrievePath:     s.handleRetrieveBatch,
 		routes.BatchesCancelPath:       s.handleCancelBatch,
+		routes.FilesPath:               s.handleFiles,
+		routes.FilesRetrievePath:       s.handleRetrieveFile,
+		routes.FilesContentPath:        s.handleRetrieveFile,
 	}
 }
 

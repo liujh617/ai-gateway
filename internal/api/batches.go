@@ -8,7 +8,6 @@ import (
 
 	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
-	"open-ai-gateway/internal/router"
 	"open-ai-gateway/internal/routes"
 )
 
@@ -21,15 +20,6 @@ func (s *Server) handleBatches(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.writeError(w, r, compat.ServerError(http.StatusMethodNotAllowed, "method not allowed"))
 	}
-}
-
-func (s *Server) resolveBatchRoute(w http.ResponseWriter, r *http.Request) (router.ModelRoute, bool) {
-	route, err := s.router.ResolveByCapability("batches")
-	if err != nil {
-		s.writeError(w, r, err)
-		return router.ModelRoute{}, false
-	}
-	return route, true
 }
 
 func (s *Server) handleCreateBatch(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +36,7 @@ func (s *Server) handleCreateBatch(w http.ResponseWriter, r *http.Request) {
 		s.writeAuditedError(w, r, routes.BatchesPath, "", err)
 		return
 	}
-	route, ok := s.resolveBatchRoute(w, r)
+	route, ok := s.resolveCapabilityRoute(w, r, "batches")
 	if !ok {
 		return
 	}
@@ -76,7 +66,7 @@ func (s *Server) handleListBatches(w http.ResponseWriter, r *http.Request) {
 			limit = parsed
 		}
 	}
-	route, ok := s.resolveBatchRoute(w, r)
+	route, ok := s.resolveCapabilityRoute(w, r, "batches")
 	if !ok {
 		return
 	}
@@ -96,7 +86,7 @@ func (s *Server) handleRetrieveBatch(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, compat.InvalidRequest("missing batch id", "batch_id"))
 		return
 	}
-	route, ok := s.resolveBatchRoute(w, r)
+	route, ok := s.resolveCapabilityRoute(w, r, "batches")
 	if !ok {
 		return
 	}
@@ -115,7 +105,7 @@ func (s *Server) handleCancelBatch(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, compat.InvalidRequest("missing batch id", "batch_id"))
 		return
 	}
-	route, ok := s.resolveBatchRoute(w, r)
+	route, ok := s.resolveCapabilityRoute(w, r, "batches")
 	if !ok {
 		return
 	}

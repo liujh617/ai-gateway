@@ -992,6 +992,48 @@ type Batch struct {
 	Metadata         map[string]json.RawMessage `json:"metadata,omitempty"`
 }
 
+// Files
+
+type FileUploadRequest struct {
+	File     []byte `json:"-"`
+	Filename string `json:"-"`
+	Purpose  string `json:"purpose"`
+}
+
+func (r FileUploadRequest) Validate() *Error {
+	if len(r.File) == 0 {
+		return InvalidRequest("missing required field: file", "file")
+	}
+	if strings.TrimSpace(r.Filename) == "" {
+		return InvalidRequest("missing required field: filename", "filename")
+	}
+	if strings.TrimSpace(r.Purpose) == "" {
+		return InvalidRequest("missing required field: purpose", "purpose")
+	}
+	return nil
+}
+
+type FileObject struct {
+	ID        string `json:"id"`
+	Object    string `json:"object"`
+	Bytes     int    `json:"bytes"`
+	CreatedAt int64  `json:"created_at"`
+	Filename  string `json:"filename"`
+	Purpose   string `json:"purpose"`
+	Status    string `json:"status,omitempty"`
+}
+
+type FileList struct {
+	Object string       `json:"object"`
+	Data   []FileObject `json:"data"`
+}
+
+type FileDeleteResponse struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Deleted bool   `json:"deleted"`
+}
+
 type BatchErrors struct {
 	Object string           `json:"object"`
 	Data   []BatchErrorItem `json:"data"`
