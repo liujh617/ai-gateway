@@ -88,25 +88,30 @@ func (r *ResponseRequest) UnmarshalJSON(data []byte) error {
 }
 
 func (r ResponseRequest) MarshalJSON() ([]byte, error) {
-	fields := make(map[string]json.RawMessage, 5)
-	model, _ := json.Marshal(r.Model)
-	fields["model"] = model
+	fields := copyRawFields(r.Extra, nil)
+	if err := putJSONField(fields, "model", r.Model); err != nil {
+		return nil, err
+	}
 	fields["input"] = cloneRawMessage(r.Input)
 	if r.Instructions != "" {
-		instructions, _ := json.Marshal(r.Instructions)
-		fields["instructions"] = instructions
+		if err := putJSONField(fields, "instructions", r.Instructions); err != nil {
+			return nil, err
+		}
 	}
 	if r.Stream {
-		stream, _ := json.Marshal(true)
-		fields["stream"] = stream
+		if err := putJSONField(fields, "stream", true); err != nil {
+			return nil, err
+		}
 	}
 	if r.Store != nil {
-		store, _ := json.Marshal(*r.Store)
-		fields["store"] = store
+		if err := putJSONField(fields, "store", *r.Store); err != nil {
+			return nil, err
+		}
 	}
 	if r.previousResponseIDSet || r.PreviousResponseID != "" {
-		previousResponseID, _ := json.Marshal(r.PreviousResponseID)
-		fields["previous_response_id"] = previousResponseID
+		if err := putJSONField(fields, "previous_response_id", r.PreviousResponseID); err != nil {
+			return nil, err
+		}
 	}
 	if len(r.Tools) > 0 {
 		fields["tools"] = cloneRawMessage(r.Tools)
@@ -115,11 +120,9 @@ func (r ResponseRequest) MarshalJSON() ([]byte, error) {
 		fields["tool_choice"] = cloneRawMessage(r.ToolChoice)
 	}
 	if r.ParallelToolCalls != nil {
-		value, _ := json.Marshal(*r.ParallelToolCalls)
-		fields["parallel_tool_calls"] = value
-	}
-	for key, value := range r.Extra {
-		fields[key] = cloneRawMessage(value)
+		if err := putJSONField(fields, "parallel_tool_calls", *r.ParallelToolCalls); err != nil {
+			return nil, err
+		}
 	}
 	return json.Marshal(fields)
 }
