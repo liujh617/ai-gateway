@@ -919,3 +919,49 @@ func (s *functionStream) Next(context.Context) (*compat.ChatCompletionChunk, err
 	return &compat.ChatCompletionChunk{Choices: []compat.ChatCompletionChunkChoice{{Index: 0, Delta: compat.ChatMessageDelta{Extra: map[string]json.RawMessage{"tool_calls": extra}}}}}, nil
 }
 func (s *functionStream) Close() error { s.p.closed = true; return nil }
+
+func TestResponsesStoreFalseWithStream(t *testing.T) {
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(&responseStateStreamProvider{}, api.Options{ResponseStore: store})
+	rr := doResponsesJSON(handler, `{"model":"test-model","input":"hello","stream":true,"store":false}`, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	// With store=false, the response should not be retrievable
+	responseID := completedResponseID(t, rr.Body.String())
+	if responseID == "" {
+		t.Fatal("missing response id in SSE stream")
+	}
+	retrieve := retrieveResponse(handler, responseID, testAPIKey, http.MethodGet)
+	if retrieve.Code != http.StatusNotFound {
+		t.Fatalf("retrieve status=%d, want 404 (store=false)", retrieve.Code)
+	}
+}
+
+func TestResponsesNonStreamFunctionCall(t *testing.T) {
+	p := &responseStateStreamProvider{}
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	handler := newTestHandlerWithOptions(p, api.Options{ResponseStore: store})
+	rr := doResponsesJSON(handler, `{"model":"test-model","input":[{"type":"function_call","call_id":"c1","name":"lookup","arguments":"{}","status":"completed"}],"stream":false}`, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if len(p.requests) != 1 || p.requests[0].Messages[0].Role != "assistant" || p.requests[0].Messages[0].Extra["tool_calls"] == nil {
+		t.Fatalf("expected assistant with tool_calls, got %#v", p.requests)
+	}
+}
+
+func TestResponsesValidationMissingModel(t *testing.T) {
+	rr := doResponsesJSON(newTestHandler(fake.New()), `{"input":"hello"}`, true)
+	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
+}
+
+func TestResponsesValidationMissingInput(t *testing.T) {
+	rr := doResponsesJSON(newTestHandler(fake.New()), `{"model":"test-model"}`, true)
+	assertError(t, rr, http.StatusBadRequest, "invalid_request_error")
+}
+
+func TestResponsesUnauthorized(t *testing.T) {
+	rr := doResponsesJSON(newTestHandler(fake.New()), `{"model":"test-model","input":"hello"}`, false)
+	assertError(t, rr, http.StatusUnauthorized, "authentication_error")
+}
