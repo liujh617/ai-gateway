@@ -240,7 +240,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["chat", "completions", "embeddings", "images", "moderations", "transcriptions", "translations", "speech"]
+            "enum": ["chat", "completions", "embeddings", "images", "moderations", "transcriptions", "translations", "speech", "batches"]
           },
           "uniqueItems": true
         },

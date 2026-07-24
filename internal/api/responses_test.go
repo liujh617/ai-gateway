@@ -965,3 +965,23 @@ func TestResponsesUnauthorized(t *testing.T) {
 	rr := doResponsesJSON(newTestHandler(fake.New()), `{"model":"test-model","input":"hello"}`, false)
 	assertError(t, rr, http.StatusUnauthorized, "authentication_error")
 }
+
+func (p *responseFunctionStateProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *responseFunctionStateProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *responseFunctionStateProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *responseFunctionStateProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+
+func (p *responseStateProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *responseStateProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *responseStateProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *responseStateProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+
+func (p *responseStateStreamProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *responseStateStreamProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *responseStateStreamProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *responseStateStreamProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+
+func (p *functionStreamProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *functionStreamProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *functionStreamProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *functionStreamProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }

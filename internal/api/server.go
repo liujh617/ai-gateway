@@ -145,6 +145,9 @@ func (s *Server) routeHandlers() map[string]func(http.ResponseWriter, *http.Requ
 		routes.AudioTranscriptionsPath: s.handleAudioTranscriptions,
 		routes.AudioTranslationsPath:   s.handleAudioTranslations,
 		routes.AudioSpeechPath:         s.handleAudioSpeech,
+		routes.BatchesPath:             s.handleBatches,
+		routes.BatchesRetrievePath:     s.handleRetrieveBatch,
+		routes.BatchesCancelPath:       s.handleCancelBatch,
 	}
 }
 

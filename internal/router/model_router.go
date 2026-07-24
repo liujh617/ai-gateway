@@ -1,6 +1,7 @@
 package router
 
 import (
+	"net/http"
 	"sort"
 
 	"open-ai-gateway/internal/compat"
@@ -58,6 +59,15 @@ func (r *ModelRouter) ResolveFor(model, capability string) (ModelRoute, *compat.
 		return route, nil
 	}
 	return ModelRoute{}, compat.NewError(404, "invalid_request_error", "model does not support "+capability+": "+model, nil)
+}
+
+func (r *ModelRouter) ResolveByCapability(capability string) (ModelRoute, *compat.Error) {
+	for _, route := range r.routes {
+		if len(route.Capabilities) == 0 || route.Capabilities[capability] {
+			return route.copy(), nil
+		}
+	}
+	return ModelRoute{}, compat.NewError(http.StatusNotFound, "invalid_request_error", "no model supports "+capability, nil)
 }
 
 func (r *ModelRouter) Models() []compat.Model {

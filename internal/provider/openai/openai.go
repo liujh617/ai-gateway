@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -300,4 +301,97 @@ func (p *Provider) setHeaders(req *http.Request) {
 func (p *Provider) setJSONHeaders(req *http.Request) {
 	p.setHeaders(req)
 	req.Header.Set("Content-Type", "application/json")
+}
+
+func (p *Provider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) {
+	var out compat.Batch
+	if err := p.doJSONRequest(ctx, "/batches", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (p *Provider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) {
+	path := p.endpoint("/batches")
+	if after != "" || limit > 0 {
+		path += "?"
+		if after != "" {
+			path += "after=" + after
+			if limit > 0 {
+				path += "&"
+			}
+		}
+		if limit > 0 {
+			path += fmt.Sprintf("limit=%d", limit)
+		}
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	p.setHeaders(httpReq)
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, httpx.UpstreamError(resp)
+	}
+	if err := httpx.RequireJSONResponse(resp); err != nil {
+		return nil, err
+	}
+	var out compat.BatchList
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (p *Provider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, p.endpoint("/batches/"+batchID), nil)
+	if err != nil {
+		return nil, err
+	}
+	p.setHeaders(httpReq)
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, httpx.UpstreamError(resp)
+	}
+	if err := httpx.RequireJSONResponse(resp); err != nil {
+		return nil, err
+	}
+	var out compat.Batch
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (p *Provider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint("/batches/"+batchID+"/cancel"), nil)
+	if err != nil {
+		return nil, err
+	}
+	p.setJSONHeaders(httpReq)
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, httpx.TransportError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, httpx.UpstreamError(resp)
+	}
+	if err := httpx.RequireJSONResponse(resp); err != nil {
+		return nil, err
+	}
+	var out compat.Batch
+	if err := httpx.DecodeLimited(resp.Body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }

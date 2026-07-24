@@ -2619,3 +2619,38 @@ func TestAuditDurationMSError(t *testing.T) {
 		t.Fatalf("error DurationMS = %d, want > 0", errorEvent.DurationMS)
 	}
 }
+
+func (p *blockingProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *blockingProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *blockingProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *blockingProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+
+func (p *captureProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *captureProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *captureProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *captureProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+
+func (p *countingProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *countingProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *countingProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *countingProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+
+func (p *usageStreamProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *usageStreamProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *usageStreamProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *usageStreamProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+
+func (p *slowProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *slowProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *slowProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *slowProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+
+func (p *delayedStreamProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *delayedStreamProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *delayedStreamProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *delayedStreamProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+
+func (p *sleepyChatProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *sleepyChatProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *sleepyChatProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *sleepyChatProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }

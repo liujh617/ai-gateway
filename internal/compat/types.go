@@ -896,3 +896,124 @@ type SpeechResponse struct {
 	Data        []byte
 	ContentType string
 }
+
+// Batches
+
+type BatchRequest struct {
+	InputFileID      string                     `json:"input_file_id"`
+	Endpoint         string                     `json:"endpoint"`
+	CompletionWindow string                     `json:"completion_window"`
+	Metadata         map[string]json.RawMessage `json:"metadata,omitempty"`
+	Extra            map[string]json.RawMessage `json:"-"`
+}
+
+type batchRequestJSON struct {
+	InputFileID      string                     `json:"input_file_id"`
+	Endpoint         string                     `json:"endpoint"`
+	CompletionWindow string                     `json:"completion_window"`
+	Metadata         map[string]json.RawMessage `json:"metadata,omitempty"`
+}
+
+var batchRequestKnownFields = []string{"input_file_id", "endpoint", "completion_window", "metadata"}
+
+func (r *BatchRequest) UnmarshalJSON(data []byte) error {
+	var known batchRequestJSON
+	if err := json.Unmarshal(data, &known); err != nil {
+		return fmt.Errorf("unmarshal: %w", err)
+	}
+	extra, err := decodeExtraFields(data, batchRequestKnownFields)
+	if err != nil {
+		return fmt.Errorf("unmarshal: %w", err)
+	}
+	*r = BatchRequest{
+		InputFileID:      known.InputFileID,
+		Endpoint:         known.Endpoint,
+		CompletionWindow: known.CompletionWindow,
+		Metadata:         known.Metadata,
+		Extra:            extra,
+	}
+	return nil
+}
+
+func (r BatchRequest) MarshalJSON() ([]byte, error) {
+	fields := copyRawFields(r.Extra, batchRequestKnownFields)
+	if err := putJSONField(fields, "input_file_id", r.InputFileID); err != nil {
+		return nil, err
+	}
+	if err := putJSONField(fields, "endpoint", r.Endpoint); err != nil {
+		return nil, err
+	}
+	if err := putJSONField(fields, "completion_window", r.CompletionWindow); err != nil {
+		return nil, err
+	}
+	if r.Metadata != nil {
+		raw, err := json.Marshal(r.Metadata)
+		if err != nil {
+			return nil, err
+		}
+		fields["metadata"] = raw
+	}
+	return json.Marshal(fields)
+}
+
+func (r BatchRequest) Validate() *Error {
+	if strings.TrimSpace(r.InputFileID) == "" {
+		return InvalidRequest("missing required field: input_file_id", "input_file_id")
+	}
+	if strings.TrimSpace(r.Endpoint) == "" {
+		return InvalidRequest("missing required field: endpoint", "endpoint")
+	}
+	if strings.TrimSpace(r.CompletionWindow) == "" {
+		return InvalidRequest("missing required field: completion_window", "completion_window")
+	}
+	return nil
+}
+
+type Batch struct {
+	ID               string                     `json:"id"`
+	Object           string                     `json:"object"`
+	Endpoint         string                     `json:"endpoint"`
+	Errors           *BatchErrors               `json:"errors"`
+	InputFileID      string                     `json:"input_file_id"`
+	CompletionWindow string                     `json:"completion_window"`
+	Status           string                     `json:"status"`
+	OutputFileID     string                     `json:"output_file_id,omitempty"`
+	ErrorFileID      string                     `json:"error_file_id,omitempty"`
+	CreatedAt        int64                      `json:"created_at"`
+	InProgressAt     *int64                     `json:"in_progress_at"`
+	ExpiresAt        *int64                     `json:"expires_at"`
+	FinalizingAt     *int64                     `json:"finalizing_at"`
+	CompletedAt      *int64                     `json:"completed_at"`
+	FailedAt         *int64                     `json:"failed_at"`
+	ExpiredAt        *int64                     `json:"expired_at"`
+	CancellingAt     *int64                     `json:"cancelling_at"`
+	CancelledAt      *int64                     `json:"cancelled_at"`
+	RequestCounts    *BatchRequestCounts        `json:"request_counts"`
+	Metadata         map[string]json.RawMessage `json:"metadata,omitempty"`
+}
+
+type BatchErrors struct {
+	Object string           `json:"object"`
+	Data   []BatchErrorItem `json:"data"`
+}
+
+type BatchErrorItem struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Param   string `json:"param"`
+	Line    int    `json:"line"`
+}
+
+type BatchRequestCounts struct {
+	Total     int `json:"total"`
+	Completed int `json:"completed"`
+	Failed    int `json:"failed"`
+}
+
+type BatchList struct {
+	Object  string  `json:"object"`
+	Data    []Batch `json:"data"`
+	FirstID string  `json:"first_id"`
+	LastID  string  `json:"last_id"`
+	HasMore bool    `json:"has_more"`
+}

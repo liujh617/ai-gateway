@@ -24,6 +24,9 @@ const (
 	AudioTranscriptionsPath = "/v1/audio/transcriptions"
 	AudioTranslationsPath   = "/v1/audio/translations"
 	AudioSpeechPath         = "/v1/audio/speech"
+	BatchesPath             = "/v1/batches"
+	BatchesRetrievePath     = "/v1/batches/{batch_id}"
+	BatchesCancelPath       = "/v1/batches/{batch_id}/cancel"
 )
 
 type Route struct {
@@ -49,6 +52,9 @@ var definitions = []Route{
 	{Path: AudioTranscriptionsPath, Methods: []string{http.MethodPost}},
 	{Path: AudioTranslationsPath, Methods: []string{http.MethodPost}},
 	{Path: AudioSpeechPath, Methods: []string{http.MethodPost}},
+	{Path: BatchesPath, Methods: []string{http.MethodPost, http.MethodGet}},
+	{Path: BatchesRetrievePath, Methods: []string{http.MethodGet}},
+	{Path: BatchesCancelPath, Methods: []string{http.MethodPost}},
 }
 
 var knownPaths = func() map[string]struct{} {
@@ -160,10 +166,18 @@ func canonicalPath(path string) (string, bool) {
 	if _, ok := knownPaths[path]; ok {
 		return path, true
 	}
+	if strings.HasPrefix(path, BatchesPath+"/") && strings.HasSuffix(path, "/cancel") {
+		suffix := strings.TrimPrefix(path, BatchesPath+"/")
+		suffix = strings.TrimSuffix(suffix, "/cancel")
+		if suffix != "" && !strings.Contains(suffix, "/") {
+			return BatchesCancelPath, true
+		}
+	}
 	for _, dynamic := range []struct {
 		prefix    string
 		canonical string
 	}{
+		{prefix: BatchesPath + "/", canonical: BatchesRetrievePath},
 		{prefix: ModelsPath + "/", canonical: ModelsRetrievePath},
 		{prefix: ResponsesPath + "/", canonical: ResponsesRetrievePath},
 	} {

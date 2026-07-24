@@ -19,6 +19,10 @@ type Provider interface {
 	CreateTranscription(ctx context.Context, req compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, error)
 	CreateTranslation(ctx context.Context, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, error)
 	CreateSpeech(ctx context.Context, req compat.SpeechRequest) (*compat.SpeechResponse, error)
+	CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error)
+	ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error)
+	RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error)
+	CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error)
 }
 
 type ChatCompletionStream interface {

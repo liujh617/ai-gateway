@@ -307,3 +307,59 @@ func fakeToolResult(req compat.ChatCompletionRequest) (string, bool) {
 	}
 	return "", false
 }
+
+func (p *Provider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.Batch{
+		ID:               "batch_fake",
+		Object:           "batch",
+		Endpoint:         req.Endpoint,
+		InputFileID:      req.InputFileID,
+		CompletionWindow: req.CompletionWindow,
+		Status:           "validating",
+		CreatedAt:        time.Now().Unix(),
+	}, nil
+}
+
+func (p *Provider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.BatchList{Object: "list", Data: []compat.Batch{}}, nil
+}
+
+func (p *Provider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.Batch{
+		ID:      batchID,
+		Object:  "batch",
+		Status:  "completed",
+	}, nil
+}
+
+func (p *Provider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.Batch{
+		ID:      batchID,
+		Object:  "batch",
+		Status:  "cancelling",
+	}, nil
+}

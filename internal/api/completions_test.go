@@ -780,3 +780,23 @@ func (s *blockingCompletionStream) Close() error {
 var _ = io.EOF
 var _ = middleware.NewRateLimiter
 var _ = router.TokenPricing{}
+
+func (p *captureCompletionProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *captureCompletionProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *captureCompletionProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *captureCompletionProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+
+func (p *countingCompletionProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *countingCompletionProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *countingCompletionProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *countingCompletionProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+
+func (p *slowCompletionProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *slowCompletionProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *slowCompletionProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *slowCompletionProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+
+func (p *blockingCompletionProvider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *blockingCompletionProvider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) { return nil, errors.New("not implemented") }
+func (p *blockingCompletionProvider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
+func (p *blockingCompletionProvider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) { return nil, errors.New("not implemented") }
