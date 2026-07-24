@@ -398,9 +398,9 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 			transcript := append(append(append([]compat.ChatMessage(nil), history...), currentMessages...), assistant)
 			if err := s.responseStore.Put(responsestore.Record{ID: responseID, Client: clientFromContext(r.Context()), Model: externalModel, Transcript: transcript, Response: payload}); err != nil {
 				s.logger.Warn("failed to store completed response stream", "error", err)
-					storeErrEvent := s.auditBaseEvent(r, audit.EventError, routes.ResponsesPath, externalModel)
-					storeErrEvent.Error = "response_store_put_failed"
-					s.audit.Record(r.Context(), storeErrEvent)
+				storeErrEvent := s.auditBaseEvent(r, audit.EventError, routes.ResponsesPath, externalModel)
+				storeErrEvent.Error = "response_store_put_failed"
+				s.audit.Record(r.Context(), storeErrEvent)
 			}
 		}
 	}
