@@ -348,3 +348,84 @@ func TestCreateTranslationForwardsAzureRequest(t *testing.T) {
 		t.Fatalf("text = %q", resp.Text)
 	}
 }
+
+func TestCreateCompletionForwardsAzureRequest(t *testing.T) {
+	var got compat.CompletionsRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/openai/deployments/completion-deployment/completions" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("api-version") != "2024-02-15-preview" {
+			t.Fatalf("api-version = %s", r.URL.Query().Get("api-version"))
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"id":"cmpl_1","object":"text_completion","created":1,"model":"completion-deployment","choices":[{"index":0,"text":"hello","finish_reason":"stop"}]}`))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL)
+	resp, err := p.CreateCompletion(context.Background(), compat.CompletionsRequest{Model: "completion-deployment", Prompt: json.RawMessage(`"hello"`)})
+	if err != nil {
+		t.Fatalf("CreateCompletion: %v", err)
+	}
+	if resp.Model != "completion-deployment" || len(resp.Choices) != 1 {
+		t.Fatalf("response = %#v", resp)
+	}
+}
+
+func TestCreateImageForwardsAzureRequest(t *testing.T) {
+	var got compat.ImageGenerationRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/openai/deployments/dalle-deployment/images/generations" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("api-version") != "2024-02-15-preview" {
+			t.Fatalf("api-version = %s", r.URL.Query().Get("api-version"))
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"created":1,"data":[{"url":"https://example.com/img.png"}]}`))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL)
+	resp, err := p.CreateImage(context.Background(), compat.ImageGenerationRequest{Model: "dalle-deployment", Prompt: "a cat"})
+	if err != nil {
+		t.Fatalf("CreateImage: %v", err)
+	}
+	if len(resp.Data) != 1 || resp.Data[0].URL != "https://example.com/img.png" {
+		t.Fatalf("response = %#v", resp)
+	}
+}
+
+func TestCreateModerationForwardsAzureRequest(t *testing.T) {
+	var got compat.ModerationRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/openai/deployments/moderation-deployment/moderations" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("api-version") != "2024-02-15-preview" {
+			t.Fatalf("api-version = %s", r.URL.Query().Get("api-version"))
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"id":"modr_1","model":"text-moderation-stable","results":[{"flagged":false,"categories":{},"category_scores":{}}]}`))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL)
+	resp, err := p.CreateModeration(context.Background(), compat.ModerationRequest{Model: "moderation-deployment", Input: json.RawMessage(`"hello"`)})
+	if err != nil {
+		t.Fatalf("CreateModeration: %v", err)
+	}
+	if resp.ID != "modr_1" || len(resp.Results) != 1 {
+		t.Fatalf("response = %#v", resp)
+	}
+}

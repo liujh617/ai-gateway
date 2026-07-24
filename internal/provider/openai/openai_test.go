@@ -1202,6 +1202,8 @@ func TestCreateEmbeddingMapsUpstreamError(t *testing.T) {
 	}
 }
 
+func intPtr(v int) *int { return &v }
+
 func newProvider(t *testing.T, baseURL string) *openai.Provider {
 	t.Helper()
 	p, err := openai.New(baseURL, "upstream-key", 0)
@@ -1367,5 +1369,166 @@ func TestCreateTranslationForwardsMultipartRequest(t *testing.T) {
 	}
 	if resp.Text != "translated text" {
 		t.Fatalf("text = %q", resp.Text)
+	}
+}
+
+func TestCreateCompletionForwardsRequest(t *testing.T) {
+	var got compat.CompletionsRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/completions" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if accept := r.Header.Get("Accept"); accept != "application/json" {
+			t.Fatalf("accept = %q", accept)
+		}
+		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
+			t.Fatalf("content-type = %q", ct)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"id":"cmpl_upstream","object":"text_completion","created":1,"model":"upstream-model","choices":[{"index":0,"text":"hello","finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	resp, err := p.CreateCompletion(context.Background(), compat.CompletionsRequest{Model: "upstream-model", Prompt: json.RawMessage(`"hello"`)})
+	if err != nil {
+		t.Fatalf("CreateCompletion: %v", err)
+	}
+	if resp.Model != "upstream-model" || len(resp.Choices) != 1 || resp.Choices[0].Text != "hello" {
+		t.Fatalf("response = %#v", resp)
+	}
+	if got.Stream {
+		t.Fatal("stream should be false")
+	}
+}
+
+func TestCreateCompletionMapsUpstreamError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"error":{"message":"rate limit","type":"rate_limit_error","code":"rate_limit"}}`))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.CreateCompletion(context.Background(), compat.CompletionsRequest{Model: "upstream-model", Prompt: json.RawMessage(`"hello"`)})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if _, ok := err.(*compat.Error); !ok {
+		t.Fatalf("error type = %T", err)
+	}
+}
+
+func TestStreamCompletionReadsSSE(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"id\":\"cmpl_upstream\",\"object\":\"text_completion.chunk\",\"created\":1,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"text\":\"hello\",\"finish_reason\":null}]}\n\n")
+		io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	stream, err := p.StreamCompletion(context.Background(), compat.CompletionsRequest{Model: "upstream-model", Prompt: json.RawMessage(`"hello"`)})
+	if err != nil {
+		t.Fatalf("StreamCompletion: %v", err)
+	}
+	defer stream.Close()
+	chunk, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("chunk: %v", err)
+	}
+	if chunk.Choices[0].Text != "hello" {
+		t.Fatalf("text = %q", chunk.Choices[0].Text)
+	}
+	if _, err := stream.Next(context.Background()); err != io.EOF {
+		t.Fatalf("end error = %v, want EOF", err)
+	}
+}
+
+func TestCreateImageForwardsRequest(t *testing.T) {
+	var got compat.ImageGenerationRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/images/generations" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"created":1,"data":[{"url":"https://example.com/img.png"}]}`))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	resp, err := p.CreateImage(context.Background(), compat.ImageGenerationRequest{Model: "dall-e-3", Prompt: "a cat", N: intPtr(1), Size: "1024x1024"})
+	if err != nil {
+		t.Fatalf("CreateImage: %v", err)
+	}
+	if len(resp.Data) != 1 || resp.Data[0].URL != "https://example.com/img.png" {
+		t.Fatalf("response = %#v", resp)
+	}
+}
+
+func TestCreateImageMapsUpstreamError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":{"message":"invalid size","type":"invalid_request_error","code":"invalid_size","param":"size"}}`))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.CreateImage(context.Background(), compat.ImageGenerationRequest{Model: "dall-e-3", Prompt: "a cat"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if _, ok := err.(*compat.Error); !ok {
+		t.Fatalf("error type = %T", err)
+	}
+}
+
+func TestCreateModerationForwardsRequest(t *testing.T) {
+	var got compat.ModerationRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/moderations" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"id":"modr_1","model":"text-moderation-stable","results":[{"flagged":false,"categories":{},"category_scores":{}}]}`))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	resp, err := p.CreateModeration(context.Background(), compat.ModerationRequest{Model: "text-moderation-stable", Input: json.RawMessage(`"hello"`)})
+	if err != nil {
+		t.Fatalf("CreateModeration: %v", err)
+	}
+	if resp.ID != "modr_1" || len(resp.Results) != 1 {
+		t.Fatalf("response = %#v", resp)
+	}
+}
+
+func TestCreateModerationMapsUpstreamError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":{"message":"unauthorized","type":"authentication_error","code":null}}`))
+	}))
+	defer server.Close()
+
+	p := newProvider(t, server.URL+"/v1")
+	_, err := p.CreateModeration(context.Background(), compat.ModerationRequest{Model: "text-moderation-stable", Input: json.RawMessage(`"hello"`)})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if _, ok := err.(*compat.Error); !ok {
+		t.Fatalf("error type = %T", err)
 	}
 }
