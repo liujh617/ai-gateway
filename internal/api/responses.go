@@ -163,26 +163,39 @@ func responseNotFound() *compat.Error {
 
 func validResponseToolOutputs(history, current []compat.ChatMessage) bool {
 	known := make(map[string]bool)
-	for _, message := range append(append([]compat.ChatMessage(nil), history...), current...) {
-		if raw := message.Extra["tool_calls"]; len(raw) > 0 {
-			var calls []struct {
-				ID string `json:"id"`
-			}
-			if json.Unmarshal(raw, &calls) != nil {
-				return false
-			}
-			for _, call := range calls {
-				known[call.ID] = true
-			}
-		}
-		if raw := message.Extra["tool_call_id"]; len(raw) > 0 {
-			var callID string
-			if json.Unmarshal(raw, &callID) != nil || !known[callID] {
-				return false
+	// Collect tool call IDs from history and current messages without allocation.
+	collectIDs := func(messages []compat.ChatMessage) bool {
+		for _, message := range messages {
+			if raw := message.Extra["tool_calls"]; len(raw) > 0 {
+				var calls []struct {
+					ID string `json:"id"`
+				}
+				if json.Unmarshal(raw, &calls) != nil {
+					return false
+				}
+				for _, call := range calls {
+					known[call.ID] = true
+				}
 			}
 		}
+		return true
 	}
-	return true
+	if !collectIDs(history) || !collectIDs(current) {
+		return false
+	}
+	// Validate all tool_call_id references resolve to known call IDs.
+	validateOutputs := func(messages []compat.ChatMessage) bool {
+		for _, message := range messages {
+			if raw := message.Extra["tool_call_id"]; len(raw) > 0 {
+				var callID string
+				if json.Unmarshal(raw, &callID) != nil || !known[callID] {
+					return false
+				}
+			}
+		}
+		return true
+	}
+	return validateOutputs(history) && validateOutputs(current)
 }
 
 func (s *Server) responseHistory(r *http.Request, previousResponseID, model string) ([]compat.ChatMessage, *compat.Error) {
