@@ -160,4 +160,3 @@ func (s *Server) resolveCapabilityRoute(w http.ResponseWriter, r *http.Request, 
 	}
 	return route, true
 }
-

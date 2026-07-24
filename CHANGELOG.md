@@ -8,6 +8,31 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+## 0.1.8 - 2026-07-25
+
+### Added
+
+- Added `POST /v1/audio/transcriptions`, `POST /v1/audio/translations`, and `POST /v1/audio/speech` endpoints with multipart form-data support for transcriptions/translations and JSON request for speech.
+- Added `POST /v1/batches`, `GET /v1/batches`, `GET /v1/batches/{id}`, and `POST /v1/batches/{id}/cancel` endpoints.
+- Added `POST /v1/files` (multipart upload), `GET /v1/files` (list), `GET /v1/files/{id}` (retrieve), `DELETE /v1/files/{id}`, and `GET /v1/files/{id}/content` (download) endpoints.
+- Added `audit-inspect` subcommand for reading JSONL audit files.
+- Added audit JSONL file rotation support via `MaxFileBytes` config.
+
+### Changed
+
+- Extracted `doJSONRequest` helper to eliminate 172 lines of duplicate provider method code.
+- Extracted generic `executeWithFallback` and `executeStreamingFallback` helpers to eliminate 324 lines of duplicate fallback loop code across 6 handler files.
+- Unified unknown field handling across all request types (all now silently pass through via Extra).
+- Unified early error auditing in images.go, moderations.go, and audio.go to use `writeAuditedError` consistently.
+- Deduplicated `validJSONValue`/`validJSONString` across packages.
+- Wrapped UnmarshalJSON errors with type context for better debuggability.
+- Fixed streaming response store failure to record audit error events instead of silently losing data.
+- Fixed missing `PreviousResponseID` in streaming path audit events.
+
+### Fixed
+
+- Fixed inconsistent indentation of store error audit events in streamResponse.
+
 ## 0.1.7 - 2026-07-23
 
 ### Added
