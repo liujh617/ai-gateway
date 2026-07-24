@@ -11,6 +11,7 @@ import (
 	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
+	"open-ai-gateway/internal/provider"
 	"open-ai-gateway/internal/router"
 	"open-ai-gateway/internal/routes"
 )
@@ -239,139 +240,41 @@ func speechRespSummary(dataSize int, contentType string) map[string]any {
 }
 
 func (s *Server) createTranscriptionWithFallback(ctx context.Context, r *http.Request, route router.ModelRoute, externalModel string, req *compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, string, string, error) {
-	var lastErr error
-	var skippedFrom string
-	attempts := route.Attempts()
-	for index, attempt := range attempts {
-		if !s.providerHealth.Healthy(attempt.ProviderName) {
-			s.observeProviderHealth(attempt.ProviderName)
-			s.observeProviderCircuitOpen(r.Context(), routes.AudioTranscriptionsPath, externalModel, attempt.ProviderName)
-				s.logger.Warn("transcription provider circuit open; trying fallback", "provider", attempt.ProviderName)
-			if skippedFrom == "" {
-				skippedFrom = attempt.ProviderName
-			}
-			continue
-		}
-		if skippedFrom != "" {
-			s.observeProviderFallback(r.Context(), routes.AudioTranscriptionsPath, externalModel, skippedFrom, attempt.ProviderName)
-			skippedFrom = ""
-		}
-		attemptReq := *req
-		attemptReq.Model = attempt.UpstreamModel
-		middleware.SetLogRoute(r.Context(), externalModel, attempt.ProviderName, attempt.UpstreamModel)
-		resp, err := attempt.Provider.CreateTranscription(ctx, attemptReq)
-		if err == nil {
-			s.providerHealth.MarkSuccess(attempt.ProviderName)
-			s.observeProviderHealth(attempt.ProviderName)
-			return resp, attempt.ProviderName, attempt.UpstreamModel, nil
-		}
-		lastErr = err
-		if canFallbackProviderError(err) {
-			s.providerHealth.MarkFailure(attempt.ProviderName)
-			s.observeProviderHealth(attempt.ProviderName)
-		}
-		if index == len(attempts)-1 || !canFallbackProviderError(err) {
-			return nil, "", "", err
-		}
-		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
-			s.observeProviderFallback(r.Context(), routes.AudioTranscriptionsPath, externalModel, attempt.ProviderName, nextProviderName)
-				s.logger.Warn("transcription provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
-		}
-	}
-	if skippedFrom != "" {
-		return nil, "", "", providerUnavailableError()
-	}
-	return nil, "", "", lastErr
+	return executeWithFallback(s, ctx, r, routes.AudioTranscriptionsPath, externalModel, route, req,
+		func(ctx context.Context, p provider.Provider, req *compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, error) {
+			return p.CreateTranscription(ctx, *req)
+		},
+		func(req *compat.AudioTranscriptionRequest, upstreamModel string) *compat.AudioTranscriptionRequest {
+			copy := *req
+			copy.Model = upstreamModel
+			return &copy
+		},
+		nil,
+	)
 }
 
 func (s *Server) createTranslationWithFallback(ctx context.Context, r *http.Request, route router.ModelRoute, externalModel string, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, string, string, error) {
-	var lastErr error
-	var skippedFrom string
-	attempts := route.Attempts()
-	for index, attempt := range attempts {
-		if !s.providerHealth.Healthy(attempt.ProviderName) {
-			s.observeProviderHealth(attempt.ProviderName)
-			s.observeProviderCircuitOpen(r.Context(), routes.AudioTranslationsPath, externalModel, attempt.ProviderName)
-				s.logger.Warn("translation provider circuit open; trying fallback", "provider", attempt.ProviderName)
-			if skippedFrom == "" {
-				skippedFrom = attempt.ProviderName
-			}
-			continue
-		}
-		if skippedFrom != "" {
-			s.observeProviderFallback(r.Context(), routes.AudioTranslationsPath, externalModel, skippedFrom, attempt.ProviderName)
-			skippedFrom = ""
-		}
-		attemptReq := req
-		attemptReq.Model = attempt.UpstreamModel
-		middleware.SetLogRoute(r.Context(), externalModel, attempt.ProviderName, attempt.UpstreamModel)
-		resp, err := attempt.Provider.CreateTranslation(ctx, attemptReq)
-		if err == nil {
-			s.providerHealth.MarkSuccess(attempt.ProviderName)
-			s.observeProviderHealth(attempt.ProviderName)
-			return resp, attempt.ProviderName, attempt.UpstreamModel, nil
-		}
-		lastErr = err
-		if canFallbackProviderError(err) {
-			s.providerHealth.MarkFailure(attempt.ProviderName)
-			s.observeProviderHealth(attempt.ProviderName)
-		}
-		if index == len(attempts)-1 || !canFallbackProviderError(err) {
-			return nil, "", "", err
-		}
-		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
-			s.observeProviderFallback(r.Context(), routes.AudioTranslationsPath, externalModel, attempt.ProviderName, nextProviderName)
-				s.logger.Warn("translation provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
-		}
-	}
-	if skippedFrom != "" {
-		return nil, "", "", providerUnavailableError()
-	}
-	return nil, "", "", lastErr
+	return executeWithFallback(s, ctx, r, routes.AudioTranslationsPath, externalModel, route, req,
+		func(ctx context.Context, p provider.Provider, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, error) {
+			return p.CreateTranslation(ctx, req)
+		},
+		func(req compat.AudioTranslationRequest, upstreamModel string) compat.AudioTranslationRequest {
+			req.Model = upstreamModel
+			return req
+		},
+		nil,
+	)
 }
 
 func (s *Server) createSpeechWithFallback(ctx context.Context, r *http.Request, route router.ModelRoute, externalModel string, req compat.SpeechRequest) (*compat.SpeechResponse, string, string, error) {
-	var lastErr error
-	var skippedFrom string
-	attempts := route.Attempts()
-	for index, attempt := range attempts {
-		if !s.providerHealth.Healthy(attempt.ProviderName) {
-			s.observeProviderHealth(attempt.ProviderName)
-			s.observeProviderCircuitOpen(r.Context(), routes.AudioSpeechPath, externalModel, attempt.ProviderName)
-				s.logger.Warn("speech provider circuit open; trying fallback", "provider", attempt.ProviderName)
-			if skippedFrom == "" {
-				skippedFrom = attempt.ProviderName
-			}
-			continue
-		}
-		if skippedFrom != "" {
-			s.observeProviderFallback(r.Context(), routes.AudioSpeechPath, externalModel, skippedFrom, attempt.ProviderName)
-			skippedFrom = ""
-		}
-		attemptReq := req
-		attemptReq.Model = attempt.UpstreamModel
-		middleware.SetLogRoute(r.Context(), externalModel, attempt.ProviderName, attempt.UpstreamModel)
-		resp, err := attempt.Provider.CreateSpeech(ctx, attemptReq)
-		if err == nil {
-			s.providerHealth.MarkSuccess(attempt.ProviderName)
-			s.observeProviderHealth(attempt.ProviderName)
-			return resp, attempt.ProviderName, attempt.UpstreamModel, nil
-		}
-		lastErr = err
-		if canFallbackProviderError(err) {
-			s.providerHealth.MarkFailure(attempt.ProviderName)
-			s.observeProviderHealth(attempt.ProviderName)
-		}
-		if index == len(attempts)-1 || !canFallbackProviderError(err) {
-			return nil, "", "", err
-		}
-		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
-			s.observeProviderFallback(r.Context(), routes.AudioSpeechPath, externalModel, attempt.ProviderName, nextProviderName)
-				s.logger.Warn("speech provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
-		}
-	}
-	if skippedFrom != "" {
-		return nil, "", "", providerUnavailableError()
-	}
-	return nil, "", "", lastErr
+	return executeWithFallback(s, ctx, r, routes.AudioSpeechPath, externalModel, route, req,
+		func(ctx context.Context, p provider.Provider, req compat.SpeechRequest) (*compat.SpeechResponse, error) {
+			return p.CreateSpeech(ctx, req)
+		},
+		func(req compat.SpeechRequest, upstreamModel string) compat.SpeechRequest {
+			req.Model = upstreamModel
+			return req
+		},
+		nil,
+	)
 }

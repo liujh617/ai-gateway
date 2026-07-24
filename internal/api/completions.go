@@ -68,50 +68,18 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) createCompletionWithFallback(ctx context.Context, r *http.Request, route router.ModelRoute, externalModel string, req compat.CompletionsRequest) (*compat.CompletionsResponse, string, string, error) {
-	var lastErr error
-	var skippedFrom string
-	attempts := route.Attempts()
-	for index, attempt := range attempts {
-		if !s.providerHealth.Healthy(attempt.ProviderName) {
-			s.observeProviderHealth(attempt.ProviderName)
-			s.observeProviderCircuitOpen(r.Context(), routes.CompletionsPath, externalModel, attempt.ProviderName)
-			if skippedFrom == "" {
-				skippedFrom = attempt.ProviderName
-			}
-			s.logger.Warn("completion provider circuit open; trying fallback", "provider", attempt.ProviderName)
-			continue
-		}
-		if skippedFrom != "" {
-			s.observeProviderFallback(r.Context(), routes.CompletionsPath, externalModel, skippedFrom, attempt.ProviderName)
-			skippedFrom = ""
-		}
-		attemptReq := req
-		attemptReq.Model = attempt.UpstreamModel
-		middleware.SetLogRoute(r.Context(), externalModel, attempt.ProviderName, attempt.UpstreamModel)
-		resp, err := attempt.Provider.CreateCompletion(ctx, attemptReq)
-		if err == nil {
-			s.providerHealth.MarkSuccess(attempt.ProviderName)
-			s.observeProviderHealth(attempt.ProviderName)
-			s.observeUsage(routes.CompletionsPath, externalModel, attempt.ProviderName, clientFromContext(r.Context()), resp.Usage, attempt.Pricing)
-			return resp, attempt.ProviderName, attempt.UpstreamModel, nil
-		}
-		lastErr = err
-		if canFallbackProviderError(err) {
-			s.providerHealth.MarkFailure(attempt.ProviderName)
-			s.observeProviderHealth(attempt.ProviderName)
-		}
-		if index == len(attempts)-1 || !canFallbackProviderError(err) {
-			return nil, "", "", err
-		}
-		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
-			s.observeProviderFallback(r.Context(), routes.CompletionsPath, externalModel, attempt.ProviderName, nextProviderName)
-		}
-		s.logger.Warn("completion provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
-	}
-	if skippedFrom != "" {
-		return nil, "", "", providerUnavailableError()
-	}
-	return nil, "", "", lastErr
+	return executeWithFallback(s, ctx, r, routes.CompletionsPath, externalModel, route, req,
+		func(ctx context.Context, p provider.Provider, req compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+			return p.CreateCompletion(ctx, req)
+		},
+		func(req compat.CompletionsRequest, upstreamModel string) compat.CompletionsRequest {
+			req.Model = upstreamModel
+			return req
+		},
+		func(resp *compat.CompletionsResponse, fa fallbackAttempt) {
+			s.observeUsage(routes.CompletionsPath, externalModel, fa.ProviderName, clientFromContext(r.Context()), resp.Usage, fa.Pricing)
+		},
+	)
 }
 
 func (s *Server) streamCompletion(w http.ResponseWriter, r *http.Request, route router.ModelRoute, externalModel string, req compat.CompletionsRequest) {
@@ -185,47 +153,13 @@ func (s *Server) streamCompletion(w http.ResponseWriter, r *http.Request, route 
 }
 
 func (s *Server) openCompletionStreamWithFallback(ctx context.Context, r *http.Request, route router.ModelRoute, externalModel string, req compat.CompletionsRequest) (provider.CompletionStream, string, string, router.TokenPricing, error) {
-	var lastErr error
-	var skippedFrom string
-	attempts := route.Attempts()
-	for index, attempt := range attempts {
-		if !s.providerHealth.Healthy(attempt.ProviderName) {
-			s.observeProviderHealth(attempt.ProviderName)
-			s.observeProviderCircuitOpen(r.Context(), routes.CompletionsPath, externalModel, attempt.ProviderName)
-			if skippedFrom == "" {
-				skippedFrom = attempt.ProviderName
-			}
-			s.logger.Warn("stream completion provider circuit open before response; trying fallback", "provider", attempt.ProviderName)
-			continue
-		}
-		if skippedFrom != "" {
-			s.observeProviderFallback(r.Context(), routes.CompletionsPath, externalModel, skippedFrom, attempt.ProviderName)
-			skippedFrom = ""
-		}
-		attemptReq := req
-		attemptReq.Model = attempt.UpstreamModel
-		middleware.SetLogRoute(r.Context(), externalModel, attempt.ProviderName, attempt.UpstreamModel)
-		stream, err := attempt.Provider.StreamCompletion(ctx, attemptReq)
-		if err == nil {
-			s.providerHealth.MarkSuccess(attempt.ProviderName)
-			s.observeProviderHealth(attempt.ProviderName)
-			return stream, attempt.ProviderName, attempt.UpstreamModel, attempt.Pricing, nil
-		}
-		lastErr = err
-		if canFallbackProviderError(err) {
-			s.providerHealth.MarkFailure(attempt.ProviderName)
-			s.observeProviderHealth(attempt.ProviderName)
-		}
-		if index == len(attempts)-1 || !canFallbackProviderError(err) {
-			return nil, "", "", router.TokenPricing{}, err
-		}
-		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
-			s.observeProviderFallback(r.Context(), routes.CompletionsPath, externalModel, attempt.ProviderName, nextProviderName)
-		}
-		s.logger.Warn("stream completion provider failed before response; trying fallback", "provider", attempt.ProviderName, "error", err)
-	}
-	if skippedFrom != "" {
-		return nil, "", "", router.TokenPricing{}, providerUnavailableError()
-	}
-	return nil, "", "", router.TokenPricing{}, lastErr
+	return executeStreamingFallback(s, ctx, r, routes.CompletionsPath, externalModel, route, req,
+		func(ctx context.Context, p provider.Provider, req compat.CompletionsRequest) (provider.CompletionStream, error) {
+			return p.StreamCompletion(ctx, req)
+		},
+		func(req compat.CompletionsRequest, upstreamModel string) compat.CompletionsRequest {
+			req.Model = upstreamModel
+			return req
+		},
+	)
 }

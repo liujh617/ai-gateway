@@ -8,6 +8,7 @@ import (
 	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
+	"open-ai-gateway/internal/provider"
 	"open-ai-gateway/internal/router"
 	"open-ai-gateway/internal/routes"
 )
@@ -60,47 +61,14 @@ func (s *Server) handleImageGenerations(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) createImageWithFallback(ctx context.Context, r *http.Request, route router.ModelRoute, externalModel string, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, string, string, error) {
-	var lastErr error
-	var skippedFrom string
-	attempts := route.Attempts()
-	for index, attempt := range attempts {
-		if !s.providerHealth.Healthy(attempt.ProviderName) {
-			s.observeProviderHealth(attempt.ProviderName)
-			s.observeProviderCircuitOpen(r.Context(), routes.ImageGenerationsPath, externalModel, attempt.ProviderName)
-			s.logger.Warn("image generation provider circuit open; trying fallback", "provider", attempt.ProviderName)
-			if skippedFrom == "" {
-				skippedFrom = attempt.ProviderName
-			}
-			continue
-		}
-		if skippedFrom != "" {
-			s.observeProviderFallback(r.Context(), routes.ImageGenerationsPath, externalModel, skippedFrom, attempt.ProviderName)
-			skippedFrom = ""
-		}
-		attemptReq := req
-		attemptReq.Model = attempt.UpstreamModel
-		middleware.SetLogRoute(r.Context(), externalModel, attempt.ProviderName, attempt.UpstreamModel)
-		resp, err := attempt.Provider.CreateImage(ctx, attemptReq)
-		if err == nil {
-			s.providerHealth.MarkSuccess(attempt.ProviderName)
-			s.observeProviderHealth(attempt.ProviderName)
-			return resp, attempt.ProviderName, attempt.UpstreamModel, nil
-		}
-		lastErr = err
-		if canFallbackProviderError(err) {
-			s.providerHealth.MarkFailure(attempt.ProviderName)
-			s.observeProviderHealth(attempt.ProviderName)
-		}
-		if index == len(attempts)-1 || !canFallbackProviderError(err) {
-			return nil, "", "", err
-		}
-		if nextProviderName := s.nextHealthyProviderName(attempts[index+1:]); nextProviderName != "" {
-			s.observeProviderFallback(r.Context(), routes.ImageGenerationsPath, externalModel, attempt.ProviderName, nextProviderName)
-			s.logger.Warn("image generation provider failed; trying fallback", "provider", attempt.ProviderName, "error", err)
-		}
-	}
-	if skippedFrom != "" {
-		return nil, "", "", providerUnavailableError()
-	}
-	return nil, "", "", lastErr
+	return executeWithFallback(s, ctx, r, routes.ImageGenerationsPath, externalModel, route, req,
+		func(ctx context.Context, p provider.Provider, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+			return p.CreateImage(ctx, req)
+		},
+		func(req compat.ImageGenerationRequest, upstreamModel string) compat.ImageGenerationRequest {
+			req.Model = upstreamModel
+			return req
+		},
+		nil,
+	)
 }
