@@ -8,6 +8,13 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+## 0.1.9 - 2026-07-25
+
+### Added
+
+- Added `POST /v1/fine_tuning/jobs` and 5 related endpoints for create, list, retrieve, events, cancel, and checkpoints.
+- Added Responses API `conversation` field support with automatic dialog history building and conversation tracking in response store.
+
 ## 0.1.8 - 2026-07-25
 
 ### Added

@@ -1037,23 +1037,23 @@ type FileDeleteResponse struct {
 // Fine-tuning
 
 type FineTuningJobRequest struct {
-	Model              string                     `json:"model"`
-	TrainingFile       string                     `json:"training_file"`
-	ValidationFile     string                     `json:"validation_file,omitempty"`
-	Hyperparameters    *FineTuningHyperparameters `json:"hyperparameters,omitempty"`
-	Suffix             string                     `json:"suffix,omitempty"`
-	Method             *FineTuningMethod          `json:"method,omitempty"`
-	Extra              map[string]json.RawMessage `json:"-"`
+	Model           string                     `json:"model"`
+	TrainingFile    string                     `json:"training_file"`
+	ValidationFile  string                     `json:"validation_file,omitempty"`
+	Hyperparameters *FineTuningHyperparameters `json:"hyperparameters,omitempty"`
+	Suffix          string                     `json:"suffix,omitempty"`
+	Method          *FineTuningMethod          `json:"method,omitempty"`
+	Extra           map[string]json.RawMessage `json:"-"`
 }
 
 type FineTuningHyperparameters struct {
-	NEpochs              *int `json:"n_epochs,omitempty"`
-	BatchSize            *int `json:"batch_size,omitempty"`
+	NEpochs                *int     `json:"n_epochs,omitempty"`
+	BatchSize              *int     `json:"batch_size,omitempty"`
 	LearningRateMultiplier *float64 `json:"learning_rate_multiplier,omitempty"`
 }
 
 type FineTuningMethod struct {
-	Type  string                     `json:"type"`
+	Type       string                `json:"type"`
 	Supervised *FineTuningSupervised `json:"supervised,omitempty"`
 }
 
@@ -1183,9 +1183,9 @@ type FineTuningJobEvent struct {
 }
 
 type FineTuningJobList struct {
-	Object  string           `json:"object"`
-	Data    []FineTuningJob  `json:"data"`
-	HasMore bool             `json:"has_more"`
+	Object  string          `json:"object"`
+	Data    []FineTuningJob `json:"data"`
+	HasMore bool            `json:"has_more"`
 }
 
 type FineTuningJobEventList struct {
@@ -1195,28 +1195,28 @@ type FineTuningJobEventList struct {
 }
 
 type FineTuningJobCheckpointList struct {
-	Object  string                 `json:"object"`
+	Object  string                    `json:"object"`
 	Data    []FineTuningJobCheckpoint `json:"data"`
-	HasMore bool                   `json:"has_more"`
+	HasMore bool                      `json:"has_more"`
 }
 
 type FineTuningJobCheckpoint struct {
-	ID            string                            `json:"id"`
-	Object        string                            `json:"object"`
-	CreatedAt     int64                             `json:"created_at"`
-	FineTunedModelCheckpoint string                 `json:"fine_tuned_model_checkpoint"`
-	StepNumber    int                               `json:"step_number"`
-	Metrics       FineTuningJobCheckpointMetrics    `json:"metrics"`
-	FineTuningJobID string                          `json:"fine_tuning_job_id"`
+	ID                       string                         `json:"id"`
+	Object                   string                         `json:"object"`
+	CreatedAt                int64                          `json:"created_at"`
+	FineTunedModelCheckpoint string                         `json:"fine_tuned_model_checkpoint"`
+	StepNumber               int                            `json:"step_number"`
+	Metrics                  FineTuningJobCheckpointMetrics `json:"metrics"`
+	FineTuningJobID          string                         `json:"fine_tuning_job_id"`
 }
 
 type FineTuningJobCheckpointMetrics struct {
-	Step                 *float64 `json:"step"`
-	TrainLoss            *float64 `json:"train_loss"`
-	TrainMeanTokenAccuracy *float64 `json:"train_mean_token_accuracy"`
-	ValidLoss            *float64 `json:"valid_loss"`
-	ValidMeanTokenAccuracy *float64 `json:"valid_mean_token_accuracy"`
-	FullValidLoss        *float64 `json:"full_valid_loss"`
+	Step                       *float64 `json:"step"`
+	TrainLoss                  *float64 `json:"train_loss"`
+	TrainMeanTokenAccuracy     *float64 `json:"train_mean_token_accuracy"`
+	ValidLoss                  *float64 `json:"valid_loss"`
+	ValidMeanTokenAccuracy     *float64 `json:"valid_mean_token_accuracy"`
+	FullValidLoss              *float64 `json:"full_valid_loss"`
 	FullValidMeanTokenAccuracy *float64 `json:"full_valid_mean_token_accuracy"`
 }
 

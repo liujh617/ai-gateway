@@ -404,9 +404,9 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 		payload, err := json.Marshal(&completed)
 		if err != nil {
 			s.logger.Warn("failed to encode completed response stream", "error", err)
-				storeErrEvent := s.auditBaseEvent(r, audit.EventError, routes.ResponsesPath, externalModel)
-				storeErrEvent.Error = "response_store_encode_failed"
-				s.audit.Record(r.Context(), storeErrEvent)
+			storeErrEvent := s.auditBaseEvent(r, audit.EventError, routes.ResponsesPath, externalModel)
+			storeErrEvent.Error = "response_store_encode_failed"
+			s.audit.Record(r.Context(), storeErrEvent)
 		} else {
 			assistant := streamAssistantMessage(text, textStarted, functionOrder)
 			transcript := append(append(append([]compat.ChatMessage(nil), history...), currentMessages...), assistant)
