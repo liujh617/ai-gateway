@@ -38,7 +38,7 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, validationErr)
 		return
 	}
-	history, stateErr := s.responseHistory(r, req.PreviousResponseID, req.Model)
+	history, stateErr := s.responseHistory(r, req.PreviousResponseID, req.ConversationID(), req.Model)
 	if stateErr != nil {
 		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, stateErr)
 		return
@@ -91,6 +91,7 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 	if req.PreviousResponseID != "" {
 		response.PreviousResponseID = req.PreviousResponseID
 	}
+	response.ConversationID = req.ConversationID()
 	shouldStore := req.Store == nil || *req.Store
 	willStore := shouldStore && s.responseStore != nil && s.responseStore.Enabled()
 	response.Store = willStore
@@ -101,7 +102,7 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		transcript := append(append(append([]compat.ChatMessage(nil), history...), currentMessages...), chatResp.Choices[0].Message)
-		err = s.responseStore.Put(responsestore.Record{ID: response.ID, Client: clientFromContext(r.Context()), Model: externalModel, Transcript: transcript, Response: payload})
+		err = s.responseStore.Put(responsestore.Record{ID: response.ID, Client: clientFromContext(r.Context()), Model: externalModel, ConversationID: req.ConversationID(), Transcript: transcript, Response: payload})
 		if err != nil {
 			if errors.Is(err, responsestore.ErrContextTooLarge) {
 				s.writeAuditedError(w, r, routes.ResponsesPath, externalModel, compat.InvalidRequest("response context is too large", "previous_response_id"))
@@ -198,22 +199,35 @@ func validResponseToolOutputs(history, current []compat.ChatMessage) bool {
 	return validateOutputs(history) && validateOutputs(current)
 }
 
-func (s *Server) responseHistory(r *http.Request, previousResponseID, model string) ([]compat.ChatMessage, *compat.Error) {
-	if previousResponseID == "" {
+func (s *Server) responseHistory(r *http.Request, previousResponseID, conversationID, model string) ([]compat.ChatMessage, *compat.Error) {
+	if previousResponseID == "" && conversationID == "" {
 		return nil, nil
 	}
 	if s.responseStore == nil || !s.responseStore.Enabled() {
 		return nil, compat.InvalidRequest("response store is disabled", "previous_response_id")
 	}
-	record, reason, ok := s.responseStore.Get(previousResponseID, clientFromContext(r.Context()), model)
-	if ok {
-		return record.Transcript, nil
+	client := clientFromContext(r.Context())
+	if previousResponseID != "" {
+		record, reason, ok := s.responseStore.Get(previousResponseID, client, model)
+		if ok {
+			return record.Transcript, nil
+		}
+		if reason == responsestore.MissModel {
+			return nil, compat.InvalidRequest("previous response model does not match request model", "previous_response_id")
+		}
+		param := "previous_response_id"
+		return nil, compat.NewError(http.StatusNotFound, "invalid_request_error", "previous response not found", &param)
 	}
-	if reason == responsestore.MissModel {
-		return nil, compat.InvalidRequest("previous response model does not match request model", "previous_response_id")
+	// Build history from conversation
+	records := s.responseStore.ConversationResponses(conversationID, client)
+	if len(records) == 0 {
+		return nil, nil
 	}
-	param := "previous_response_id"
-	return nil, compat.NewError(http.StatusNotFound, "invalid_request_error", "previous response not found", &param)
+	var transcript []compat.ChatMessage
+	for _, record := range records {
+		transcript = append(transcript, record.Transcript...)
+	}
+	return transcript, nil
 }
 
 func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route router.ModelRoute, externalModel string, req compat.ChatCompletionRequest, history, currentMessages []compat.ChatMessage, responseReq compat.ResponseRequest) {
@@ -396,7 +410,7 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 		} else {
 			assistant := streamAssistantMessage(text, textStarted, functionOrder)
 			transcript := append(append(append([]compat.ChatMessage(nil), history...), currentMessages...), assistant)
-			if err := s.responseStore.Put(responsestore.Record{ID: responseID, Client: clientFromContext(r.Context()), Model: externalModel, Transcript: transcript, Response: payload}); err != nil {
+			if err := s.responseStore.Put(responsestore.Record{ID: responseID, Client: clientFromContext(r.Context()), Model: externalModel, ConversationID: responseReq.ConversationID(), Transcript: transcript, Response: payload}); err != nil {
 				s.logger.Warn("failed to store completed response stream", "error", err)
 				storeErrEvent := s.auditBaseEvent(r, audit.EventError, routes.ResponsesPath, externalModel)
 				storeErrEvent.Error = "response_store_put_failed"

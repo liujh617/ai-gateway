@@ -52,11 +52,12 @@ func (c Config) enabled() bool {
 }
 
 type Record struct {
-	ID         string
-	Client     string
-	Model      string
-	Transcript []compat.ChatMessage
-	Response   json.RawMessage
+	ID             string
+	Client         string
+	Model          string
+	ConversationID string
+	Transcript     []compat.ChatMessage
+	Response       json.RawMessage
 }
 
 type Stats struct {
@@ -74,14 +75,15 @@ type entry struct {
 }
 
 type Store struct {
-	mu        sync.Mutex
-	config    Config
-	clock     Clock
-	entries   map[string]*entry
-	lru       *list.List
-	bytes     int64
-	evictions map[EvictionReason]uint64
-	misses    map[MissReason]uint64
+	mu            sync.Mutex
+	config        Config
+	clock         Clock
+	entries       map[string]*entry
+	conversations map[string][]string // conversation_id -> response IDs (ordered)
+	lru           *list.List
+	bytes         int64
+	evictions     map[EvictionReason]uint64
+	misses        map[MissReason]uint64
 }
 
 func New(config Config, clock Clock) *Store {
@@ -136,6 +138,12 @@ func (s *Store) Put(record Record) error {
 	e.lru = s.lru.PushFront(e)
 	s.entries[cloned.ID] = e
 	s.bytes += size
+	if cloned.ConversationID != "" {
+		if s.conversations == nil {
+			s.conversations = make(map[string][]string)
+		}
+		s.conversations[cloned.ConversationID] = append(s.conversations[cloned.ConversationID], cloned.ID)
+	}
 	return nil
 }
 
@@ -219,6 +227,15 @@ func (s *Store) DeleteByID(id, client string) (MissReason, bool) {
 		s.misses[MissNotFound]++
 		return MissNotFound, false
 	}
+	if e.record.ConversationID != "" && s.conversations != nil {
+		ids := s.conversations[e.record.ConversationID]
+		for i, rid := range ids {
+			if rid == id {
+				s.conversations[e.record.ConversationID] = append(ids[:i], ids[i+1:]...)
+				break
+			}
+		}
+	}
 	if !s.clock.Now().Before(e.expiresAt) {
 		s.removeLocked(e, EvictionExpired)
 		s.misses[MissExpired]++
@@ -257,7 +274,7 @@ func encodedRecordSize(record Record) (int64, error) {
 }
 
 func cloneRecord(record Record) Record {
-	cloned := Record{ID: record.ID, Client: record.Client, Model: record.Model, Response: cloneRaw(record.Response)}
+	cloned := Record{ID: record.ID, Client: record.Client, Model: record.Model, ConversationID: record.ConversationID, Response: cloneRaw(record.Response)}
 	if record.Transcript == nil {
 		return cloned
 	}
@@ -295,4 +312,27 @@ func cloneMisses(source map[MissReason]uint64) map[MissReason]uint64 {
 		result[reason] = count
 	}
 	return result
+}
+
+func (s *Store) ConversationResponses(conversationID, client string) []Record {
+	if s == nil || !s.config.enabled() || s.conversations == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.clock.Now()
+	s.removeExpiredLocked(now)
+	ids := s.conversations[conversationID]
+	var records []Record
+	for _, id := range ids {
+		e, ok := s.entries[id]
+		if !ok || !now.Before(e.expiresAt) {
+			continue
+		}
+		if client != "" && e.record.Client != client {
+			continue
+		}
+		records = append(records, cloneRecord(e.record))
+	}
+	return records
 }

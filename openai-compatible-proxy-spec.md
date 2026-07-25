@@ -143,7 +143,7 @@ OpenAI-compatible provider 解析上游 JSON 响应时也要求响应体只包�
 
 `previous_response_id` 引用同一 gateway client、同一外部模型此前成功存储的响应。客户端只需发送本轮新增 input；网关恢复规范化 Chat transcript 后再调用 provider。`store: false` 不保存当前响应，但仍可读取已存储的上一响应。顶层 `instructions`、tools、tool choice 和采样控制不继承。不存在、过期、淘汰或属于其他 client 的 ID 统一返回 `404 invalid_request_error`；模型不一致、store 禁用或合并上下文超限返回 `400 invalid_request_error`，`param` 为 `previous_response_id`。
 
-只有完整成功的非流式响应和正常输出 `response.completed` 的流式响应才会保存。状态仅存在于当前进程，重启丢失，不跨实例共享。当前仍不支持 Conversations、非 function 工具、reasoning Items、图片、音频、文件、多模态、background mode、WebSocket 和其他未知字段。
+只有完整成功的非流式响应和正常输出 `response.completed` 的流式响应才会保存。状态仅存在于当前进程，重启丢失，不跨实例共享。支持 `conversation` 字段（字符串 ID 或 `{}` 创建新对话），透传到上游并自动构建对话历史。当前不支持非 function 工具、reasoning Items、图片、音频、文件、多模态、background mode、WebSocket 和其他未知字段。
 
 ### `GET /v1/responses/{response_id}`
 

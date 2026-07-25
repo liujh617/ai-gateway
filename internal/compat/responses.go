@@ -17,8 +17,10 @@ type ResponseRequest struct {
 	ToolChoice            json.RawMessage
 	ParallelToolCalls     *bool
 	PreviousResponseID    string
+	Conversation          json.RawMessage
 	Extra                 map[string]json.RawMessage
 	previousResponseIDSet bool
+	conversationSet       bool
 }
 
 func (r *ResponseRequest) UnmarshalJSON(data []byte) error {
@@ -81,6 +83,11 @@ func (r *ResponseRequest) UnmarshalJSON(data []byte) error {
 		r.ParallelToolCalls = &value
 		delete(fields, "parallel_tool_calls")
 	}
+	if raw, ok := fields["conversation"]; ok {
+		r.conversationSet = true
+		r.Conversation = cloneRawMessage(raw)
+		delete(fields, "conversation")
+	}
 	if len(fields) > 0 {
 		r.Extra = fields
 	}
@@ -124,7 +131,22 @@ func (r ResponseRequest) MarshalJSON() ([]byte, error) {
 			return nil, err
 		}
 	}
+	if r.conversationSet {
+		fields["conversation"] = cloneRawMessage(r.Conversation)
+	}
 	return json.Marshal(fields)
+}
+
+// ConversationID returns the conversation identifier, or empty string if not set.
+func (r ResponseRequest) ConversationID() string {
+	if !r.conversationSet || len(r.Conversation) == 0 {
+		return ""
+	}
+	var id string
+	if json.Unmarshal(r.Conversation, &id) == nil && id != "" {
+		return id
+	}
+	return ""
 }
 
 func (r ResponseRequest) Validate() *Error {
@@ -338,6 +360,7 @@ type Response struct {
 	Output             []ResponseOutputMessage `json:"output"`
 	ParallelToolCalls  bool                    `json:"parallel_tool_calls"`
 	PreviousResponseID any                     `json:"previous_response_id"`
+	ConversationID     string                  `json:"conversation_id,omitempty"`
 	Store              bool                    `json:"store"`
 	Tools              []any                   `json:"tools"`
 	Usage              *ResponseUsage          `json:"usage"`
