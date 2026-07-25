@@ -30,6 +30,11 @@ const (
 	FilesPath               = "/v1/files"
 	FilesRetrievePath       = "/v1/files/{file_id}"
 	FilesContentPath        = "/v1/files/{file_id}/content"
+	FineTuningJobsPath      = "/v1/fine_tuning/jobs"
+	FineTuningJobRetrievePath = "/v1/fine_tuning/jobs/{job_id}"
+	FineTuningJobEventsPath = "/v1/fine_tuning/jobs/{job_id}/events"
+	FineTuningJobCancelPath = "/v1/fine_tuning/jobs/{job_id}/cancel"
+	FineTuningJobCheckpointsPath = "/v1/fine_tuning/jobs/{job_id}/checkpoints"
 )
 
 type Route struct {
@@ -61,6 +66,11 @@ var definitions = []Route{
 	{Path: FilesPath, Methods: []string{http.MethodPost, http.MethodGet}},
 	{Path: FilesRetrievePath, Methods: []string{http.MethodGet, http.MethodDelete}},
 	{Path: FilesContentPath, Methods: []string{http.MethodGet}},
+	{Path: FineTuningJobsPath, Methods: []string{http.MethodPost, http.MethodGet}},
+	{Path: FineTuningJobRetrievePath, Methods: []string{http.MethodGet}},
+	{Path: FineTuningJobEventsPath, Methods: []string{http.MethodGet}},
+	{Path: FineTuningJobCancelPath, Methods: []string{http.MethodPost}},
+	{Path: FineTuningJobCheckpointsPath, Methods: []string{http.MethodGet}},
 }
 
 var knownPaths = func() map[string]struct{} {
@@ -183,6 +193,7 @@ func canonicalPath(path string) (string, bool) {
 		prefix    string
 		canonical string
 	}{
+		{prefix: FineTuningJobsPath + "/", canonical: FineTuningJobRetrievePath},
 		{prefix: FilesPath + "/", canonical: FilesRetrievePath},
 		{prefix: BatchesPath + "/", canonical: BatchesRetrievePath},
 		{prefix: ModelsPath + "/", canonical: ModelsRetrievePath},

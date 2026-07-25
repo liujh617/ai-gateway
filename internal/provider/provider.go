@@ -28,6 +28,12 @@ type Provider interface {
 	RetrieveFile(ctx context.Context, fileID string) (*compat.FileObject, error)
 	DeleteFile(ctx context.Context, fileID string) (*compat.FileDeleteResponse, error)
 	DownloadFile(ctx context.Context, fileID string) ([]byte, string, error)
+	CreateFineTuningJob(ctx context.Context, req compat.FineTuningJobRequest) (*compat.FineTuningJob, error)
+	ListFineTuningJobs(ctx context.Context, after string, limit int) (*compat.FineTuningJobList, error)
+	RetrieveFineTuningJob(ctx context.Context, jobID string) (*compat.FineTuningJob, error)
+	ListFineTuningJobEvents(ctx context.Context, jobID string, after string, limit int) (*compat.FineTuningJobEventList, error)
+	CancelFineTuningJob(ctx context.Context, jobID string) (*compat.FineTuningJob, error)
+	ListFineTuningJobCheckpoints(ctx context.Context, jobID string, after string, limit int) (*compat.FineTuningJobCheckpointList, error)
 }
 
 type ChatCompletionStream interface {

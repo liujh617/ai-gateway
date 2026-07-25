@@ -151,6 +151,11 @@ func (s *Server) routeHandlers() map[string]func(http.ResponseWriter, *http.Requ
 		routes.FilesPath:               s.handleFiles,
 		routes.FilesRetrievePath:       s.handleRetrieveFile,
 		routes.FilesContentPath:        s.handleRetrieveFile,
+		routes.FineTuningJobsPath:      s.handleFineTuningJobs,
+		routes.FineTuningJobRetrievePath: s.handleRetrieveFineTuningJob,
+		routes.FineTuningJobEventsPath: s.handleFineTuningJobEvents,
+		routes.FineTuningJobCancelPath: s.handleCancelFineTuningJob,
+		routes.FineTuningJobCheckpointsPath: s.handleFineTuningJobCheckpoints,
 	}
 }
 

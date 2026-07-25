@@ -1034,6 +1034,192 @@ type FileDeleteResponse struct {
 	Deleted bool   `json:"deleted"`
 }
 
+// Fine-tuning
+
+type FineTuningJobRequest struct {
+	Model              string                     `json:"model"`
+	TrainingFile       string                     `json:"training_file"`
+	ValidationFile     string                     `json:"validation_file,omitempty"`
+	Hyperparameters    *FineTuningHyperparameters `json:"hyperparameters,omitempty"`
+	Suffix             string                     `json:"suffix,omitempty"`
+	Method             *FineTuningMethod          `json:"method,omitempty"`
+	Extra              map[string]json.RawMessage `json:"-"`
+}
+
+type FineTuningHyperparameters struct {
+	NEpochs              *int `json:"n_epochs,omitempty"`
+	BatchSize            *int `json:"batch_size,omitempty"`
+	LearningRateMultiplier *float64 `json:"learning_rate_multiplier,omitempty"`
+}
+
+type FineTuningMethod struct {
+	Type  string                     `json:"type"`
+	Supervised *FineTuningSupervised `json:"supervised,omitempty"`
+}
+
+type FineTuningSupervised struct {
+	Hyperparameters *FineTuningHyperparameters `json:"hyperparameters,omitempty"`
+}
+
+var fineTuningJobRequestKnownFields = []string{"model", "training_file", "validation_file", "hyperparameters", "suffix", "method"}
+
+func (r *FineTuningJobRequest) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("unmarshal: %w", err)
+	}
+	if v, ok := raw["model"]; ok {
+		if err := json.Unmarshal(v, &r.Model); err != nil {
+			return fmt.Errorf("unmarshal: %w", err)
+		}
+		delete(raw, "model")
+	}
+	if v, ok := raw["training_file"]; ok {
+		if err := json.Unmarshal(v, &r.TrainingFile); err != nil {
+			return fmt.Errorf("unmarshal: %w", err)
+		}
+		delete(raw, "training_file")
+	}
+	if v, ok := raw["validation_file"]; ok {
+		if err := json.Unmarshal(v, &r.ValidationFile); err != nil {
+			return fmt.Errorf("unmarshal: %w", err)
+		}
+		delete(raw, "validation_file")
+	}
+	if v, ok := raw["hyperparameters"]; ok {
+		if err := json.Unmarshal(v, &r.Hyperparameters); err != nil {
+			return fmt.Errorf("unmarshal: %w", err)
+		}
+		delete(raw, "hyperparameters")
+	}
+	if v, ok := raw["suffix"]; ok {
+		if err := json.Unmarshal(v, &r.Suffix); err != nil {
+			return fmt.Errorf("unmarshal: %w", err)
+		}
+		delete(raw, "suffix")
+	}
+	if v, ok := raw["method"]; ok {
+		if err := json.Unmarshal(v, &r.Method); err != nil {
+			return fmt.Errorf("unmarshal: %w", err)
+		}
+		delete(raw, "method")
+	}
+	if len(raw) > 0 {
+		r.Extra = raw
+	}
+	return nil
+}
+
+func (r FineTuningJobRequest) MarshalJSON() ([]byte, error) {
+	fields := copyRawFields(r.Extra, fineTuningJobRequestKnownFields)
+	if err := putJSONField(fields, "model", r.Model); err != nil {
+		return nil, err
+	}
+	if err := putJSONField(fields, "training_file", r.TrainingFile); err != nil {
+		return nil, err
+	}
+	if r.ValidationFile != "" {
+		if err := putJSONField(fields, "validation_file", r.ValidationFile); err != nil {
+			return nil, err
+		}
+	}
+	if r.Hyperparameters != nil {
+		if err := putJSONField(fields, "hyperparameters", r.Hyperparameters); err != nil {
+			return nil, err
+		}
+	}
+	if r.Suffix != "" {
+		if err := putJSONField(fields, "suffix", r.Suffix); err != nil {
+			return nil, err
+		}
+	}
+	if r.Method != nil {
+		if err := putJSONField(fields, "method", r.Method); err != nil {
+			return nil, err
+		}
+	}
+	return json.Marshal(fields)
+}
+
+func (r FineTuningJobRequest) Validate() *Error {
+	if strings.TrimSpace(r.Model) == "" {
+		return InvalidRequest("missing required field: model", "model")
+	}
+	if strings.TrimSpace(r.TrainingFile) == "" {
+		return InvalidRequest("missing required field: training_file", "training_file")
+	}
+	return nil
+}
+
+type FineTuningJob struct {
+	ID              string                     `json:"id"`
+	Object          string                     `json:"object"`
+	Model           string                     `json:"model"`
+	CreatedAt       int64                      `json:"created_at"`
+	FinishedAt      *int64                     `json:"finished_at"`
+	Status          string                     `json:"status"`
+	TrainingFile    string                     `json:"training_file"`
+	ValidationFile  string                     `json:"validation_file,omitempty"`
+	Hyperparameters *FineTuningHyperparameters `json:"hyperparameters,omitempty"`
+	TrainedTokens   *int64                     `json:"trained_tokens"`
+	Error           *FineTuningJobError        `json:"error"`
+	Suffix          string                     `json:"suffix,omitempty"`
+	OrganizationID  string                     `json:"organization_id,omitempty"`
+	Seed            *int64                     `json:"seed"`
+}
+
+type FineTuningJobError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Param   string `json:"param"`
+}
+
+type FineTuningJobEvent struct {
+	ID        string `json:"id"`
+	Object    string `json:"object"`
+	CreatedAt int64  `json:"created_at"`
+	Level     string `json:"level"`
+	Message   string `json:"message"`
+}
+
+type FineTuningJobList struct {
+	Object  string           `json:"object"`
+	Data    []FineTuningJob  `json:"data"`
+	HasMore bool             `json:"has_more"`
+}
+
+type FineTuningJobEventList struct {
+	Object  string               `json:"object"`
+	Data    []FineTuningJobEvent `json:"data"`
+	HasMore bool                 `json:"has_more"`
+}
+
+type FineTuningJobCheckpointList struct {
+	Object  string                 `json:"object"`
+	Data    []FineTuningJobCheckpoint `json:"data"`
+	HasMore bool                   `json:"has_more"`
+}
+
+type FineTuningJobCheckpoint struct {
+	ID            string                            `json:"id"`
+	Object        string                            `json:"object"`
+	CreatedAt     int64                             `json:"created_at"`
+	FineTunedModelCheckpoint string                 `json:"fine_tuned_model_checkpoint"`
+	StepNumber    int                               `json:"step_number"`
+	Metrics       FineTuningJobCheckpointMetrics    `json:"metrics"`
+	FineTuningJobID string                          `json:"fine_tuning_job_id"`
+}
+
+type FineTuningJobCheckpointMetrics struct {
+	Step                 *float64 `json:"step"`
+	TrainLoss            *float64 `json:"train_loss"`
+	TrainMeanTokenAccuracy *float64 `json:"train_mean_token_accuracy"`
+	ValidLoss            *float64 `json:"valid_loss"`
+	ValidMeanTokenAccuracy *float64 `json:"valid_mean_token_accuracy"`
+	FullValidLoss        *float64 `json:"full_valid_loss"`
+	FullValidMeanTokenAccuracy *float64 `json:"full_valid_mean_token_accuracy"`
+}
+
 type BatchErrors struct {
 	Object string           `json:"object"`
 	Data   []BatchErrorItem `json:"data"`

@@ -863,6 +863,28 @@ JSONL event 示例：
 - 审计文件不得记录 `Authorization` header、gateway API key 或上游 API key。
 - 审计模式仅用于本地、受控目录和自有研究流量；不要默认开启，也不要提交审计文件。
 
+## Batches
+
+网关支持 `POST /v1/batches` 创建批处理任务，`GET /v1/batches` 列出批处理任务，`GET /v1/batches/{batch_id}` 检索批处理，以及 `POST /v1/batches/{batch_id}/cancel` 取消批处理。
+
+审计支持：请求事件记录 `input_file_id`、`endpoint`、`completion_window`；响应事件记录完整 Batch 对象。
+
+路由：通过 `"batches"` 能力匹配模型。使用 `ResolveByCapability` 查找任意具备该能力的 provider。
+
+## Files
+
+网关支持 `POST /v1/files`（multipart form-data 上传）、`GET /v1/files`（列表）、`GET /v1/files/{file_id}`（检索元数据）、`DELETE /v1/files/{file_id}`（删除），以及 `GET /v1/files/{file_id}/content`（下载文件内容）。
+
+上传安全约束：单文件最大 512 MiB，必须提供 `purpose` 字段和 `file` 字段。`filename` 从 multipart part header 中提取。
+
+路由：通过 `"files"` 能力匹配模型。
+
+## Fine-tuning
+
+网关支持 `POST /v1/fine_tuning/jobs` 创建微调任务、`GET /v1/fine_tuning/jobs` 列出任务（支持 `after` 和 `limit` 查询参数）、`GET /v1/fine_tuning/jobs/{job_id}` 检索任务详情、`GET /v1/fine_tuning/jobs/{job_id}/events` 获取事件流、`POST /v1/fine_tuning/jobs/{job_id}/cancel` 取消任务，以及 `GET /v1/fine_tuning/jobs/{job_id}/checkpoints` 获取检查点列表。
+
+路由：通过 `"fine_tuning"` 能力匹配模型。
+
 ## 配置自检
 
 网关支持不启动 HTTP server 的配置自检模式：

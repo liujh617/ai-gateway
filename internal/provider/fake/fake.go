@@ -344,9 +344,9 @@ func (p *Provider) RetrieveBatch(ctx context.Context, batchID string) (*compat.B
 		return nil, p.Err
 	}
 	return &compat.Batch{
-		ID:      batchID,
-		Object:  "batch",
-		Status:  "completed",
+		ID:     batchID,
+		Object: "batch",
+		Status: "completed",
 	}, nil
 }
 
@@ -358,9 +358,9 @@ func (p *Provider) CancelBatch(ctx context.Context, batchID string) (*compat.Bat
 		return nil, p.Err
 	}
 	return &compat.Batch{
-		ID:      batchID,
-		Object:  "batch",
-		Status:  "cancelling",
+		ID:     batchID,
+		Object: "batch",
+		Status: "cancelling",
 	}, nil
 }
 
@@ -420,4 +420,71 @@ func (p *Provider) DownloadFile(ctx context.Context, fileID string) ([]byte, str
 		return nil, "", p.Err
 	}
 	return []byte("fake-file-content"), "application/octet-stream", nil
+}
+
+func (p *Provider) CreateFineTuningJob(ctx context.Context, req compat.FineTuningJobRequest) (*compat.FineTuningJob, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.FineTuningJob{
+		ID:           "ftjob_fake",
+		Object:       "fine_tuning.job",
+		Model:        req.Model,
+		CreatedAt:    time.Now().Unix(),
+		Status:       "validating_files",
+		TrainingFile: req.TrainingFile,
+	}, nil
+}
+
+func (p *Provider) ListFineTuningJobs(ctx context.Context, after string, limit int) (*compat.FineTuningJobList, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.FineTuningJobList{Object: "list", Data: []compat.FineTuningJob{}}, nil
+}
+
+func (p *Provider) RetrieveFineTuningJob(ctx context.Context, jobID string) (*compat.FineTuningJob, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.FineTuningJob{ID: jobID, Object: "fine_tuning.job", Status: "succeeded", Model: "gpt-4o-mini", CreatedAt: time.Now().Unix()}, nil
+}
+
+func (p *Provider) ListFineTuningJobEvents(ctx context.Context, jobID string, after string, limit int) (*compat.FineTuningJobEventList, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.FineTuningJobEventList{Object: "list", Data: []compat.FineTuningJobEvent{}}, nil
+}
+
+func (p *Provider) CancelFineTuningJob(ctx context.Context, jobID string) (*compat.FineTuningJob, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.FineTuningJob{ID: jobID, Object: "fine_tuning.job", Status: "cancelled", Model: "gpt-4o-mini", CreatedAt: time.Now().Unix()}, nil
+}
+
+func (p *Provider) ListFineTuningJobCheckpoints(ctx context.Context, jobID string, after string, limit int) (*compat.FineTuningJobCheckpointList, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if p.Err != nil {
+		return nil, p.Err
+	}
+	return &compat.FineTuningJobCheckpointList{Object: "list", Data: []compat.FineTuningJobCheckpoint{}}, nil
 }
