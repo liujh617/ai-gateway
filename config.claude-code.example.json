@@ -1,0 +1,27 @@
+{
+  "addr": "127.0.0.1:8080",
+  "api_key": "sk-gateway-local",
+  "log": {
+    "format": "text",
+    "level": "info"
+  },
+  "providers": {
+    "deepseek": {
+      "type": "anthropic",
+      "base_url": "https://api.deepseek.com/anthropic",
+      "api_key": "sk-xxxxxxx"
+    }
+  },
+  "models": {
+    "deepseek-v4-pro[1m]": {
+      "provider": "deepseek",
+      "upstream_model": "deepseek-v4-pro[1m]",
+      "capabilities": ["chat"]
+    },
+    "deepseek-v4-flash": {
+      "provider": "deepseek",
+      "upstream_model": "deepseek-v4-flash",
+      "capabilities": ["chat"]
+    }
+  }
+}

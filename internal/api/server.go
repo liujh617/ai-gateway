@@ -9,26 +9,26 @@ import (
 	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/middleware"
+	realtoken "open-ai-gateway/internal/realtimetoken"
 	"open-ai-gateway/internal/requestctx"
 	"open-ai-gateway/internal/responsestore"
 	"open-ai-gateway/internal/router"
 	"open-ai-gateway/internal/routes"
-	"open-ai-gateway/internal/wsproxy"
-	realtoken "open-ai-gateway/internal/realtimetoken"
 	"open-ai-gateway/internal/version"
+	"open-ai-gateway/internal/wsproxy"
 )
 
 type Server struct {
-	router         *router.ModelRouter
-	logger         *slog.Logger
-	credentials    []middleware.AuthCredential
-	requestTimeout time.Duration
-	streamTimeout  time.Duration
-	rateLimiter    *middleware.RateLimiter
-	metrics        *middleware.Metrics
-	providerHealth *providerHealth
-	clientModels   map[string]map[string]bool
-	maxBodyBytes   int64
+	router               *router.ModelRouter
+	logger               *slog.Logger
+	credentials          []middleware.AuthCredential
+	requestTimeout       time.Duration
+	streamTimeout        time.Duration
+	rateLimiter          *middleware.RateLimiter
+	metrics              *middleware.Metrics
+	providerHealth       *providerHealth
+	clientModels         map[string]map[string]bool
+	maxBodyBytes         int64
 	audit                audit.Recorder
 	realtimeConfig       *wsproxy.Config
 	realtimeTokens       *realtoken.Store
@@ -102,7 +102,7 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 		maxBodyBytes:   opts.MaxBodyBytes,
 		audit:          opts.Audit,
 		realtimeConfig: opts.RealtimeConfig,
-		realtimeTokens:       realtoken.NewStore(),
+		realtimeTokens: realtoken.NewStore(),
 		responseStore:  opts.ResponseStore,
 	}
 }
@@ -164,6 +164,7 @@ func (s *Server) routeHandlers() map[string]func(http.ResponseWriter, *http.Requ
 		routes.FineTuningJobEventsPath:      s.handleFineTuningJobEvents,
 		routes.FineTuningJobCancelPath:      s.handleCancelFineTuningJob,
 		routes.FineTuningJobCheckpointsPath: s.handleFineTuningJobCheckpoints,
+		routes.AnthropicMessagesPath:        s.handleAnthropicMessages,
 		routes.RealtimePath:                 s.handleRealtime,
 		routes.RealtimeTokensPath:           s.handleRealtimeTokens,
 	}

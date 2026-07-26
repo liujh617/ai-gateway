@@ -111,6 +111,29 @@ func (p *Provider) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 }
 
+// ProxyAnthropicRequest forwards a native Anthropic API request to the upstream
+// and returns the response. This enables Claude Code and other Anthropic SDK clients.
+func (p *Provider) ProxyAnthropicRequest(r *http.Request) (*http.Response, error) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+	r.Body.Close()
+
+	upstreamURL := p.baseURL + r.URL.Path
+	if r.URL.RawQuery != "" {
+		upstreamURL += "?" + r.URL.RawQuery
+	}
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("x-api-key", p.apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("Content-Type", "application/json")
+	return p.client.Do(req)
+}
+
 // Stub methods
 func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
 	return nil, notSupported

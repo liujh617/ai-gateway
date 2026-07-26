@@ -37,6 +37,7 @@ const (
 	FineTuningJobCheckpointsPath = "/v1/fine_tuning/jobs/{job_id}/checkpoints"
 	RealtimePath                 = "/v1/realtime"
 	RealtimeTokensPath           = "/v1/realtime/tokens"
+	AnthropicMessagesPath        = "/v1/messages"
 )
 
 type Route struct {
@@ -68,6 +69,7 @@ var definitions = []Route{
 	{Path: FilesPath, Methods: []string{http.MethodPost, http.MethodGet}},
 	{Path: FilesRetrievePath, Methods: []string{http.MethodGet, http.MethodDelete}},
 	{Path: FilesContentPath, Methods: []string{http.MethodGet}},
+	{Path: AnthropicMessagesPath, Methods: []string{http.MethodPost}, Public: true},
 	{Path: RealtimeTokensPath, Methods: []string{http.MethodPost}},
 	{Path: RealtimePath, Methods: []string{http.MethodGet}, Public: true},
 	{Path: FineTuningJobsPath, Methods: []string{http.MethodPost, http.MethodGet}},

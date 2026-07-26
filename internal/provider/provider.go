@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"io"
+	"net/http"
 
 	"open-ai-gateway/internal/compat"
 )
@@ -40,6 +41,12 @@ type Provider interface {
 type ErrUnsupported struct{ Provider string }
 
 func (e ErrUnsupported) Error() string { return e.Provider + ": operation not supported" }
+
+// AnthropicProxy is an optional interface for providers that can proxy
+// native Anthropic API requests (used by Claude Code and other SDK clients).
+type AnthropicProxy interface {
+	ProxyAnthropicRequest(r *http.Request) (*http.Response, error)
+}
 
 // RealtimeProvider is an optional interface for providers that support WebSocket realtime.
 type RealtimeProvider interface {
