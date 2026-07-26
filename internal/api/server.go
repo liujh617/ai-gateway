@@ -14,6 +14,7 @@ import (
 	"open-ai-gateway/internal/router"
 	"open-ai-gateway/internal/routes"
 	"open-ai-gateway/internal/wsproxy"
+	realtoken "open-ai-gateway/internal/realtimetoken"
 	"open-ai-gateway/internal/version"
 )
 
@@ -28,9 +29,11 @@ type Server struct {
 	providerHealth *providerHealth
 	clientModels   map[string]map[string]bool
 	maxBodyBytes   int64
-	audit          audit.Recorder
-	realtimeConfig *wsproxy.Config
-	responseStore  *responsestore.Store
+	audit                audit.Recorder
+	realtimeConfig       *wsproxy.Config
+	realtimeTokens       *realtoken.Store
+	realtimeClientQuotas *wsproxy.ClientQuota
+	responseStore        *responsestore.Store
 }
 
 type Options struct {
@@ -99,6 +102,7 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 		maxBodyBytes:   opts.MaxBodyBytes,
 		audit:          opts.Audit,
 		realtimeConfig: opts.RealtimeConfig,
+		realtimeTokens:       realtoken.NewStore(),
 		responseStore:  opts.ResponseStore,
 	}
 }
@@ -161,6 +165,7 @@ func (s *Server) routeHandlers() map[string]func(http.ResponseWriter, *http.Requ
 		routes.FineTuningJobCancelPath:      s.handleCancelFineTuningJob,
 		routes.FineTuningJobCheckpointsPath: s.handleFineTuningJobCheckpoints,
 		routes.RealtimePath:                 s.handleRealtime,
+		routes.RealtimeTokensPath:           s.handleRealtimeTokens,
 	}
 }
 

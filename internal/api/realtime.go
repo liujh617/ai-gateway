@@ -7,6 +7,7 @@ import (
 	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/provider"
+	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/requestctx"
 	"open-ai-gateway/internal/routes"
 	"open-ai-gateway/internal/wsproxy"
@@ -29,6 +30,22 @@ func (s *Server) handleRealtime(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, compat.InvalidRequest("missing model query parameter", "model"))
 		return
 	}
+
+	// Auth: check token parameter first (for browsers), then fall back to Authorization header.
+	client, authed := s.authenticateRealtimeToken(r)
+	if !authed {
+		client = middleware.ExtractClientFromHeader(r, s.credentials)
+		if client == "" {
+			s.writeError(w, r, compat.NewError(http.StatusUnauthorized, "authentication_error", "missing token or Authorization header", nil))
+			return
+		}
+	}
+
+	if !s.realtimeClientQuota(client) {
+		s.writeError(w, r, compat.ServerError(http.StatusTooManyRequests, "client connection quota exceeded"))
+		return
+	}
+	defer s.realtimeClientQuotaRelease(client)
 
 	cfg := s.realtimeConfig
 	if cfg == nil {

@@ -66,6 +66,14 @@ func ClientFromContext(ctx context.Context) string {
 	return client
 }
 
+func ExtractClientFromHeader(r *http.Request, credentials []AuthCredential) string {
+	client, ok := validBearerToken(r.Header.Get("Authorization"), credentials)
+	if ok {
+		return client
+	}
+	return ""
+}
+
 func validBearerToken(header string, credentials []AuthCredential) (string, bool) {
 	got := strings.TrimSpace(header)
 	const prefix = "Bearer "
