@@ -14,8 +14,8 @@ import (
 	"github.com/coder/websocket"
 )
 
-// realtimeConfig is the static configuration for the realtime proxy.
-var realtimeConfig = wsproxy.Config{
+// defaultRealtimeConfig is the fallback configuration when no Server config is provided.
+var defaultRealtimeConfig = wsproxy.Config{
 	MaxMessageBytes: 1 << 20, // 1 MB
 	MaxDuration:     30 * time.Minute,
 }
@@ -30,10 +30,15 @@ func (s *Server) handleRealtime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(realtimeConfig.AllowedOrigins) > 0 {
+	cfg := s.realtimeConfig
+	if cfg == nil {
+		cfg = &defaultRealtimeConfig
+	}
+
+	if len(cfg.AllowedOrigins) > 0 {
 		origin := r.Header.Get("Origin")
 		allowed := false
-		for _, o := range realtimeConfig.AllowedOrigins {
+		for _, o := range cfg.AllowedOrigins {
 			if o == origin {
 				allowed = true
 				break
@@ -64,7 +69,7 @@ func (s *Server) handleRealtime(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientConn, err2 := websocket.Accept(w, r, &websocket.AcceptOptions{
-		OriginPatterns: realtimeConfig.AllowedOrigins,
+		OriginPatterns: cfg.AllowedOrigins,
 	})
 	if err2 != nil {
 		s.logger.Warn("failed to accept websocket", "error", err2)
@@ -88,7 +93,7 @@ func (s *Server) handleRealtime(w http.ResponseWriter, r *http.Request) {
 	s.audit.Record(r.Context(), connectEvent)
 
 	ctx := r.Context()
-	stats := wsproxy.Relay(ctx, clientConn, upstreamConn, realtimeConfig)
+	stats := wsproxy.Relay(ctx, clientConn, upstreamConn, *cfg)
 
 	s.logger.Info("realtime connection closed",
 		"model", model,

@@ -13,6 +13,7 @@ import (
 	"open-ai-gateway/internal/responsestore"
 	"open-ai-gateway/internal/router"
 	"open-ai-gateway/internal/routes"
+	"open-ai-gateway/internal/wsproxy"
 	"open-ai-gateway/internal/version"
 )
 
@@ -28,6 +29,7 @@ type Server struct {
 	clientModels   map[string]map[string]bool
 	maxBodyBytes   int64
 	audit          audit.Recorder
+	realtimeConfig *wsproxy.Config
 	responseStore  *responsestore.Store
 }
 
@@ -42,6 +44,7 @@ type Options struct {
 	MaxBodyBytes          int64
 	Audit                 audit.Recorder
 	ResponseStore         *responsestore.Store
+	RealtimeConfig        *wsproxy.Config
 }
 
 func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logger, options ...Options) *Server {
@@ -95,6 +98,7 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 		clientModels:   copyClientModels(opts.ClientModels),
 		maxBodyBytes:   opts.MaxBodyBytes,
 		audit:          opts.Audit,
+		realtimeConfig: opts.RealtimeConfig,
 		responseStore:  opts.ResponseStore,
 	}
 }
