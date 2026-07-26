@@ -110,7 +110,16 @@ func (s *Server) handleRealtime(w http.ResponseWriter, r *http.Request) {
 	s.audit.Record(r.Context(), connectEvent)
 
 	ctx := r.Context()
-	stats := wsproxy.Relay(ctx, clientConn, upstreamConn, *cfg)
+	obs := &wsproxy.ObserverCallbacks{
+		OnSessionCreated: func(sessionID, model string) {
+			s.logger.Info("realtime session created", "session_id", sessionID, "model", model)
+		},
+		OnResponseDone: func(responseID string, usage map[string]any) {
+			s.logger.Info("realtime response done", "response_id", responseID, "usage", usage)
+		},
+	}
+	observer := wsproxy.NewObserver(*obs)
+	stats := wsproxy.Relay(ctx, clientConn, upstreamConn, *cfg, observer)
 
 	s.logger.Info("realtime connection closed",
 		"model", model,

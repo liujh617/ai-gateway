@@ -83,7 +83,7 @@ func TestRelayBidirectional(t *testing.T) {
 		upstream.Close(websocket.StatusNormalClosure, "")
 	}()
 
-	stats := wsproxy.Relay(ctx, client, upstream, wsproxy.Config{})
+	stats := wsproxy.Relay(ctx, client, upstream, wsproxy.Config{}, nil)
 	if stats.Duration == 0 {
 		t.Fatal("duration is zero")
 	}

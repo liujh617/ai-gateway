@@ -25,14 +25,13 @@ type Stats struct {
 }
 
 // Relay performs a full-duplex relay between client and upstream WebSocket connections.
-// It reads messages from each side and writes them to the other, enforcing message size
-// limits and a maximum connection duration. It returns statistics when both sides close.
-func Relay(ctx context.Context, client, upstream *websocket.Conn, cfg Config) Stats {
+// If observer is non-nil, messages are passed to it for protocol-level observability.
+func Relay(ctx context.Context, client, upstream *websocket.Conn, cfg Config, obs *Observer) Stats {
 	start := time.Now()
 	stats := &relayStats{}
 	done := make(chan struct{}, 2)
 
-	readConn := func(dst, src *websocket.Conn, sentBytes, msgCount *int64) {
+	readConn := func(dst, src *websocket.Conn, sentBytes, msgCount *int64, isClient bool) {
 		defer func() { done <- struct{}{} }()
 		for {
 			select {
@@ -49,6 +48,13 @@ func Relay(ctx context.Context, client, upstream *websocket.Conn, cfg Config) St
 			}
 			*sentBytes += int64(len(msg))
 			*msgCount++
+			if obs != nil {
+				if isClient {
+					obs.ObserveClientMessage(msg)
+				} else {
+					obs.ObserveServerEvent(msg)
+				}
+			}
 		}
 	}
 
@@ -58,8 +64,8 @@ func Relay(ctx context.Context, client, upstream *websocket.Conn, cfg Config) St
 		defer deadlineCancel()
 	}
 
-	go readConn(client, upstream, &stats.clientSent, &stats.clientMsgs)
-	go readConn(upstream, client, &stats.upstreamSent, &stats.upstreamMsgs)
+	go readConn(client, upstream, &stats.clientSent, &stats.clientMsgs, true)
+	go readConn(upstream, client, &stats.upstreamSent, &stats.upstreamMsgs, false)
 
 	<-done
 	if deadlineCancel != nil {
