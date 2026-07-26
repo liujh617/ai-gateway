@@ -36,6 +36,11 @@ type Provider interface {
 	ListFineTuningJobCheckpoints(ctx context.Context, jobID string, after string, limit int) (*compat.FineTuningJobCheckpointList, error)
 }
 
+// RealtimeProvider is an optional interface for providers that support WebSocket realtime.
+type RealtimeProvider interface {
+	RealtimeEndpoint(model string) string
+}
+
 type ChatCompletionStream interface {
 	Next(ctx context.Context) (*compat.ChatCompletionChunk, error)
 	Close() error

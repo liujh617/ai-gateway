@@ -518,3 +518,7 @@ func (p *Provider) DownloadFile(ctx context.Context, fileID string) ([]byte, str
 	}
 	return data, ct, nil
 }
+
+func (p *Provider) RealtimeEndpoint(model string) string {
+	return p.baseURL + "/realtime?api-version=" + p.apiVersion + "&deployment=" + model
+}

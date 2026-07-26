@@ -488,3 +488,5 @@ func (p *Provider) ListFineTuningJobCheckpoints(ctx context.Context, jobID strin
 	}
 	return &compat.FineTuningJobCheckpointList{Object: "list", Data: []compat.FineTuningJobCheckpoint{}}, nil
 }
+
+func (p *Provider) RealtimeEndpoint(model string) string { return "" }
