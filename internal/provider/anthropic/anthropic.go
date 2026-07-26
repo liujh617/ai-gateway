@@ -99,9 +99,9 @@ func (p *Provider) StreamChatCompletion(ctx context.Context, req compat.ChatComp
 		return nil, anthropicErrorToOpenAI(errBody, resp.StatusCode)
 	}
 	return &chatCompletionStream{
-		model:    req.Model,
-		reader:   resp.Body,
-		stream:   NewMessageStream(resp.Body),
+		model:  req.Model,
+		reader: resp.Body,
+		stream: NewMessageStream(resp.Body),
 	}, nil
 }
 
@@ -112,35 +112,80 @@ func (p *Provider) setHeaders(req *http.Request) {
 }
 
 // Stub methods
-func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error)     { return nil, notSupported }
-func (p *Provider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error)  { return nil, notSupported }
-func (p *Provider) CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error)        { return nil, notSupported }
-func (p *Provider) CreateTranscription(ctx context.Context, req compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, error)  { return nil, notSupported }
-func (p *Provider) CreateTranslation(ctx context.Context, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, error)        { return nil, notSupported }
-func (p *Provider) CreateSpeech(ctx context.Context, req compat.SpeechRequest) (*compat.SpeechResponse, error)                                  { return nil, notSupported }
-func (p *Provider) CreateCompletion(ctx context.Context, req compat.CompletionsRequest) (*compat.CompletionsResponse, error)                  { return nil, notSupported }
-func (p *Provider) StreamCompletion(ctx context.Context, req compat.CompletionsRequest) (provider.CompletionStream, error)                   { return nil, notSupported }
-func (p *Provider) UploadFile(ctx context.Context, req compat.FileUploadRequest) (*compat.FileObject, error)                               { return nil, notSupported }
-func (p *Provider) ListFiles(ctx context.Context) (*compat.FileList, error)                                                               { return nil, notSupported }
-func (p *Provider) RetrieveFile(ctx context.Context, fileID string) (*compat.FileObject, error)                                            { return nil, notSupported }
-func (p *Provider) DeleteFile(ctx context.Context, fileID string) (*compat.FileDeleteResponse, error)                                      { return nil, notSupported }
-func (p *Provider) DownloadFile(ctx context.Context, fileID string) ([]byte, string, error)                                                { return nil, "", notSupported }
-func (p *Provider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error)                                        { return nil, notSupported }
-func (p *Provider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error)                                     { return nil, notSupported }
-func (p *Provider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error)                                                { return nil, notSupported }
-func (p *Provider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error)                                                  { return nil, notSupported }
-func (p *Provider) CreateFineTuningJob(ctx context.Context, req compat.FineTuningJobRequest) (*compat.FineTuningJob, error)                { return nil, notSupported }
-func (p *Provider) ListFineTuningJobs(ctx context.Context, after string, limit int) (*compat.FineTuningJobList, error)                     { return nil, notSupported }
-func (p *Provider) RetrieveFineTuningJob(ctx context.Context, jobID string) (*compat.FineTuningJob, error)                                  { return nil, notSupported }
-func (p *Provider) ListFineTuningJobEvents(ctx context.Context, jobID string, after string, limit int) (*compat.FineTuningJobEventList, error) { return nil, notSupported }
-func (p *Provider) CancelFineTuningJob(ctx context.Context, jobID string) (*compat.FineTuningJob, error)                                    { return nil, notSupported }
-func (p *Provider) ListFineTuningJobCheckpoints(ctx context.Context, jobID string, after string, limit int) (*compat.FineTuningJobCheckpointList, error) { return nil, notSupported }
-var notSupported = provider.ErrUnsupported{"anthropic"}
+func (p *Provider) CreateEmbedding(ctx context.Context, req compat.EmbeddingRequest) (*compat.EmbeddingResponse, error) {
+	return nil, notSupported
+}
+func (p *Provider) CreateImage(ctx context.Context, req compat.ImageGenerationRequest) (*compat.ImageGenerationResponse, error) {
+	return nil, notSupported
+}
+func (p *Provider) CreateModeration(ctx context.Context, req compat.ModerationRequest) (*compat.ModerationResponse, error) {
+	return nil, notSupported
+}
+func (p *Provider) CreateTranscription(ctx context.Context, req compat.AudioTranscriptionRequest) (*compat.AudioTranscriptionResponse, error) {
+	return nil, notSupported
+}
+func (p *Provider) CreateTranslation(ctx context.Context, req compat.AudioTranslationRequest) (*compat.AudioTranslationResponse, error) {
+	return nil, notSupported
+}
+func (p *Provider) CreateSpeech(ctx context.Context, req compat.SpeechRequest) (*compat.SpeechResponse, error) {
+	return nil, notSupported
+}
+func (p *Provider) CreateCompletion(ctx context.Context, req compat.CompletionsRequest) (*compat.CompletionsResponse, error) {
+	return nil, notSupported
+}
+func (p *Provider) StreamCompletion(ctx context.Context, req compat.CompletionsRequest) (provider.CompletionStream, error) {
+	return nil, notSupported
+}
+func (p *Provider) UploadFile(ctx context.Context, req compat.FileUploadRequest) (*compat.FileObject, error) {
+	return nil, notSupported
+}
+func (p *Provider) ListFiles(ctx context.Context) (*compat.FileList, error) { return nil, notSupported }
+func (p *Provider) RetrieveFile(ctx context.Context, fileID string) (*compat.FileObject, error) {
+	return nil, notSupported
+}
+func (p *Provider) DeleteFile(ctx context.Context, fileID string) (*compat.FileDeleteResponse, error) {
+	return nil, notSupported
+}
+func (p *Provider) DownloadFile(ctx context.Context, fileID string) ([]byte, string, error) {
+	return nil, "", notSupported
+}
+func (p *Provider) CreateBatch(ctx context.Context, req compat.BatchRequest) (*compat.Batch, error) {
+	return nil, notSupported
+}
+func (p *Provider) ListBatches(ctx context.Context, after string, limit int) (*compat.BatchList, error) {
+	return nil, notSupported
+}
+func (p *Provider) RetrieveBatch(ctx context.Context, batchID string) (*compat.Batch, error) {
+	return nil, notSupported
+}
+func (p *Provider) CancelBatch(ctx context.Context, batchID string) (*compat.Batch, error) {
+	return nil, notSupported
+}
+func (p *Provider) CreateFineTuningJob(ctx context.Context, req compat.FineTuningJobRequest) (*compat.FineTuningJob, error) {
+	return nil, notSupported
+}
+func (p *Provider) ListFineTuningJobs(ctx context.Context, after string, limit int) (*compat.FineTuningJobList, error) {
+	return nil, notSupported
+}
+func (p *Provider) RetrieveFineTuningJob(ctx context.Context, jobID string) (*compat.FineTuningJob, error) {
+	return nil, notSupported
+}
+func (p *Provider) ListFineTuningJobEvents(ctx context.Context, jobID string, after string, limit int) (*compat.FineTuningJobEventList, error) {
+	return nil, notSupported
+}
+func (p *Provider) CancelFineTuningJob(ctx context.Context, jobID string) (*compat.FineTuningJob, error) {
+	return nil, notSupported
+}
+func (p *Provider) ListFineTuningJobCheckpoints(ctx context.Context, jobID string, after string, limit int) (*compat.FineTuningJobCheckpointList, error) {
+	return nil, notSupported
+}
+
+var notSupported = provider.ErrUnsupported{Provider: "anthropic"}
 
 type chatCompletionStream struct {
-	model    string
-	reader   io.ReadCloser
-	stream   *MessageStream
+	model  string
+	reader io.ReadCloser
+	stream *MessageStream
 }
 
 func (s *chatCompletionStream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) {

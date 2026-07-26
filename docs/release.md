@@ -13,7 +13,7 @@ MAJOR.MINOR.PATCH
 示例：
 
 ```text
-0.1.9
+0.3.0
 ```
 
 ## Preflight

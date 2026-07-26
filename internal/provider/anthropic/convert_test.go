@@ -1,6 +1,7 @@
 package anthropic
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -112,7 +113,7 @@ func TestProviderCreateChatCompletion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	resp, err := p.CreateChatCompletion(t.Context(), compat.ChatCompletionRequest{
+	resp, err := p.CreateChatCompletion(context.Background(), compat.ChatCompletionRequest{
 		Model: "claude-3",
 		Messages: []compat.ChatMessage{
 			{Role: "user", Content: json.RawMessage(`"Hi"`)},

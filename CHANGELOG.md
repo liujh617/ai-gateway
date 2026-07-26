@@ -8,6 +8,20 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+## 0.3.0 - 2026-07-26
+
+### Added
+
+- **Realtime API v0.2.x**: WebSocket-based real-time communication with full-duplex relay, browser token auth (`POST /v1/realtime/tokens`), connection quotas, and Protocol Observer for session-level audit and metrics.
+- **Anthropic Provider**: Native `anthropic` provider type with OpenAI Chat Completions ↔ Anthropic Messages API format conversion layer, including request/response/streaming/tool-use conversion. Supports `x-api-key` auth and `anthropic-version` headers.
+- **WebSocket proxy package** (`internal/wsproxy`): Generic WebSocket relay with message size limits, max duration, connection limiter, and per-client quota tracking.
+
+### Changed
+
+- Added `realtime` capability to model config and routing.
+- Added `anthropic` to provider type enum in config schema.
+- Exported `middleware.ExtractClientFromHeader` for manual auth in non-standard handlers.
+
 ## 0.1.9 - 2026-07-25
 
 ### Added
