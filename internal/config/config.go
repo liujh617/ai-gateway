@@ -29,6 +29,7 @@ type Config struct {
 	MaxRequestBodyBytes      int64                     `json:"max_request_body_bytes"`
 	Log                      LogConfig                 `json:"log"`
 	Audit                    AuditConfig               `json:"audit"`
+	Realtime                 RealtimeConfig            `json:"realtime"`
 	RateLimit                RateLimitConfig           `json:"rate_limit"`
 	ProviderHealth           ProviderHealthConfig      `json:"provider_health"`
 	ResponseStore            *ResponseStoreConfig      `json:"response_store,omitempty"`
@@ -107,6 +108,14 @@ type AuditConfig struct {
 	Enabled      bool   `json:"enabled"`
 	Path         string `json:"path"`
 	MaxFileBytes int64  `json:"max_file_bytes"`
+}
+
+type RealtimeConfig struct {
+	Enabled         bool     `json:"enabled"`
+	MaxMessageBytes int64    `json:"max_message_bytes"`
+	MaxDurationSec  int      `json:"max_duration_seconds"`
+	MaxConcurrency  int      `json:"max_concurrency"`
+	AllowedOrigins  []string `json:"allowed_origins"`
 }
 
 type CheckReport struct {
