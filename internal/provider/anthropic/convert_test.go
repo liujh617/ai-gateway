@@ -126,3 +126,93 @@ func TestProviderCreateChatCompletion(t *testing.T) {
 		t.Fatal("empty response")
 	}
 }
+
+func TestStreamConvertContentBlockStartToolUse(t *testing.T) {
+	event := &MessageStreamEvent{
+		Type:  "content_block_start",
+		Index: 0,
+		ContentBlock: &ContentBlock{
+			Type: "tool_use",
+			ID:   "toolu_01A",
+			Name: "get_weather",
+		},
+	}
+	chunk := convertStreamEvent(event, "claude-3")
+	extra := chunk.Choices[0].Delta.Extra
+	if extra == nil || extra["tool_calls"] == nil {
+		t.Fatal("missing tool_calls in delta")
+	}
+	var calls []map[string]any
+	if err := json.Unmarshal(extra["tool_calls"], &calls); err != nil {
+		t.Fatalf("unmarshal tool_calls: %v", err)
+	}
+	if len(calls) != 1 || calls[0]["id"] != "toolu_01A" {
+		t.Fatalf("calls=%v", calls)
+	}
+}
+
+func TestStreamConvertToolUseArgsDelta(t *testing.T) {
+	event := &MessageStreamEvent{
+		Type:  "content_block_delta",
+		Index: 0,
+		Delta: &StreamDelta{
+			Type:        "input_json_delta",
+			PartialJSON: `"{"location":"Paris"}"`,
+		},
+	}
+	chunk := convertStreamEvent(event, "claude-3")
+	extra := chunk.Choices[0].Delta.Extra
+	if extra == nil || extra["tool_calls"] == nil {
+		t.Fatal("missing tool_calls in args delta")
+	}
+}
+
+func TestStreamConvertMessageDelta(t *testing.T) {
+	event := &MessageStreamEvent{
+		Type: "message_delta",
+		Delta: &StreamDelta{
+			StopReason: "end_turn",
+		},
+		Usage: &Usage{InputTokens: 10, OutputTokens: 5},
+	}
+	chunk := convertStreamEvent(event, "claude-3")
+	if chunk.Choices[0].FinishReason == nil || *chunk.Choices[0].FinishReason != "stop" {
+		t.Fatalf("finish_reason=%v", chunk.Choices[0].FinishReason)
+	}
+	if chunk.Usage == nil || chunk.Usage.TotalTokens != 15 {
+		t.Fatalf("usage=%#v", chunk.Usage)
+	}
+}
+
+
+func TestStreamChatCompletionFullToolUseFlow(t *testing.T) {
+	streamBody := "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-3\"}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_01\",\"name\":\"get_weather\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"location\\\":\\\"Paris\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"input_tokens\":10,\"output_tokens\":30}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Write([]byte(streamBody))
+	}))
+	defer server.Close()
+	p, _ := New(server.URL, "test-key", 0)
+	stream, err := p.StreamChatCompletion(context.Background(), compat.ChatCompletionRequest{
+		Model:    "claude-3",
+		Messages: []compat.ChatMessage{{Role: "user", Content: json.RawMessage(`"Weather?"`)}},
+	})
+	if err != nil {
+		t.Fatalf("StreamChatCompletion: %v", err)
+	}
+	defer stream.Close()
+	count := 0
+	for {
+		_, err := stream.Next(context.Background())
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next: %v", err)
+		}
+		count++
+	}
+	if count < 4 {
+		t.Fatalf("got %d chunks", count)
+	}
+}
