@@ -36,6 +36,11 @@ type Provider interface {
 	ListFineTuningJobCheckpoints(ctx context.Context, jobID string, after string, limit int) (*compat.FineTuningJobCheckpointList, error)
 }
 
+// ErrUnsupported is a sentinel error for provider methods that are not implemented.
+type ErrUnsupported struct{ Provider string }
+
+func (e ErrUnsupported) Error() string { return e.Provider + ": operation not supported" }
+
 // RealtimeProvider is an optional interface for providers that support WebSocket realtime.
 type RealtimeProvider interface {
 	RealtimeEndpoint(model string) string

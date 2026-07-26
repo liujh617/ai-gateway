@@ -20,6 +20,7 @@ import (
 	"open-ai-gateway/internal/config"
 	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/provider"
+	"open-ai-gateway/internal/provider/anthropic"
 	"open-ai-gateway/internal/provider/azureopenai"
 	"open-ai-gateway/internal/provider/fake"
 	"open-ai-gateway/internal/provider/openai"
@@ -297,7 +298,13 @@ func buildRouter(cfg *config.Config) (*router.ModelRouter, error) {
 				return nil, fmt.Errorf("provider %q: %w", name, err)
 			}
 			providers[name] = provider
-		default:
+		case "anthropic":
+				provider, err := anthropic.New(providerConfig.BaseURL, providerConfig.ResolvedAPIKey(), providerConfig.Timeout())
+				if err != nil {
+					return nil, fmt.Errorf("provider %q: %w", name, err)
+				}
+				providers[name] = provider
+			default:
 			return nil, fmt.Errorf("provider %q has unsupported type %q", name, providerConfig.Type)
 		}
 	}

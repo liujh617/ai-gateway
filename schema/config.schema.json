@@ -203,7 +203,7 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["fake", "openai-compatible", "azure-openai"]
+          "enum": ["fake", "openai-compatible", "azure-openai", "anthropic"]
         },
         "base_url": {
           "type": "string",

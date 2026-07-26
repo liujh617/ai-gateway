@@ -1,175 +1,107 @@
 # Task 184 - Anthropic Provider + 格式转换层
 
-## 目标
+## 背景
 
-新增 Anthropic Provider，支持 OpenAI Chat Completions ↔ Anthropic Messages API 格式转换，使现有 OpenAI 兼容客户端（包括 Claude Code）可以通过网关访问 Anthropic 模型。
-
-## 架构
-
-```
-Client (OpenAI format)    Gateway                     Upstream (Anthropic format)
-  |                          |                            |
-  |-- Chat Completions ---->|                            |
-  |  (Bearer key, gpt-like) |-- Auth + Routing           |
-  |                          |-- OpenAI → Anthropic 转换   |
-  |                          |-- Messages API req ------->|
-  |                          |<- Anthropic SSE/JSON ------|
-  |                          |-- Anthropic → OpenAI 转换   |
-  |<-- OpenAI SSE/JSON ------|                            |
-```
-
-## 转换映射
-
-### 请求转换（OpenAI → Anthropic）
-
-| OpenAI 字段 | Anthropic 字段 | 说明 |
-|---|---|---|
-| `model` | `model` | 通过路由映射到 upstream_model |
-| `messages` | `messages` | 角色+内容转换 |
-| `stream` | `stream` | 直接透传 |
-| `temperature` | `temperature` | 直接透传 |
-| `top_p` | `top_p` | 直接透传 |
-| `max_tokens` | `max_tokens` | 直接透传 |
-| `stop` | `stop_sequences` | 数组化 |
-| `system` role msg | `system` (顶层) | 提取首条 system 消息 |
-| `tools` | `tools` | 格式转换 |
-| `tool_choice` | `tool_choice` | 格式转换 |
-
-### 响应转换（Anthropic → OpenAI）
-
-| Anthropic 字段 | OpenAI 字段 | 说明 |
-|---|---|---|
-| `id` | `id` | `msg_xxx` → `chatcmpl-xxx` |
-| `model` | `model` | 对外模型名 |
-| `usage` | `usage` | input_tokens/output_tokens |
-| `stop_reason` | `choices[0].finish_reason` | end_turn→stop, max_tokens→length, tool_use→tool_calls |
-| `content[].text` | `choices[0].message.content` | 文本拼接 |
-| `content[].tool_use` | `choices[0].message.tool_calls` | 工具调用转换 |
-
-### 流式转换
-
-| Anthropic SSE | OpenAI SSE |
-|---|---|
-| `message_start` | 首个 `chat.completion.chunk` + `role` |
-| `content_block_start(text)` | delta 首块（含 content 前缀） |
-| `content_block_delta(text_delta)` | `choices[0].delta.content` |
-| `content_block_start(tool_use)` | `choices[0].delta.tool_calls[0]` (含 id/name) |
-| `content_block_delta(input_json_delta)` | `choices[0].delta.tool_calls[0].function.arguments` |
-| `message_delta(usage)` | 末块 `usage` |
-| `message_stop` | `[DONE]` |
-
-### 错误转换
-
-| Anthropic Error | OpenAI Error |
-|---|---|
-| `{"type":"error","error":{"type":"...","message":"..."}}` | `{"error":{"type":"...","message":"...","code":"..."}}` |
-
-HTTP 状态码直接透传。
-
-## 新建文件
-
-```
-internal/provider/anthropic/
-  anthropic.go        # Provider 实现
-  convert.go          # 格式转换函数
-  anthropic_test.go   # 测试
-  convert_test.go     # 转换测试
-```
-
-## 修改文件
-
-```
-internal/config/config.go        # 新增 "anthropic" provider type
-schema/config.schema.json        # Schema 更新
-cmd/gateway/main.go              # Provider 工厂
-```
-
-## 配置示例
-
-```json
-{
-  "providers": {
-    "claude": {
-      "type": "anthropic",
-      "base_url": "https://api.anthropic.com/v1",
-      "api_key": "sk-ant-xxx"
-    }
-  },
-  "models": {
-    "claude-sonnet-5": {
-      "provider": "claude",
-      "upstream_model": "claude-sonnet-5-20251001",
-      "capabilities": ["chat"]
-    }
-  }
-}
-```
-
-## Provider 实现要点
-
-### anthropic.go
-
-```go
-type Provider struct {
-    baseURL  string
-    apiKey   string
-    client   *http.Client
-}
-```
-
-- 认证：`x-api-key` header + `anthropic-version: 2023-06-01`
-- 请求构造：`POST /v1/messages`
-- 流式：`POST /v1/messages` + `Accept: text/event-stream`（但 SSE 格式不同）
-- 注意：Anthropic 的流式格式不是标准 SSE，需要特殊处理
-
-### convert.go
-
-```go
-func openaiToAnthropic(req compat.ChatCompletionRequest) anthropicRequest
-func anthropicToOpenAI(resp anthropicResponse, model string) *compat.ChatCompletionResponse
-func anthropicStreamToOpenAIChunk(event anthropicStreamEvent) *compat.ChatCompletionChunk
-func anthropicErrorToOpenAI(errResp anthropicErrorResp) *compat.Error
-```
-
-## Anthropic Stream 格式
-
-Anthropic 使用自己的流式格式（不是 SSE），每条事件以 `event:` 开头：
-
-```
-event: message_start
-data: {"type":"message_start","message":{"id":"msg_xxx",...}}
-
-event: content_block_start
-data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}
-
-event: content_block_stop
-data: {"type":"content_block_stop","index":0}
-
-event: message_delta
-data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":10}}
-
-event: message_stop
-data: {"type":"message_stop"}
-```
-
-需要自定义流解析器（无法复用现有的 SSE 解析器）。
+见 spec `openai-compatible-proxy-spec.md` Anthropic Provider 章节。
 
 ## 实施步骤
 
-1. 创建 `internal/provider/anthropic/` 包
-2. 实现 `convert.go`（请求+响应+流式+错误转换）
-3. 实现 `anthropic.go`（Provider）
-4. 实现 Anthropic SSE 流解析
-5. 在 `config.go` 注册 `"anthropic"` provider type
-6. 在 `main.go` 工厂中创建 Anthropic provider
-7. 单元测试（convert_test.go + anthropic_test.go）
-8. 集成测试 + `make verify`
+### Step 1：Anthropic 数据类型
 
-## 验证
+`internal/provider/anthropic/types.go`：
+- `MessageRequest`：顶层请求（model, messages, system, stream, max_tokens, temperature, top_p, stop_sequences, tools, tool_choice）
+- `Message`：role + content blocks 数组
+- `ContentBlock`：{type, text} | {type, id, name, input} | {type, tool_use_id, content}
+- `MessageResponse`：id, model, role, content[], stop_reason, usage
+- `MessageStreamEvent`：type, message, content_block, delta, usage
+- `Tool`：name, description, input_schema
+- `ErrorResponse`：type, error{type, message}
+
+### Step 2：格式转换
+
+`internal/provider/anthropic/convert.go`：
+
+**请求转换**（重点）：
+```go
+func openaiToAnthropic(req compat.ChatCompletionRequest) MessageRequest
+```
+- 遍历 messages：第一条 system → MessageRequest.System
+- user msg → ContentBlock{type:"text", text: content}
+- assistant msg → ContentBlock{type:"text", text: content} + tool_use blocks
+- tool msg → ContentBlock{type:"tool_result", tool_use_id, content}
+- tools → Anthropic Tool 数组
+- tool_choice 格式转换
+
+**响应转换**：
+```go
+func anthropicToOpenAI(resp MessageResponse, model string) *compat.ChatCompletionResponse
+```
+- content blocks → choices[0].message.content + tool_calls
+- stop_reason → finish_reason 映射
+- usage 透传
+
+**流式转换**：
+```go
+func anthropicStreamToOpenAIChunk(event MessageStreamEvent, model string) *compat.ChatCompletionChunk
+```
+- message_start → null（占位，实际数据在后续事件中）
+- content_block_start(text) → 首次 delta 含 role
+- content_block_delta(text_delta) → delta.content
+- content_block_start(tool_use) → delta.tool_calls[0]{id, name}
+- content_block_delta(input_json_delta) → delta.tool_calls[0].function.arguments
+- message_stop → [DONE]
+
+**错误转换**：
+```go
+func anthropicErrorToOpenAI(body []byte, statusCode int) *compat.Error
+```
+
+### Step 3：流式解析器
+
+`internal/provider/anthropic/stream.go`：
+
+Anthropic 流式格式每行以 `event:` 开头：
+```
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}
+```
+
+解析器：
+```go
+type MessageStream struct { reader io.Reader }
+func NewMessageStream(r io.Reader) *MessageStream
+func (s *MessageStream) Next(ctx context.Context) (*MessageStreamEvent, error)
+```
+
+### Step 4：Provider 实现
+
+`internal/provider/anthropic/anthropic.go`：
+- New(baseURL, apiKey string, timeout time.Duration)
+- CreateChatCompletion → POST /v1/messages → 请求转换 + 响应转换
+- StreamChatCompletion → POST /v1/messages + stream:true → 流式读取 + 事件转换
+- 认证：x-api-key + anthropic-version headers
+- 其他 Provider 接口方法返回 not implemented
+
+### Step 5：注册 Provider
+
+- `internal/config/config.go`：添加 `"anthropic"` case
+- `cmd/gateway/main.go`：工厂创建 AnthropicProvider
+- `schema/config.schema.json`：enum 增加 `"anthropic"`
+
+### Step 6：测试
+
+- `convert_test.go`：请求/响应/流式/错误 round-trip 测试
+- `anthropic_test.go`：Provider CreateChatCompletion/StreamChatCompletion 测试
+- 集成测试用 httptest 模拟 Anthropic API
+
+### Step 7：验证
 
 - `go test ./...`
-- 转换 round-trip 测试
-- 流式格式解析测试
+- `make verify`
+
+## 关键决策
+
+1. **Anthropic 流式解析**：自实现（非标准 SSE），使用 bufio.Scanner
+2. **Content 聚合**：多个 text block 拼接为单个字符串
+3. **工具调用**：tool_use block → OpenAI tool_calls 数组，带 index 保持顺序
+4. **只实现核心的 CreateChatCompletion + StreamChatCompletion**，其他 Provider 方法返回 `errors.New("not supported")`

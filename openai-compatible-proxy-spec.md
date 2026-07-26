@@ -593,6 +593,24 @@ POST <base_url>/openai/deployments/<deployment>/embeddings?api-version=<api_vers
 
 Azure provider 使用 `api-key` header 发送上游 API key。`providers.<name>.api_version` 是必填的 Azure OpenAI `api-version` query 值。`models.<external>.upstream_model` 对 Azure 表示 deployment name；为空时仍按 external model name 回退。
 
+#### Anthropic Provider（v0.3.0）
+
+`anthropic` provider 连接 Anthropic Messages API，在网关内部完成 OpenAI Chat Completions ↔ Anthropic Messages 格式转换，使现有 OpenAI 兼容客户端无需修改即可访问 Claude 模型。
+
+**认证**：使用 `x-api-key` header（值为 `providers.<name>.api_key`）和 `anthropic-version: 2023-06-01` header 调用上游 `/v1/messages`。
+
+**格式转换层**：网关在收到 OpenAI 格式请求后、发送到上游前完成转换；上游返回后、返回客户端前完成逆向转换。转换层处理：
+
+- **消息转换**：OpenAI `system` role 消息提取到 Anthropic 顶层 `system` 字段；`user`/`assistant` 消息按 content block 模型转换；`tool` role 消息转为 Anthropic `tool_result` content block。
+- **工具调用**：OpenAI `tools` 数组（`function` 类型）转为 Anthropic `tools` 格式；响应中的 Anthropic `tool_use` content block 转为 OpenAI `tool_calls` 数组。
+- **流式**：Anthropic 使用 `event:` 前缀的自定义流式格式（非标准 SSE）。网关解析 Anthropic 流式事件后，转换为 OpenAI SSE `chat.completion.chunk` 格式。支持 `message_start`/`content_block_start`/`content_block_delta`/`content_block_stop`/`message_delta`/`message_stop` 事件类型。
+- **错误**：Anthropic API 错误 `{"type":"error","error":{"type":"...","message":"..."}}` 转为 OpenAI 兼容的 `{"error":{"type":"...","message":"...","code":"..."}}`。
+- **内容块聚合**：Anthropic 响应中的多个 `text` content block 拼接为 OpenAI 响应中的单个 `content` 字符串。
+
+**不转换的字段**：`temperature`、`top_p`、`max_tokens`、`stop`（转为 `stop_sequences`）直接透传。OpenAI 特有字段（如 `logprobs`、`n`、`frequency_penalty`）通过 Extra 透传但不保证上游支持。
+
+**provider type 注册**：`"anthropic"` 作为新的 `provider.type` 值。`base_url` 默认指向 `https://api.anthropic.com/v1`。
+
 早期 ADR 中的 YAML 示例属于目标形态。当前实现使用 JSON 配置，避免在第一版引入额外配置解析依赖。
 
 目标 YAML 形态：
