@@ -7,16 +7,16 @@ import (
 
 // ClientQuota tracks per-client connection counts and rate limits.
 type ClientQuota struct {
-	mu            sync.Mutex
-	clients       map[string]*clientState
-	maxPerClient  int
-	maxPerMinute  int
+	mu           sync.Mutex
+	clients      map[string]*clientState
+	maxPerClient int
+	maxPerMinute int
 }
 
 type clientState struct {
-	connections  int
-	windowStart  time.Time
-	windowCount  int
+	connections int
+	windowStart time.Time
+	windowCount int
 }
 
 // ClientQuotaConfig configures per-client limits.

@@ -131,7 +131,16 @@ func (p *Provider) ProxyAnthropicRequest(r *http.Request) (*http.Response, error
 	req.Header.Set("x-api-key", p.apiKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 	req.Header.Set("Content-Type", "application/json")
-	return p.client.Do(req)
+	// Forward headers that affect upstream behavior for streaming.
+	for _, header := range []string{"Accept", "User-Agent"} {
+		if v := r.Header.Get(header); v != "" {
+			req.Header.Set(header, v)
+		}
+	}
+	// Use a client without a short timeout for proxy requests;
+	// the request context (set by the handler with streamTimeout) controls deadlines.
+	proxyClient := &http.Client{Timeout: 0}
+	return proxyClient.Do(req)
 }
 
 // Stub methods

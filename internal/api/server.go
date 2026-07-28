@@ -165,6 +165,7 @@ func (s *Server) routeHandlers() map[string]func(http.ResponseWriter, *http.Requ
 		routes.FineTuningJobCancelPath:      s.handleCancelFineTuningJob,
 		routes.FineTuningJobCheckpointsPath: s.handleFineTuningJobCheckpoints,
 		routes.AnthropicMessagesPath:        s.handleAnthropicMessages,
+		routes.AnthropicCountTokensPath:     s.handleAnthropicMessages,
 		routes.RealtimePath:                 s.handleRealtime,
 		routes.RealtimeTokensPath:           s.handleRealtimeTokens,
 	}

@@ -38,6 +38,7 @@ const (
 	RealtimePath                 = "/v1/realtime"
 	RealtimeTokensPath           = "/v1/realtime/tokens"
 	AnthropicMessagesPath        = "/v1/messages"
+	AnthropicCountTokensPath     = "/v1/messages/count_tokens"
 )
 
 type Route struct {
@@ -70,6 +71,7 @@ var definitions = []Route{
 	{Path: FilesRetrievePath, Methods: []string{http.MethodGet, http.MethodDelete}},
 	{Path: FilesContentPath, Methods: []string{http.MethodGet}},
 	{Path: AnthropicMessagesPath, Methods: []string{http.MethodPost}, Public: true},
+	{Path: AnthropicCountTokensPath, Methods: []string{http.MethodPost}, Public: true},
 	{Path: RealtimeTokensPath, Methods: []string{http.MethodPost}},
 	{Path: RealtimePath, Methods: []string{http.MethodGet}, Public: true},
 	{Path: FineTuningJobsPath, Methods: []string{http.MethodPost, http.MethodGet}},

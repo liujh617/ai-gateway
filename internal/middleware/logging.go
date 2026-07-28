@@ -31,12 +31,16 @@ func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			next.ServeHTTP(rec, r)
 
+			normPath := routes.NormalizePath(r.URL.Path)
 			attrs := []any{
 				"request_id", RequestIDFromContext(r.Context()),
 				"method", r.Method,
-				"path", routes.NormalizePath(r.URL.Path),
+				"path", normPath,
 				"status", rec.status,
 				"latency_ms", time.Since(started).Milliseconds(),
+			}
+			if normPath == routes.UnknownPathLabel {
+				attrs = append(attrs, "raw_path", r.URL.Path)
 			}
 			if fields.ExternalModel != "" {
 				attrs = append(attrs, "external_model", fields.ExternalModel)

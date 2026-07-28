@@ -1324,11 +1324,11 @@ func TestCreateTranscriptionForwardsMultipartRequest(t *testing.T) {
 	temp := 0.5
 	p := newProvider(t, server.URL+"/v1")
 	resp, err := p.CreateTranscription(context.Background(), compat.AudioTranscriptionRequest{
-		Model:          "whisper-1",
-		File:           []byte("audio-data"),
-		Filename:       "test.wav",
-		Language:       "en",
-		Temperature:    &temp,
+		Model:       "whisper-1",
+		File:        []byte("audio-data"),
+		Filename:    "test.wav",
+		Language:    "en",
+		Temperature: &temp,
 	})
 	if err != nil {
 		t.Fatalf("CreateTranscription: %v", err)

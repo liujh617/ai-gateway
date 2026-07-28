@@ -6,8 +6,8 @@ import (
 
 	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
-	"open-ai-gateway/internal/provider"
 	"open-ai-gateway/internal/middleware"
+	"open-ai-gateway/internal/provider"
 	"open-ai-gateway/internal/requestctx"
 	"open-ai-gateway/internal/routes"
 	"open-ai-gateway/internal/wsproxy"

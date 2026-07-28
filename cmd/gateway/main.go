@@ -299,12 +299,12 @@ func buildRouter(cfg *config.Config) (*router.ModelRouter, error) {
 			}
 			providers[name] = provider
 		case "anthropic":
-				provider, err := anthropic.New(providerConfig.BaseURL, providerConfig.ResolvedAPIKey(), providerConfig.Timeout())
-				if err != nil {
-					return nil, fmt.Errorf("provider %q: %w", name, err)
-				}
-				providers[name] = provider
-			default:
+			provider, err := anthropic.New(providerConfig.BaseURL, providerConfig.ResolvedAPIKey(), providerConfig.Timeout())
+			if err != nil {
+				return nil, fmt.Errorf("provider %q: %w", name, err)
+			}
+			providers[name] = provider
+		default:
 			return nil, fmt.Errorf("provider %q has unsupported type %q", name, providerConfig.Type)
 		}
 	}

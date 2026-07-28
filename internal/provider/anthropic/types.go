@@ -21,26 +21,26 @@ type Message struct {
 }
 
 type ContentBlock struct {
-	Type         string          `json:"type"`
-	Text         string          `json:"text,omitempty"`
-	ID           string          `json:"id,omitempty"`
-	Name         string          `json:"name,omitempty"`
-	Input        json.RawMessage `json:"input,omitempty"`
-	ToolUseID    string          `json:"tool_use_id,omitempty"`
-	Content      string          `json:"content,omitempty"`
-	IsError      bool            `json:"is_error,omitempty"`
+	Type      string          `json:"type"`
+	Text      string          `json:"text,omitempty"`
+	ID        string          `json:"id,omitempty"`
+	Name      string          `json:"name,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty"`
+	ToolUseID string          `json:"tool_use_id,omitempty"`
+	Content   string          `json:"content,omitempty"`
+	IsError   bool            `json:"is_error,omitempty"`
 }
 
 type Tool struct {
-	Name        string     `json:"name"`
-	Description string     `json:"description,omitempty"`
+	Name        string      `json:"name"`
+	Description string      `json:"description,omitempty"`
 	InputSchema *ToolSchema `json:"input_schema"`
 }
 
 type ToolSchema struct {
-	Type       string                 `json:"type"`
-	Properties map[string]any         `json:"properties,omitempty"`
-	Required   []string               `json:"required,omitempty"`
+	Type       string                     `json:"type"`
+	Properties map[string]any             `json:"properties,omitempty"`
+	Required   []string                   `json:"required,omitempty"`
 	Extra      map[string]json.RawMessage `json:"-"`
 }
 
@@ -84,8 +84,8 @@ type StreamDelta struct {
 }
 
 type ErrorResponse struct {
-	Type  string       `json:"type"`
-	Error ErrorDetail  `json:"error"`
+	Type  string      `json:"type"`
+	Error ErrorDetail `json:"error"`
 }
 
 type ErrorDetail struct {

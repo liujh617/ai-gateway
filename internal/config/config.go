@@ -501,6 +501,13 @@ func (c *Config) Validate() error {
 			if provider.APIVersion != strings.TrimSpace(provider.APIVersion) {
 				return fmt.Errorf("provider %q api_version must not contain leading or trailing whitespace", name)
 			}
+		case "anthropic":
+			if _, err := upstreamurl.NormalizeHTTPBaseURL(provider.BaseURL); err != nil {
+				return fmt.Errorf("provider %q %w", name, err)
+			}
+			if provider.APIKey == "" && provider.APIKeyEnv == "" {
+				return fmt.Errorf("provider %q requires api_key or api_key_env", name)
+			}
 		default:
 			return fmt.Errorf("provider %q has unsupported type %q", name, provider.Type)
 		}
