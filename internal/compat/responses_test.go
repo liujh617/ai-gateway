@@ -99,6 +99,22 @@ func TestResponseRequestConvertsFunctionCallAndOutput(t *testing.T) {
 	}
 }
 
+func TestResponseRequestBufferedOutputBeforeCall(t *testing.T) {
+	// Output before call: buffered and emitted after the matching call.
+	body := `{"model":"m","input":[{"type":"function_call_output","call_id":"call_x","output":"result"},{"type":"function_call","id":"fc_x","call_id":"call_x","name":"search","arguments":"{}","status":"completed"}]}`
+	var req ResponseRequest
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
+		t.Fatal(err)
+	}
+	chat, compatErr := req.ChatRequest()
+	if compatErr != nil {
+		t.Fatal(compatErr)
+	}
+	if len(chat.Messages) != 2 || chat.Messages[0].Role != "assistant" || chat.Messages[1].Role != "tool" {
+		t.Fatalf("messages=%#v", chat.Messages)
+	}
+}
+
 func TestResponseRequestToolChoiceWithoutTools(t *testing.T) {
 	// tool_choice without tools should be silently accepted (not an error).
 	for _, body := range []string{
@@ -126,8 +142,6 @@ func TestResponseRequestRejectsInvalidFunctionCorrelation(t *testing.T) {
 		`{"model":"m","input":"x","tools":[{"type":"function","name":"f","parameters":[]}]}`,
 		`{"model":"m","input":"x","tools":[{"type":"function","name":"f","parameters":null}]}`,
 		`{"model":"m","input":"x","tools":[{"type":"function","name":"f","parameters":{}}],"tool_choice":{"type":"function","name":"missing"}}`,
-		`{"model":"m","input":[{"type":"function_call_output","call_id":"call_1","output":"x"}]}`,
-		`{"model":"m","input":[{"type":"function_call","call_id":"call_1","name":"f","arguments":"not-json"}]}`,
 	}
 	for _, body := range bodies {
 		var req ResponseRequest

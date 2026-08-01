@@ -188,33 +188,63 @@ func (r ResponseRequest) ChatRequest() (ChatCompletionRequest, *Error) {
 	if err := json.Unmarshal(r.Input, &items); err != nil || len(items) == 0 {
 		return ChatCompletionRequest{}, InvalidRequest("input must be text or a non-empty message array", "input")
 	}
-	seenCalls := map[string]bool{}
-	seenOutputs := map[string]bool{}
+	allTools := []responseFunctionTool{}
+	seenCallIDs := map[string]bool{}
+	bufferedOutputs := map[string]responseFunctionCallOutputInput{}
 	for i, raw := range items {
 		var header struct {
 			Type string `json:"type"`
 		}
 		_ = json.Unmarshal(raw, &header)
+		if header.Type == "additional_tools" || header.Type == "reasoning" {
+			if header.Type == "additional_tools" {
+				var at struct {
+					Tools json.RawMessage `json:"tools"`
+				}
+				if json.Unmarshal(raw, &at) == nil && len(at.Tools) > 0 {
+					var tools []responseFunctionTool
+					if json.Unmarshal(at.Tools, &tools) == nil {
+						allTools = append(allTools, tools...)
+					}
+				}
+			}
+			continue
+		}
 		if header.Type == "function_call" {
 			var item responseFunctionCallInput
-			if json.Unmarshal(raw, &item) != nil || strings.TrimSpace(item.CallID) == "" || strings.TrimSpace(item.Name) == "" || !ValidJSONString(item.Arguments) || (item.Status != "" && item.Status != "completed") || seenCalls[item.CallID] {
+			if json.Unmarshal(raw, &item) != nil || strings.TrimSpace(item.CallID) == "" || strings.TrimSpace(item.Name) == "" || !ValidJSONString(item.Arguments) || (item.Status != "" && item.Status != "completed") {
 				return ChatCompletionRequest{}, InvalidRequest(fmt.Sprintf("invalid function_call at input index %d", i), "input")
 			}
-			seenCalls[item.CallID] = true
-			call := map[string]any{"id": item.CallID, "type": "function", "function": map[string]any{"name": item.Name, "arguments": item.Arguments}}
+			callID := strings.TrimSpace(item.CallID)
+			seenCallIDs[callID] = true
+			call := map[string]any{"id": callID, "type": "function", "function": map[string]any{"name": item.Name, "arguments": item.Arguments}}
 			calls, _ := json.Marshal([]any{call})
 			messages = append(messages, ChatMessage{Role: "assistant", Content: json.RawMessage("null"), Extra: map[string]json.RawMessage{"tool_calls": calls}})
+			if out, ok := bufferedOutputs[callID]; ok {
+				callIDJSON, _ := json.Marshal(callID)
+				outputJSON, _ := json.Marshal(*out.Output)
+				messages = append(messages, ChatMessage{Role: "tool", Content: outputJSON, Extra: map[string]json.RawMessage{"tool_call_id": callIDJSON}})
+				delete(bufferedOutputs, callID)
+			}
 			continue
 		}
 		if header.Type == "function_call_output" {
 			var item responseFunctionCallOutputInput
-			if json.Unmarshal(raw, &item) != nil || (!seenCalls[item.CallID] && r.PreviousResponseID == "") || seenOutputs[item.CallID] || item.Output == nil {
+			if json.Unmarshal(raw, &item) != nil || item.Output == nil {
 				return ChatCompletionRequest{}, InvalidRequest(fmt.Sprintf("invalid function_call_output at input index %d", i), "input")
 			}
-			seenOutputs[item.CallID] = true
-			callID, _ := json.Marshal(item.CallID)
-			output, _ := json.Marshal(*item.Output)
-			messages = append(messages, ChatMessage{Role: "tool", Content: output, Extra: map[string]json.RawMessage{"tool_call_id": callID}})
+			callID := strings.TrimSpace(item.CallID)
+			if callID == "" {
+				return ChatCompletionRequest{}, InvalidRequest(fmt.Sprintf("invalid function_call_output at input index %d", i), "input")
+			}
+			callIDJSON, _ := json.Marshal(callID)
+			outputJSON, _ := json.Marshal(*item.Output)
+			toolMsg := ChatMessage{Role: "tool", Content: outputJSON, Extra: map[string]json.RawMessage{"tool_call_id": callIDJSON}}
+			if seenCallIDs[callID] {
+				messages = append(messages, toolMsg)
+			} else {
+				bufferedOutputs[callID] = item
+			}
 			continue
 		}
 		var item responseInputMessage
@@ -237,6 +267,27 @@ func (r ResponseRequest) ChatRequest() (ChatCompletionRequest, *Error) {
 		}
 		content, _ := json.Marshal(text)
 		messages = append(messages, ChatMessage{Role: role, Content: content})
+	}
+	// Merge tools from additional_tools input items.
+	if len(allTools) > 0 {
+		var merged []any
+		if raw, ok := extra["tools"]; ok && len(raw) > 0 {
+			json.Unmarshal(raw, &merged)
+		}
+		for _, t := range allTools {
+			name := strings.TrimSpace(t.Name)
+			if name == "" || name != t.Name {
+				continue
+			}
+			params := t.Parameters
+			if params == nil {
+				params = json.RawMessage(`{"type":"object"}`)
+			}
+			merged = append(merged, map[string]any{"type": "function", "function": map[string]any{"name": name, "description": t.Description, "parameters": params, "strict": true}})
+		}
+		if len(merged) > 0 {
+			extra["tools"], _ = json.Marshal(merged)
+		}
 	}
 	return ChatCompletionRequest{Model: r.Model, Messages: messages, Stream: r.Stream, Extra: extra}, nil
 }
