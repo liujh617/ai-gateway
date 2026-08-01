@@ -457,14 +457,21 @@ type DeletedResponse struct {
 }
 
 type ResponseOutputMessage struct {
-	ID        string               `json:"id"`
-	Type      string               `json:"type"`
-	Status    string               `json:"status"`
-	Role      string               `json:"role,omitempty"`
-	Content   []ResponseOutputText `json:"content,omitempty"`
-	CallID    string               `json:"call_id,omitempty"`
-	Name      string               `json:"name,omitempty"`
-	Arguments string               `json:"arguments,omitempty"`
+	ID               string                      `json:"id"`
+	Type             string                      `json:"type"`
+	Status           string                      `json:"status,omitempty"`
+	Role             string                      `json:"role,omitempty"`
+	Content          []ResponseOutputText        `json:"content,omitempty"`
+	CallID           string                      `json:"call_id,omitempty"`
+	Name             string                      `json:"name,omitempty"`
+	Arguments        string                      `json:"arguments,omitempty"`
+	Summary          *[]ResponseReasoningSummary `json:"summary,omitempty"`
+	EncryptedContent string                      `json:"encrypted_content,omitempty"`
+}
+
+type ResponseReasoningSummary struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
 }
 
 type ResponseOutputText struct {
