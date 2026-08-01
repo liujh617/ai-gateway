@@ -76,6 +76,9 @@
     "response_store": {
       "$ref": "#/$defs/response_store"
     },
+    "reasoning_envelope": {
+      "$ref": "#/$defs/reasoning_envelope"
+    },
     "providers": {
       "type": "object",
       "minProperties": 1,
@@ -197,6 +200,35 @@
       },
       "required": ["ttl_seconds", "max_entries", "max_context_bytes", "max_total_bytes"]
     },
+    "reasoning_envelope_key": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "key_env": { "type": "string", "minLength": 1 }
+      },
+      "required": ["id", "key_env"]
+    },
+    "reasoning_envelope": {
+      "type": "object",
+      "description": "Versioned encrypted reasoning state for stateless Responses tool continuation. Key material is read only from environment variables.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "audience": { "type": "string", "minLength": 1 },
+        "ttl_seconds": { "type": "integer", "minimum": 1, "default": 3600 },
+        "max_envelope_bytes": { "type": "integer", "minimum": 1, "default": 1048576 },
+        "max_plaintext_bytes": { "type": "integer", "minimum": 1, "default": 524288 },
+        "max_items_per_request": { "type": "integer", "minimum": 1, "default": 256 },
+        "max_tool_calls_per_turn": { "type": "integer", "minimum": 1, "default": 64 },
+        "active_key": { "$ref": "#/$defs/reasoning_envelope_key" },
+        "previous_keys": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/reasoning_envelope_key" },
+          "default": []
+        }
+      }
+    },
     "provider": {
       "type": "object",
       "additionalProperties": false,
@@ -236,6 +268,15 @@
         "upstream_model": {
           "type": "string"
         },
+        "dialect": {
+          "type": "string",
+          "enum": ["openai-compatible", "deepseek"],
+          "default": "openai-compatible"
+        },
+        "reasoning_replay": {
+          "type": "boolean",
+          "default": false
+        },
         "capabilities": {
           "type": "array",
           "items": {
@@ -265,6 +306,15 @@
         },
         "upstream_model": {
           "type": "string"
+        },
+        "dialect": {
+          "type": "string",
+          "enum": ["openai-compatible", "deepseek"],
+          "default": "openai-compatible"
+        },
+        "reasoning_replay": {
+          "type": "boolean",
+          "default": false
         },
         "pricing": {
           "$ref": "#/$defs/pricing"

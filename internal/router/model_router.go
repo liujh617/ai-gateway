@@ -9,20 +9,24 @@ import (
 )
 
 type ModelRoute struct {
-	ExternalModel string
-	UpstreamModel string
-	ProviderName  string
-	Capabilities  map[string]bool
-	Provider      provider.Provider
-	Pricing       TokenPricing
-	Fallbacks     []ProviderRoute
+	ExternalModel   string
+	UpstreamModel   string
+	ProviderName    string
+	Dialect         string
+	ReasoningReplay bool
+	Capabilities    map[string]bool
+	Provider        provider.Provider
+	Pricing         TokenPricing
+	Fallbacks       []ProviderRoute
 }
 
 type ProviderRoute struct {
-	UpstreamModel string
-	ProviderName  string
-	Provider      provider.Provider
-	Pricing       TokenPricing
+	UpstreamModel   string
+	ProviderName    string
+	Dialect         string
+	ReasoningReplay bool
+	Provider        provider.Provider
+	Pricing         TokenPricing
 }
 
 type TokenPricing struct {
@@ -136,24 +140,37 @@ func (r *ModelRouter) ModelCount() int {
 func (r ModelRoute) Attempts() []ProviderRoute {
 	attempts := make([]ProviderRoute, 0, 1+len(r.Fallbacks))
 	attempts = append(attempts, ProviderRoute{
-		UpstreamModel: r.UpstreamModel,
-		ProviderName:  r.ProviderName,
-		Provider:      r.Provider,
-		Pricing:       r.Pricing,
+		UpstreamModel:   r.UpstreamModel,
+		ProviderName:    r.ProviderName,
+		Dialect:         r.Dialect,
+		ReasoningReplay: r.ReasoningReplay,
+		Provider:        r.Provider,
+		Pricing:         r.Pricing,
 	})
 	attempts = append(attempts, r.Fallbacks...)
 	return attempts
 }
 
+func (r ModelRoute) MatchAttempt(providerName, upstreamModel, dialect string) (ProviderRoute, bool) {
+	for _, attempt := range r.Attempts() {
+		if attempt.ProviderName == providerName && attempt.UpstreamModel == upstreamModel && attempt.Dialect == dialect {
+			return attempt, true
+		}
+	}
+	return ProviderRoute{}, false
+}
+
 func (r ModelRoute) copy() ModelRoute {
 	return ModelRoute{
-		ExternalModel: r.ExternalModel,
-		UpstreamModel: r.UpstreamModel,
-		ProviderName:  r.ProviderName,
-		Capabilities:  copyCapabilities(r.Capabilities),
-		Provider:      r.Provider,
-		Pricing:       r.Pricing,
-		Fallbacks:     append([]ProviderRoute(nil), r.Fallbacks...),
+		ExternalModel:   r.ExternalModel,
+		UpstreamModel:   r.UpstreamModel,
+		ProviderName:    r.ProviderName,
+		Dialect:         r.Dialect,
+		ReasoningReplay: r.ReasoningReplay,
+		Capabilities:    copyCapabilities(r.Capabilities),
+		Provider:        r.Provider,
+		Pricing:         r.Pricing,
+		Fallbacks:       append([]ProviderRoute(nil), r.Fallbacks...),
 	}
 }
 

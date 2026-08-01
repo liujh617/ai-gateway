@@ -47,9 +47,19 @@ func TestConfigSchemaKeepsCoreContract(t *testing.T) {
 	if !ok {
 		t.Fatalf("$defs = %#v", schema["$defs"])
 	}
-	for _, name := range []string{"api_client", "rate_limit", "provider_health", "provider", "model", "model_fallback", "pricing"} {
+	for _, name := range []string{"api_client", "rate_limit", "provider_health", "reasoning_envelope", "reasoning_envelope_key", "provider", "model", "model_fallback", "pricing"} {
 		if _, ok := defs[name]; !ok {
 			t.Fatalf("missing schema def %q", name)
+		}
+	}
+	properties := schema["properties"].(map[string]any)
+	if _, ok := properties["reasoning_envelope"]; !ok {
+		t.Fatal("schema properties missing reasoning_envelope")
+	}
+	model := defs["model"].(map[string]any)["properties"].(map[string]any)
+	for _, field := range []string{"dialect", "reasoning_replay"} {
+		if _, ok := model[field]; !ok {
+			t.Fatalf("model schema missing %q", field)
 		}
 	}
 }

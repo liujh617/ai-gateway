@@ -1,6 +1,8 @@
 package config
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,6 +35,7 @@ type Config struct {
 	RateLimit                RateLimitConfig           `json:"rate_limit"`
 	ProviderHealth           ProviderHealthConfig      `json:"provider_health"`
 	ResponseStore            *ResponseStoreConfig      `json:"response_store,omitempty"`
+	ReasoningEnvelope        ReasoningEnvelopeConfig   `json:"reasoning_envelope"`
 	Providers                map[string]ProviderConfig `json:"providers"`
 	Models                   map[string]ModelConfig    `json:"models"`
 
@@ -61,17 +64,21 @@ type ClientRateLimitConfig struct {
 }
 
 type ModelConfig struct {
-	Provider      string                `json:"provider"`
-	UpstreamModel string                `json:"upstream_model"`
-	Capabilities  []string              `json:"capabilities"`
-	Pricing       PricingConfig         `json:"pricing"`
-	Fallbacks     []ModelFallbackConfig `json:"fallbacks"`
+	Provider        string                `json:"provider"`
+	UpstreamModel   string                `json:"upstream_model"`
+	Dialect         string                `json:"dialect"`
+	ReasoningReplay bool                  `json:"reasoning_replay"`
+	Capabilities    []string              `json:"capabilities"`
+	Pricing         PricingConfig         `json:"pricing"`
+	Fallbacks       []ModelFallbackConfig `json:"fallbacks"`
 }
 
 type ModelFallbackConfig struct {
-	Provider      string        `json:"provider"`
-	UpstreamModel string        `json:"upstream_model"`
-	Pricing       PricingConfig `json:"pricing"`
+	Provider        string        `json:"provider"`
+	UpstreamModel   string        `json:"upstream_model"`
+	Dialect         string        `json:"dialect"`
+	ReasoningReplay bool          `json:"reasoning_replay"`
+	Pricing         PricingConfig `json:"pricing"`
 }
 
 type PricingConfig struct {
@@ -93,6 +100,45 @@ type ResponseStoreConfig struct {
 	MaxEntries      int   `json:"max_entries"`
 	MaxContextBytes int64 `json:"max_context_bytes"`
 	MaxTotalBytes   int64 `json:"max_total_bytes"`
+}
+
+type ReasoningEnvelopeKeyConfig struct {
+	ID     string `json:"id"`
+	KeyEnv string `json:"key_env"`
+}
+
+type ReasoningEnvelopeConfig struct {
+	Enabled             bool                         `json:"enabled"`
+	Audience            string                       `json:"audience"`
+	TTLSeconds          int                          `json:"ttl_seconds"`
+	MaxEnvelopeBytes    int                          `json:"max_envelope_bytes"`
+	MaxPlaintextBytes   int                          `json:"max_plaintext_bytes"`
+	MaxItemsPerRequest  int                          `json:"max_items_per_request"`
+	MaxToolCallsPerTurn int                          `json:"max_tool_calls_per_turn"`
+	ActiveKey           ReasoningEnvelopeKeyConfig   `json:"active_key"`
+	PreviousKeys        []ReasoningEnvelopeKeyConfig `json:"previous_keys"`
+}
+
+func (c *ReasoningEnvelopeConfig) UnmarshalJSON(data []byte) error {
+	type plain ReasoningEnvelopeConfig
+	value := defaultReasoningEnvelopeConfig()
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode((*plain)(&value)); err != nil {
+		return err
+	}
+	*c = value
+	return nil
+}
+
+func defaultReasoningEnvelopeConfig() ReasoningEnvelopeConfig {
+	return ReasoningEnvelopeConfig{
+		TTLSeconds:          3600,
+		MaxEnvelopeBytes:    1048576,
+		MaxPlaintextBytes:   524288,
+		MaxItemsPerRequest:  256,
+		MaxToolCallsPerTurn: 64,
+	}
 }
 
 func (c *ResponseStoreConfig) Enabled() bool {
@@ -119,31 +165,32 @@ type RealtimeConfig struct {
 }
 
 type CheckReport struct {
-	Addr                           string                 `json:"addr"`
-	GatewayAPIKeyCount             int                    `json:"gateway_api_key_count"`
-	GatewayClients                 []GatewayClientSummary `json:"gateway_clients"`
-	RequestTimeoutSeconds          int                    `json:"request_timeout_seconds"`
-	StreamTimeoutSeconds           int                    `json:"stream_timeout_seconds"`
-	ReadHeaderTimeoutSeconds       int                    `json:"read_header_timeout_seconds"`
-	ReadTimeoutSeconds             int                    `json:"read_timeout_seconds"`
-	WriteTimeoutSeconds            int                    `json:"write_timeout_seconds"`
-	IdleTimeoutSeconds             int                    `json:"idle_timeout_seconds"`
-	ShutdownTimeoutSeconds         int                    `json:"shutdown_timeout_seconds"`
-	MaxRequestBodyBytes            int64                  `json:"max_request_body_bytes"`
-	LogFormat                      string                 `json:"log_format"`
-	LogLevel                       string                 `json:"log_level"`
-	AuditEnabled                   bool                   `json:"audit_enabled"`
-	AuditPath                      string                 `json:"audit_path"`
-	AuditMaxFileBytes              int64                  `json:"audit_max_file_bytes"`
-	RateLimitRequestsPerMinute     int                    `json:"rate_limit_requests_per_minute"`
-	ProviderHealthFailureThreshold int                    `json:"provider_health_failure_threshold"`
-	ProviderHealthCooldownSeconds  int                    `json:"provider_health_cooldown_seconds"`
-	ResponseStore                  ResponseStoreSummary   `json:"response_store"`
-	ProviderCount                  int                    `json:"provider_count"`
-	ModelCount                     int                    `json:"model_count"`
-	Providers                      []ProviderSummary      `json:"providers"`
-	Models                         []ModelSummary         `json:"models"`
-	Warnings                       []string               `json:"warnings"`
+	Addr                           string                   `json:"addr"`
+	GatewayAPIKeyCount             int                      `json:"gateway_api_key_count"`
+	GatewayClients                 []GatewayClientSummary   `json:"gateway_clients"`
+	RequestTimeoutSeconds          int                      `json:"request_timeout_seconds"`
+	StreamTimeoutSeconds           int                      `json:"stream_timeout_seconds"`
+	ReadHeaderTimeoutSeconds       int                      `json:"read_header_timeout_seconds"`
+	ReadTimeoutSeconds             int                      `json:"read_timeout_seconds"`
+	WriteTimeoutSeconds            int                      `json:"write_timeout_seconds"`
+	IdleTimeoutSeconds             int                      `json:"idle_timeout_seconds"`
+	ShutdownTimeoutSeconds         int                      `json:"shutdown_timeout_seconds"`
+	MaxRequestBodyBytes            int64                    `json:"max_request_body_bytes"`
+	LogFormat                      string                   `json:"log_format"`
+	LogLevel                       string                   `json:"log_level"`
+	AuditEnabled                   bool                     `json:"audit_enabled"`
+	AuditPath                      string                   `json:"audit_path"`
+	AuditMaxFileBytes              int64                    `json:"audit_max_file_bytes"`
+	RateLimitRequestsPerMinute     int                      `json:"rate_limit_requests_per_minute"`
+	ProviderHealthFailureThreshold int                      `json:"provider_health_failure_threshold"`
+	ProviderHealthCooldownSeconds  int                      `json:"provider_health_cooldown_seconds"`
+	ResponseStore                  ResponseStoreSummary     `json:"response_store"`
+	ReasoningEnvelope              ReasoningEnvelopeSummary `json:"reasoning_envelope"`
+	ProviderCount                  int                      `json:"provider_count"`
+	ModelCount                     int                      `json:"model_count"`
+	Providers                      []ProviderSummary        `json:"providers"`
+	Models                         []ModelSummary           `json:"models"`
+	Warnings                       []string                 `json:"warnings"`
 }
 
 type ResponseStoreSummary struct {
@@ -152,6 +199,19 @@ type ResponseStoreSummary struct {
 	MaxEntries      int   `json:"max_entries"`
 	MaxContextBytes int64 `json:"max_context_bytes"`
 	MaxTotalBytes   int64 `json:"max_total_bytes"`
+}
+
+type ReasoningEnvelopeSummary struct {
+	Enabled             bool   `json:"enabled"`
+	Audience            string `json:"audience"`
+	TTLSeconds          int    `json:"ttl_seconds"`
+	MaxEnvelopeBytes    int    `json:"max_envelope_bytes"`
+	MaxPlaintextBytes   int    `json:"max_plaintext_bytes"`
+	MaxItemsPerRequest  int    `json:"max_items_per_request"`
+	MaxToolCallsPerTurn int    `json:"max_tool_calls_per_turn"`
+	ActiveKeyID         string `json:"active_key_id"`
+	ActiveKeySet        bool   `json:"active_key_set"`
+	PreviousKeyCount    int    `json:"previous_key_count"`
 }
 
 type GatewayClientSummary struct {
@@ -172,18 +232,22 @@ type ProviderSummary struct {
 }
 
 type ModelSummary struct {
-	Name          string                 `json:"name"`
-	Provider      string                 `json:"provider"`
-	UpstreamModel string                 `json:"upstream_model"`
-	Capabilities  []string               `json:"capabilities"`
-	Pricing       PricingConfig          `json:"pricing"`
-	Fallbacks     []ModelFallbackSummary `json:"fallbacks"`
+	Name            string                 `json:"name"`
+	Provider        string                 `json:"provider"`
+	UpstreamModel   string                 `json:"upstream_model"`
+	Dialect         string                 `json:"dialect"`
+	ReasoningReplay bool                   `json:"reasoning_replay"`
+	Capabilities    []string               `json:"capabilities"`
+	Pricing         PricingConfig          `json:"pricing"`
+	Fallbacks       []ModelFallbackSummary `json:"fallbacks"`
 }
 
 type ModelFallbackSummary struct {
-	Provider      string        `json:"provider"`
-	UpstreamModel string        `json:"upstream_model"`
-	Pricing       PricingConfig `json:"pricing"`
+	Provider        string        `json:"provider"`
+	UpstreamModel   string        `json:"upstream_model"`
+	Dialect         string        `json:"dialect"`
+	ReasoningReplay bool          `json:"reasoning_replay"`
+	Pricing         PricingConfig `json:"pricing"`
 }
 
 func Load(path string) (*Config, error) {
@@ -231,6 +295,8 @@ func Check(path string) (*Config, CheckReport, error) {
 }
 
 func (c *Config) CheckReport() CheckReport {
+	_, reasoningKeySet := os.LookupEnv(c.ReasoningEnvelope.ActiveKey.KeyEnv)
+	reasoningKeySet = reasoningKeySet && c.ReasoningEnvelope.ActiveKey.KeyEnv != ""
 	report := CheckReport{
 		Addr:                           c.Addr,
 		GatewayAPIKeyCount:             len(c.GatewayAPIKeys()),
@@ -256,6 +322,18 @@ func (c *Config) CheckReport() CheckReport {
 			MaxEntries:      c.ResponseStore.MaxEntries,
 			MaxContextBytes: c.ResponseStore.MaxContextBytes,
 			MaxTotalBytes:   c.ResponseStore.MaxTotalBytes,
+		},
+		ReasoningEnvelope: ReasoningEnvelopeSummary{
+			Enabled:             c.ReasoningEnvelope.Enabled,
+			Audience:            c.ReasoningEnvelope.Audience,
+			TTLSeconds:          c.ReasoningEnvelope.TTLSeconds,
+			MaxEnvelopeBytes:    c.ReasoningEnvelope.MaxEnvelopeBytes,
+			MaxPlaintextBytes:   c.ReasoningEnvelope.MaxPlaintextBytes,
+			MaxItemsPerRequest:  c.ReasoningEnvelope.MaxItemsPerRequest,
+			MaxToolCallsPerTurn: c.ReasoningEnvelope.MaxToolCallsPerTurn,
+			ActiveKeyID:         c.ReasoningEnvelope.ActiveKey.ID,
+			ActiveKeySet:        reasoningKeySet,
+			PreviousKeyCount:    len(c.ReasoningEnvelope.PreviousKeys),
 		},
 		ProviderCount: len(c.Providers),
 		ModelCount:    len(c.Models),
@@ -299,12 +377,14 @@ func (c *Config) CheckReport() CheckReport {
 			upstreamModel = name
 		}
 		report.Models = append(report.Models, ModelSummary{
-			Name:          name,
-			Provider:      model.Provider,
-			UpstreamModel: upstreamModel,
-			Capabilities:  append([]string(nil), model.Capabilities...),
-			Pricing:       model.Pricing,
-			Fallbacks:     fallbackSummaries(name, model.Fallbacks),
+			Name:            name,
+			Provider:        model.Provider,
+			UpstreamModel:   upstreamModel,
+			Dialect:         model.Dialect,
+			ReasoningReplay: model.ReasoningReplay,
+			Capabilities:    append([]string(nil), model.Capabilities...),
+			Pricing:         model.Pricing,
+			Fallbacks:       fallbackSummaries(name, model.Fallbacks),
 		})
 	}
 	return report
@@ -321,9 +401,11 @@ func fallbackSummaries(externalModel string, fallbacks []ModelFallbackConfig) []
 			upstreamModel = externalModel
 		}
 		out = append(out, ModelFallbackSummary{
-			Provider:      fallback.Provider,
-			UpstreamModel: upstreamModel,
-			Pricing:       fallback.Pricing,
+			Provider:        fallback.Provider,
+			UpstreamModel:   upstreamModel,
+			Dialect:         fallback.Dialect,
+			ReasoningReplay: fallback.ReasoningReplay,
+			Pricing:         fallback.Pricing,
 		})
 	}
 	return out
@@ -446,6 +528,9 @@ func (c *Config) Validate() error {
 	if c.ProviderHealth.CooldownSeconds < 0 {
 		return fmt.Errorf("provider_health.cooldown_seconds must be non-negative")
 	}
+	if err := c.validateReasoningEnvelope(); err != nil {
+		return err
+	}
 	if c.auditEnabledEnvInvalid {
 		return fmt.Errorf("GATEWAY_AUDIT_ENABLED must be true or false")
 	}
@@ -532,6 +617,12 @@ func (c *Config) Validate() error {
 		if _, ok := c.Providers[model.Provider]; !ok {
 			return fmt.Errorf("model %q references unknown provider %q", externalModel, model.Provider)
 		}
+		if err := validateDialect(model.Dialect, model.ReasoningReplay); err != nil {
+			return fmt.Errorf("model %q %w", externalModel, err)
+		}
+		if model.ReasoningReplay && !c.ReasoningEnvelope.Enabled {
+			return fmt.Errorf("model %q reasoning_replay requires reasoning_envelope.enabled", externalModel)
+		}
 		for _, capability := range model.Capabilities {
 			switch capability {
 			case "chat", "completions", "embeddings", "images", "moderations", "transcriptions", "translations", "speech", "batches", "files", "fine_tuning", "realtime":
@@ -552,6 +643,12 @@ func (c *Config) Validate() error {
 			if _, ok := c.Providers[fallback.Provider]; !ok {
 				return fmt.Errorf("model %q fallback %d references unknown provider %q", externalModel, index, fallback.Provider)
 			}
+			if err := validateDialect(fallback.Dialect, fallback.ReasoningReplay); err != nil {
+				return fmt.Errorf("model %q fallback %d %w", externalModel, index, err)
+			}
+			if fallback.ReasoningReplay && !c.ReasoningEnvelope.Enabled {
+				return fmt.Errorf("model %q fallback %d reasoning_replay requires reasoning_envelope.enabled", externalModel, index)
+			}
 			if err := validatePricing(fallback.Pricing); err != nil {
 				return fmt.Errorf("model %q fallback %d pricing %w", externalModel, index, err)
 			}
@@ -559,6 +656,59 @@ func (c *Config) Validate() error {
 	}
 	if err := c.validateGatewayClientModels(); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateDialect(name string, reasoningReplay bool) error {
+	switch name {
+	case "", "openai-compatible":
+		if reasoningReplay {
+			return fmt.Errorf("reasoning_replay requires a reasoning-capable dialect")
+		}
+	case "deepseek":
+	default:
+		return fmt.Errorf("has unsupported dialect %q", name)
+	}
+	return nil
+}
+
+func (c *Config) validateReasoningEnvelope() error {
+	value := c.ReasoningEnvelope
+	if !value.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(value.Audience) == "" || value.Audience != strings.TrimSpace(value.Audience) {
+		return fmt.Errorf("reasoning_envelope.audience must be non-empty without leading or trailing whitespace")
+	}
+	if value.TTLSeconds <= 0 || value.MaxEnvelopeBytes <= 0 || value.MaxPlaintextBytes <= 0 || value.MaxItemsPerRequest <= 0 || value.MaxToolCallsPerTurn <= 0 {
+		return fmt.Errorf("reasoning_envelope TTL and limits must be positive")
+	}
+	keys := append([]ReasoningEnvelopeKeyConfig{value.ActiveKey}, value.PreviousKeys...)
+	seen := make(map[string]struct{}, len(keys))
+	for index, key := range keys {
+		path := "reasoning_envelope.active_key"
+		if index > 0 {
+			path = fmt.Sprintf("reasoning_envelope.previous_keys[%d]", index-1)
+		}
+		if strings.TrimSpace(key.ID) == "" || key.ID != strings.TrimSpace(key.ID) {
+			return fmt.Errorf("%s.id must be non-empty without leading or trailing whitespace", path)
+		}
+		if _, ok := seen[key.ID]; ok {
+			return fmt.Errorf("%s.id duplicates another reasoning envelope key", path)
+		}
+		seen[key.ID] = struct{}{}
+		if strings.TrimSpace(key.KeyEnv) == "" || key.KeyEnv != strings.TrimSpace(key.KeyEnv) {
+			return fmt.Errorf("%s.key_env must be non-empty without leading or trailing whitespace", path)
+		}
+		encoded, ok := os.LookupEnv(key.KeyEnv)
+		if !ok || encoded == "" {
+			return fmt.Errorf("%s.key_env %q is not set", path, key.KeyEnv)
+		}
+		decoded, err := base64.RawURLEncoding.DecodeString(encoded)
+		if err != nil || len(decoded) != 32 {
+			return fmt.Errorf("%s.key_env must contain a base64url-encoded 32-byte key", path)
+		}
 	}
 	return nil
 }
@@ -678,6 +828,14 @@ func (c *Config) applyDefaults() {
 		c.Providers[name] = provider
 	}
 	for name, model := range c.Models {
+		if model.Dialect == "" {
+			model.Dialect = "openai-compatible"
+		}
+		for index := range model.Fallbacks {
+			if model.Fallbacks[index].Dialect == "" {
+				model.Fallbacks[index].Dialect = "openai-compatible"
+			}
+		}
 		if len(model.Capabilities) == 0 {
 			model.Capabilities = []string{"chat", "completions", "embeddings", "images", "moderations"}
 		}

@@ -1,6 +1,8 @@
 package config_test
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -53,6 +55,162 @@ func TestLoadDefaultConfig(t *testing.T) {
 	}
 	if *cfg.ResponseStore != (config.ResponseStoreConfig{TTLSeconds: 3600, MaxEntries: 1000, MaxContextBytes: 4194304, MaxTotalBytes: 67108864}) {
 		t.Fatalf("response store defaults = %#v", cfg.ResponseStore)
+	}
+}
+
+func TestLoadReasoningEnvelopeConfigAndDialectDefaults(t *testing.T) {
+	t.Setenv("ACTIVE_REASONING_KEY", base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)))
+	path := writeConfig(t, `{
+		"reasoning_envelope": {
+			"enabled": true,
+			"audience": "gateway-prod",
+			"active_key": {"id":"active","key_env":"ACTIVE_REASONING_KEY"}
+		},
+		"providers": {"fake":{"type":"fake"}},
+		"models": {
+			"codex-model": {
+				"provider":"fake",
+				"dialect":"deepseek",
+				"reasoning_replay":true,
+				"capabilities":["chat"],
+				"fallbacks":[{"provider":"fake"}]
+			}
+		}
+	}`)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.ReasoningEnvelope.Enabled || cfg.ReasoningEnvelope.ActiveKey.ID != "active" {
+		t.Fatalf("reasoning envelope=%#v", cfg.ReasoningEnvelope)
+	}
+	if cfg.ReasoningEnvelope.TTLSeconds != 3600 || cfg.ReasoningEnvelope.MaxEnvelopeBytes != 1048576 || cfg.ReasoningEnvelope.MaxPlaintextBytes != 524288 || cfg.ReasoningEnvelope.MaxItemsPerRequest != 256 || cfg.ReasoningEnvelope.MaxToolCallsPerTurn != 64 {
+		t.Fatalf("reasoning envelope defaults=%#v", cfg.ReasoningEnvelope)
+	}
+	model := cfg.Models["codex-model"]
+	if model.Dialect != "deepseek" || !model.ReasoningReplay || model.Fallbacks[0].Dialect != "openai-compatible" {
+		t.Fatalf("model=%#v", model)
+	}
+}
+
+func TestValidateRejectsInvalidReasoningEnvelopeAndDialect(t *testing.T) {
+	validKey := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32))
+	t.Setenv("VALID_REASONING_KEY", validKey)
+	t.Setenv("INVALID_REASONING_KEY", "not-base64url")
+	t.Setenv("SHORT_REASONING_KEY", base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{3}, 16)))
+	validEnvelope := func() config.ReasoningEnvelopeConfig {
+		return config.ReasoningEnvelopeConfig{
+			Enabled:             true,
+			Audience:            "gateway-prod",
+			TTLSeconds:          3600,
+			MaxEnvelopeBytes:    1048576,
+			MaxPlaintextBytes:   524288,
+			MaxItemsPerRequest:  256,
+			MaxToolCallsPerTurn: 64,
+			ActiveKey:           config.ReasoningEnvelopeKeyConfig{ID: "active", KeyEnv: "VALID_REASONING_KEY"},
+		}
+	}
+	tests := []struct {
+		name   string
+		mutate func(*config.Config)
+		want   string
+	}{
+		{name: "replay without envelope", mutate: func(c *config.Config) {
+			model := c.Models["test-model"]
+			model.Dialect, model.ReasoningReplay = "deepseek", true
+			c.Models["test-model"] = model
+		}, want: "reasoning_envelope.enabled"},
+		{name: "unknown dialect", mutate: func(c *config.Config) {
+			model := c.Models["test-model"]
+			model.Dialect = "unknown"
+			c.Models["test-model"] = model
+		}, want: "unsupported dialect"},
+		{name: "openai replay", mutate: func(c *config.Config) {
+			c.ReasoningEnvelope = validEnvelope()
+			model := c.Models["test-model"]
+			model.ReasoningReplay = true
+			c.Models["test-model"] = model
+		}, want: "reasoning-capable dialect"},
+		{name: "empty audience", mutate: func(c *config.Config) {
+			c.ReasoningEnvelope = validEnvelope()
+			c.ReasoningEnvelope.Audience = ""
+		}, want: "audience"},
+		{name: "zero ttl", mutate: func(c *config.Config) {
+			c.ReasoningEnvelope = validEnvelope()
+			c.ReasoningEnvelope.TTLSeconds = 0
+		}, want: "must be positive"},
+		{name: "zero item limit", mutate: func(c *config.Config) {
+			c.ReasoningEnvelope = validEnvelope()
+			c.ReasoningEnvelope.MaxItemsPerRequest = 0
+		}, want: "must be positive"},
+		{name: "missing key env", mutate: func(c *config.Config) {
+			c.ReasoningEnvelope = validEnvelope()
+			c.ReasoningEnvelope.ActiveKey.KeyEnv = "MISSING_REASONING_KEY"
+		}, want: "is not set"},
+		{name: "invalid key encoding", mutate: func(c *config.Config) {
+			c.ReasoningEnvelope = validEnvelope()
+			c.ReasoningEnvelope.ActiveKey.KeyEnv = "INVALID_REASONING_KEY"
+		}, want: "base64url-encoded 32-byte key"},
+		{name: "short key", mutate: func(c *config.Config) {
+			c.ReasoningEnvelope = validEnvelope()
+			c.ReasoningEnvelope.ActiveKey.KeyEnv = "SHORT_REASONING_KEY"
+		}, want: "base64url-encoded 32-byte key"},
+		{name: "duplicate key id", mutate: func(c *config.Config) {
+			c.ReasoningEnvelope = validEnvelope()
+			c.ReasoningEnvelope.PreviousKeys = []config.ReasoningEnvelopeKeyConfig{{ID: "active", KeyEnv: "VALID_REASONING_KEY"}}
+		}, want: "duplicates another reasoning envelope key"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.Default()
+			tt.mutate(cfg)
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error=%v want substring %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestCheckReportSummarizesReasoningWithoutKeyMaterial(t *testing.T) {
+	t.Setenv("REPORT_REASONING_KEY", base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{4}, 32)))
+	cfg := config.Default()
+	cfg.ReasoningEnvelope = config.ReasoningEnvelopeConfig{
+		Enabled: true, Audience: "prod", TTLSeconds: 60,
+		MaxEnvelopeBytes: 1024, MaxPlaintextBytes: 512,
+		MaxItemsPerRequest: 16, MaxToolCallsPerTurn: 4,
+		ActiveKey:    config.ReasoningEnvelopeKeyConfig{ID: "active", KeyEnv: "REPORT_REASONING_KEY"},
+		PreviousKeys: []config.ReasoningEnvelopeKeyConfig{{ID: "old", KeyEnv: "REPORT_REASONING_KEY"}},
+	}
+	model := cfg.Models["test-model"]
+	model.Dialect = "deepseek"
+	model.ReasoningReplay = true
+	model.Fallbacks = []config.ModelFallbackConfig{{Provider: "fake", Dialect: "openai-compatible"}}
+	cfg.Models["test-model"] = model
+	report := cfg.CheckReport()
+	if !report.ReasoningEnvelope.Enabled || report.ReasoningEnvelope.ActiveKeyID != "active" || !report.ReasoningEnvelope.ActiveKeySet || report.ReasoningEnvelope.PreviousKeyCount != 1 {
+		t.Fatalf("summary=%#v", report.ReasoningEnvelope)
+	}
+	if len(report.Models) != 1 || report.Models[0].Dialect != "deepseek" || !report.Models[0].ReasoningReplay || report.Models[0].Fallbacks[0].Dialect != "openai-compatible" {
+		t.Fatalf("models=%#v", report.Models)
+	}
+	encoded, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encoded, []byte("REPORT_REASONING_KEY")) || bytes.Contains(encoded, []byte(base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{4}, 32)))) {
+		t.Fatalf("report leaks key metadata: %s", encoded)
+	}
+}
+
+func TestLoadRejectsUnknownReasoningEnvelopeField(t *testing.T) {
+	path := writeConfig(t, `{
+		"reasoning_envelope":{"enabled":false,"unknown_field":true},
+		"providers":{"fake":{"type":"fake"}},
+		"models":{"test-model":{"provider":"fake"}}
+	}`)
+	if _, err := config.Load(path); err == nil || !strings.Contains(err.Error(), "unknown_field") {
+		t.Fatalf("error=%v", err)
 	}
 }
 

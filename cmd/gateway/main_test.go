@@ -100,3 +100,36 @@ func TestBuildRouterAcceptsAzureOpenAIProvider(t *testing.T) {
 		t.Fatalf("buildRouter: %v", err)
 	}
 }
+
+func TestBuildRouterPreservesReasoningDialectMetadata(t *testing.T) {
+	cfg := config.Default()
+	cfg.ReasoningEnvelope = config.ReasoningEnvelopeConfig{
+		Enabled: true, Audience: "test", TTLSeconds: 60,
+		MaxEnvelopeBytes: 1024, MaxPlaintextBytes: 512,
+		MaxItemsPerRequest: 16, MaxToolCallsPerTurn: 4,
+		ActiveKey: config.ReasoningEnvelopeKeyConfig{ID: "active", KeyEnv: "TEST_REASONING_KEY"},
+	}
+	t.Setenv("TEST_REASONING_KEY", "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE")
+	cfg.Models = map[string]config.ModelConfig{
+		"codex-model": {
+			Provider: "fake", UpstreamModel: "deepseek-chat", Dialect: "deepseek", ReasoningReplay: true,
+			Capabilities: []string{"chat"},
+			Fallbacks:    []config.ModelFallbackConfig{{Provider: "fake", UpstreamModel: "fallback-chat", Dialect: "deepseek", ReasoningReplay: true}},
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	modelRouter, err := buildRouter(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	route, compatErr := modelRouter.Resolve("codex-model")
+	if compatErr != nil {
+		t.Fatal(compatErr)
+	}
+	attempts := route.Attempts()
+	if len(attempts) != 2 || attempts[0].Dialect != "deepseek" || !attempts[0].ReasoningReplay || attempts[1].Dialect != "deepseek" || !attempts[1].ReasoningReplay {
+		t.Fatalf("attempts=%#v", attempts)
+	}
+}

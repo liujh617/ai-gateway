@@ -49,6 +49,20 @@
     "max_context_bytes": 4194304,
     "max_total_bytes": 67108864
   },
+  "reasoning_envelope": {
+    "enabled": false,
+    "audience": "ai-gateway-prod",
+    "ttl_seconds": 3600,
+    "max_envelope_bytes": 1048576,
+    "max_plaintext_bytes": 524288,
+    "max_items_per_request": 256,
+    "max_tool_calls_per_turn": 64,
+    "active_key": {
+      "id": "reasoning-2026-01",
+      "key_env": "GATEWAY_REASONING_KEY"
+    },
+    "previous_keys": []
+  },
   "providers": {
     "openai": {
       "type": "openai-compatible",
@@ -73,16 +87,19 @@
     "gpt-4o-mini": {
       "provider": "openai",
       "upstream_model": "gpt-4o-mini",
+      "dialect": "openai-compatible",
       "capabilities": ["chat"]
     },
     "text-embedding-3-small": {
       "provider": "openai",
       "upstream_model": "text-embedding-3-small",
+      "dialect": "openai-compatible",
       "capabilities": ["embeddings"]
     },
     "local-qwen": {
       "provider": "vllm-local",
       "upstream_model": "Qwen/Qwen2.5-7B-Instruct",
+      "dialect": "openai-compatible",
       "capabilities": ["chat"]
     }
   }

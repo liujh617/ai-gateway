@@ -38,6 +38,41 @@ func TestResolveReturnsProviderAttemptsInOrder(t *testing.T) {
 	}
 }
 
+func TestModelRouteAttemptsPreserveReasoningDialectMetadata(t *testing.T) {
+	route := router.ModelRoute{
+		ExternalModel:   "codex-model",
+		UpstreamModel:   "deepseek-chat",
+		ProviderName:    "primary",
+		Dialect:         "deepseek",
+		ReasoningReplay: true,
+		Provider:        fake.New(),
+		Fallbacks: []router.ProviderRoute{{
+			UpstreamModel:   "backup-model",
+			ProviderName:    "backup",
+			Dialect:         "openai-compatible",
+			ReasoningReplay: false,
+			Provider:        fake.New(),
+		}},
+	}
+
+	resolved := router.NewModelRouter([]router.ModelRoute{route})
+	got, err := resolved.Resolve("codex-model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempts := got.Attempts()
+	if len(attempts) != 2 || attempts[0].Dialect != "deepseek" || !attempts[0].ReasoningReplay || attempts[1].Dialect != "openai-compatible" || attempts[1].ReasoningReplay {
+		t.Fatalf("attempts=%#v", attempts)
+	}
+	matched, ok := got.MatchAttempt("primary", "deepseek-chat", "deepseek")
+	if !ok || !matched.ReasoningReplay {
+		t.Fatalf("matched=%#v ok=%t", matched, ok)
+	}
+	if _, ok := got.MatchAttempt("primary", "deepseek-chat", "glm"); ok {
+		t.Fatal("mismatched dialect matched")
+	}
+}
+
 func TestResolveReturnsDefensiveCopy(t *testing.T) {
 	modelRouter := router.NewModelRouter([]router.ModelRoute{{
 		ExternalModel: "test-model",

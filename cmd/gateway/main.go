@@ -319,18 +319,24 @@ func buildRouter(cfg *config.Config) (*router.ModelRouter, error) {
 		if upstreamModel == "" {
 			upstreamModel = externalModel
 		}
+		dialect := modelConfig.Dialect
+		if dialect == "" {
+			dialect = "openai-compatible"
+		}
 		fallbacks, err := fallbackRoutes(externalModel, modelConfig.Fallbacks, providers)
 		if err != nil {
 			return nil, err
 		}
 		routes = append(routes, router.ModelRoute{
-			ExternalModel: externalModel,
-			UpstreamModel: upstreamModel,
-			ProviderName:  modelConfig.Provider,
-			Capabilities:  capabilities(modelConfig.Capabilities),
-			Provider:      provider,
-			Pricing:       pricing(modelConfig.Pricing),
-			Fallbacks:     fallbacks,
+			ExternalModel:   externalModel,
+			UpstreamModel:   upstreamModel,
+			ProviderName:    modelConfig.Provider,
+			Dialect:         dialect,
+			ReasoningReplay: modelConfig.ReasoningReplay,
+			Capabilities:    capabilities(modelConfig.Capabilities),
+			Provider:        provider,
+			Pricing:         pricing(modelConfig.Pricing),
+			Fallbacks:       fallbacks,
 		})
 	}
 	return router.NewModelRouter(routes), nil
@@ -357,11 +363,17 @@ func fallbackRoutes(externalModel string, fallbacks []config.ModelFallbackConfig
 		if upstreamModel == "" {
 			upstreamModel = externalModel
 		}
+		dialect := fallback.Dialect
+		if dialect == "" {
+			dialect = "openai-compatible"
+		}
 		routes = append(routes, router.ProviderRoute{
-			UpstreamModel: upstreamModel,
-			ProviderName:  fallback.Provider,
-			Provider:      provider,
-			Pricing:       pricing(fallback.Pricing),
+			UpstreamModel:   upstreamModel,
+			ProviderName:    fallback.Provider,
+			Dialect:         dialect,
+			ReasoningReplay: fallback.ReasoningReplay,
+			Provider:        provider,
+			Pricing:         pricing(fallback.Pricing),
 		})
 	}
 	return routes, nil
