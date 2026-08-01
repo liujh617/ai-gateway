@@ -348,7 +348,7 @@ func responseMessageText(raw json.RawMessage) (string, error) {
 	if err := json.Unmarshal(raw, &parts); err == nil && len(parts) > 0 {
 		var out strings.Builder
 		for _, part := range parts {
-			if part.Type != "input_text" || strings.TrimSpace(part.Text) == "" {
+			if (part.Type != "input_text" && part.Type != "output_text") || strings.TrimSpace(part.Text) == "" {
 				return "", fmt.Errorf("unsupported content part")
 			}
 			out.WriteString(part.Text)
@@ -357,7 +357,7 @@ func responseMessageText(raw json.RawMessage) (string, error) {
 	}
 	// Single content part object, e.g. {"type":"input_text","text":"hello"}.
 	var single responseInputText
-	if err := json.Unmarshal(raw, &single); err == nil && single.Type == "input_text" && strings.TrimSpace(single.Text) != "" {
+	if err := json.Unmarshal(raw, &single); err == nil && (single.Type == "input_text" || single.Type == "output_text") && strings.TrimSpace(single.Text) != "" {
 		return single.Text, nil
 	}
 	return "", fmt.Errorf("invalid content")
