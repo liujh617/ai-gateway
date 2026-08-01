@@ -34,97 +34,11 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 	}
 	middleware.SetLogStream(r.Context(), req.Stream)
 	middleware.SetLogPreviousResponse(r.Context(), req.PreviousResponseID != "")
-	if !req.Stream {
-		s.handleNonStreamingResponse(w, r, req)
-		return
-	}
-	chatReq, validationErr := req.ChatRequest()
-	if validationErr != nil {
-		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, validationErr)
-		return
-	}
-	history, stateErr := s.responseHistory(r, req.PreviousResponseID, req.ConversationID(), req.Model)
-	if stateErr != nil {
-		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, stateErr)
-		return
-	}
-	currentMessages := chatReq.Messages
-	if req.Instructions != "" {
-		currentMessages = currentMessages[1:]
-		chatReq.Messages = append([]compat.ChatMessage{chatReq.Messages[0]}, history...)
-		chatReq.Messages = append(chatReq.Messages, currentMessages...)
-	} else {
-		chatReq.Messages = append(append([]compat.ChatMessage(nil), history...), currentMessages...)
-	}
-	if !validResponseToolOutputs(history, currentMessages) {
-		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, compat.InvalidRequest("function_call_output references an unknown call", "input"))
-		return
-	}
-	if !s.modelAllowedForRequest(r, req.Model) {
-		middleware.SetLogRoute(r.Context(), req.Model, "", "")
-		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, compat.ModelNotFound(req.Model))
-		return
-	}
-	route, resolveErr := s.router.ResolveFor(req.Model, "chat")
-	if resolveErr != nil {
-		middleware.SetLogRoute(r.Context(), req.Model, "", "")
-		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, resolveErr)
-		return
-	}
-	externalModel := req.Model
-	requestEvent := s.auditBaseEvent(r, audit.EventRequest, routes.ResponsesPath, externalModel)
-	requestEvent.PreviousResponseID = req.PreviousResponseID
-	requestEvent.Body = rawBody(req)
-	s.audit.Record(r.Context(), requestEvent)
 	if req.Stream {
-		s.streamResponse(w, r, route, externalModel, chatReq, history, currentMessages, req)
+		s.handleDialectStreamingResponse(w, r, req)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), s.requestTimeout)
-	defer cancel()
-	chatResp, providerName, upstreamModel, err := s.createChatCompletionWithFallback(ctx, r, routes.ResponsesPath, route, externalModel, chatReq)
-	if err != nil {
-		s.writeAuditedError(w, r, routes.ResponsesPath, externalModel, providerError(err))
-		return
-	}
-	response, conversionErr := compat.NewResponseEnvelope(externalModel, chatResp, time.Now(), responseIdentifier("resp"), responseIdentifier("msg"))
-	if conversionErr != nil {
-		s.writeAuditedError(w, r, routes.ResponsesPath, externalModel, conversionErr)
-		return
-	}
-	response.PreviousResponseID = nil
-	if req.PreviousResponseID != "" {
-		response.PreviousResponseID = req.PreviousResponseID
-	}
-	response.ConversationID = req.ConversationID()
-	shouldStore := req.Store == nil || *req.Store
-	willStore := shouldStore && s.responseStore != nil && s.responseStore.Enabled()
-	response.Store = willStore
-	if willStore {
-		payload, err := json.Marshal(response)
-		if err != nil {
-			s.writeAuditedError(w, r, routes.ResponsesPath, externalModel, compat.ServerError(http.StatusInternalServerError, "failed to store response state"))
-			return
-		}
-		transcript := append(append(append([]compat.ChatMessage(nil), history...), currentMessages...), chatResp.Choices[0].Message)
-		err = s.responseStore.Put(responsestore.Record{ID: response.ID, Client: clientFromContext(r.Context()), Model: externalModel, ConversationID: req.ConversationID(), Transcript: transcript, Response: payload})
-		if err != nil {
-			if errors.Is(err, responsestore.ErrContextTooLarge) {
-				s.writeAuditedError(w, r, routes.ResponsesPath, externalModel, compat.InvalidRequest("response context is too large", "previous_response_id"))
-				return
-			}
-			s.writeAuditedError(w, r, routes.ResponsesPath, externalModel, compat.ServerError(http.StatusInternalServerError, "failed to store response state"))
-			return
-		}
-	}
-	responseEvent := s.auditBaseEvent(r, audit.EventResponse, routes.ResponsesPath, externalModel)
-	responseEvent.Provider = providerName
-	responseEvent.UpstreamModel = upstreamModel
-	responseEvent.Status = http.StatusOK
-	responseEvent.Body = rawBody(response)
-	s.audit.Record(r.Context(), responseEvent)
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(response)
+	s.handleNonStreamingResponse(w, r, req)
 }
 
 func (s *Server) handleResponse(w http.ResponseWriter, r *http.Request) {

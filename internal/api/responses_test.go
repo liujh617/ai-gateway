@@ -719,8 +719,8 @@ func TestResponsesStreamOK(t *testing.T) {
 		}
 		last = index
 	}
-	if strings.Contains(text, "[DONE]") {
-		t.Fatalf("unexpected chat sentinel: %s", text)
+	if !strings.Contains(text, "data: [DONE]\n\n") {
+		t.Fatalf("missing stream sentinel: %s", text)
 	}
 }
 
@@ -851,8 +851,9 @@ func (p *responseStateStreamProvider) CreateSpeech(ctx context.Context, req comp
 }
 
 type responseStateStream struct {
-	sent bool
-	err  error
+	sent     bool
+	finished bool
+	err      error
 }
 
 func (s *responseStateStream) Next(context.Context) (*compat.ChatCompletionChunk, error) {
@@ -862,6 +863,11 @@ func (s *responseStateStream) Next(context.Context) (*compat.ChatCompletionChunk
 	}
 	if s.err != nil {
 		return nil, s.err
+	}
+	if !s.finished {
+		s.finished = true
+		finish := "stop"
+		return &compat.ChatCompletionChunk{Choices: []compat.ChatCompletionChunkChoice{{Index: 0, FinishReason: &finish}}}, nil
 	}
 	return nil, io.EOF
 }
@@ -1060,8 +1066,13 @@ type functionStream struct {
 }
 
 func (s *functionStream) Next(context.Context) (*compat.ChatCompletionChunk, error) {
-	if s.index >= 2 {
+	if s.index >= 3 {
 		return nil, io.EOF
+	}
+	if s.index == 2 {
+		s.index++
+		finish := "tool_calls"
+		return &compat.ChatCompletionChunk{Choices: []compat.ChatCompletionChunkChoice{{Index: 0, FinishReason: &finish}}}, nil
 	}
 	arguments := `{"location":`
 	if s.index == 1 {

@@ -219,6 +219,7 @@ type chatStream struct {
 	parts    []string
 	index    int
 	toolMode bool
+	finished bool
 }
 
 func (s *chatStream) Next(ctx context.Context) (*compat.ChatCompletionChunk, error) {
@@ -227,7 +228,7 @@ func (s *chatStream) Next(ctx context.Context) (*compat.ChatCompletionChunk, err
 	}
 	if s.toolMode {
 		if s.index >= 2 {
-			return nil, io.EOF
+			return s.finishChunk()
 		}
 		argument := `{"location":`
 		if s.index == 1 {
@@ -238,7 +239,7 @@ func (s *chatStream) Next(ctx context.Context) (*compat.ChatCompletionChunk, err
 		return &compat.ChatCompletionChunk{Model: s.model, Choices: []compat.ChatCompletionChunkChoice{{Index: 0, Delta: compat.ChatMessageDelta{Extra: map[string]json.RawMessage{"tool_calls": calls}}}}}, nil
 	}
 	if s.index >= len(s.parts) {
-		return nil, io.EOF
+		return s.finishChunk()
 	}
 	part := s.parts[s.index]
 	s.index++
@@ -255,6 +256,18 @@ func (s *chatStream) Next(ctx context.Context) (*compat.ChatCompletionChunk, err
 			FinishReason: nil,
 		}},
 	}, nil
+}
+
+func (s *chatStream) finishChunk() (*compat.ChatCompletionChunk, error) {
+	if s.finished {
+		return nil, io.EOF
+	}
+	s.finished = true
+	reason := "stop"
+	if s.toolMode {
+		reason = "tool_calls"
+	}
+	return &compat.ChatCompletionChunk{Model: s.model, Choices: []compat.ChatCompletionChunkChoice{{Index: 0, FinishReason: &reason}}}, nil
 }
 
 func (s *chatStream) Close() error {
