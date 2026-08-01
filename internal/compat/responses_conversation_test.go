@@ -101,6 +101,26 @@ func TestResponseRequestConversationRejectsReasoningCallMismatch(t *testing.T) {
 	}
 }
 
+func TestResponseRequestConversationRejectsReorderedReasoningCalls(t *testing.T) {
+	var request ResponseRequest
+	if err := json.Unmarshal([]byte(`{
+		"model":"m",
+		"input":[
+			{"type":"reasoning","encrypted_content":"token"},
+			{"type":"function_call","call_id":"call_2","name":"f","arguments":"{}","status":"completed"},
+			{"type":"function_call","call_id":"call_1","name":"f","arguments":"{}","status":"completed"}
+		]
+	}`), &request); err != nil {
+		t.Fatal(err)
+	}
+	_, compatErr := request.ConversationRequest(func(string) (conversation.Reasoning, error) {
+		return conversation.Reasoning{EnvelopeID: "env_1", Content: "private", CallIDs: []string{"call_1", "call_2"}, Route: conversation.RouteBinding{Dialect: "deepseek", Provider: "p", UpstreamModel: "m"}}, nil
+	})
+	if compatErr == nil || compatErr.Status != 400 || compatErr.Message != "reasoning item does not match function calls" {
+		t.Fatalf("error=%#v", compatErr)
+	}
+}
+
 func TestNewResponseEnvelopeFromTurnSealsReasoningBeforeCalls(t *testing.T) {
 	turn := conversation.Turn{Items: []conversation.Item{
 		conversation.Reasoning{EnvelopeID: "env_1", Content: "private reasoning", AssistantContent: "", CallIDs: []string{"call_1"}},

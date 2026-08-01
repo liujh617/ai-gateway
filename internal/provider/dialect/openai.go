@@ -3,7 +3,6 @@ package dialect
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 
 	"open-ai-gateway/internal/compat"
@@ -156,6 +155,8 @@ type streamToolCall struct {
 type openAIStreamDecoder struct {
 	text       strings.Builder
 	tools      map[int]*streamToolCall
+	order      []streamOutputRef
+	textSeen   bool
 	usage      *compat.Usage
 	seenFinish bool
 }
@@ -171,6 +172,10 @@ func (d *openAIStreamDecoder) Push(chunk compat.ChatCompletionChunk) ([]StreamEv
 			return nil, fmt.Errorf("provider sent content after stream finish")
 		}
 		if choice.Delta.Content != "" {
+			if !d.textSeen {
+				d.textSeen = true
+				d.order = append(d.order, streamOutputRef{text: true})
+			}
 			d.text.WriteString(choice.Delta.Content)
 			events = append(events, StreamEvent{TextDelta: choice.Delta.Content})
 		}
@@ -214,6 +219,7 @@ func (d *openAIStreamDecoder) pushToolDeltas(raw json.RawMessage) ([]StreamEvent
 		if state == nil {
 			state = &streamToolCall{}
 			d.tools[delta.Index] = state
+			d.order = append(d.order, streamOutputRef{toolIndex: delta.Index})
 		}
 		if delta.ID != "" {
 			if state.id != "" && state.id != delta.ID {
@@ -238,18 +244,16 @@ func (d *openAIStreamDecoder) Finish() (Response, error) {
 	if !d.seenFinish {
 		return Response{}, fmt.Errorf("provider stream ended before finish")
 	}
-	items := make([]conversation.Item, 0, 1+len(d.tools))
-	if d.text.Len() > 0 {
-		items = append(items, conversation.Message{Role: "assistant", Text: d.text.String()})
-	}
-	indexes := make([]int, 0, len(d.tools))
-	for index := range d.tools {
-		indexes = append(indexes, index)
-	}
-	sort.Ints(indexes)
-	seen := make(map[string]struct{}, len(indexes))
-	for _, index := range indexes {
-		state := d.tools[index]
+	items := make([]conversation.Item, 0, len(d.order))
+	seen := make(map[string]struct{}, len(d.tools))
+	for _, output := range d.order {
+		if output.text {
+			if d.text.Len() > 0 {
+				items = append(items, conversation.Message{Role: "assistant", Text: d.text.String()})
+			}
+			continue
+		}
+		state := d.tools[output.toolIndex]
 		arguments := state.arguments.String()
 		if strings.TrimSpace(state.id) == "" || (state.typeName != "" && state.typeName != "function") || strings.TrimSpace(state.name.String()) == "" || !json.Valid([]byte(arguments)) {
 			return Response{}, fmt.Errorf("provider returned incomplete function call stream")
@@ -264,6 +268,11 @@ func (d *openAIStreamDecoder) Finish() (Response, error) {
 		return Response{}, fmt.Errorf("provider stream returned no content")
 	}
 	return Response{Turn: conversation.Turn{Items: items}, Usage: cloneUsage(d.usage)}, nil
+}
+
+type streamOutputRef struct {
+	text      bool
+	toolIndex int
 }
 
 func applyKnownRequestFields(request *compat.ChatCompletionRequest) {

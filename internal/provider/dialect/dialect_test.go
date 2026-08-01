@@ -140,3 +140,35 @@ func TestOpenAICompatibleStreamDecoderRejectsIncompleteStream(t *testing.T) {
 		t.Fatal("unfinished stream accepted")
 	}
 }
+
+func TestOpenAICompatibleStreamDecoderPreservesOutOfOrderParallelCallArrival(t *testing.T) {
+	decoder := NewOpenAICompatible().NewStreamDecoder()
+	finish := "tool_calls"
+	chunks := []compat.ChatCompletionChunk{
+		{Choices: []compat.ChatCompletionChunkChoice{{Index: 0, Delta: compat.ChatMessageDelta{Extra: map[string]json.RawMessage{"tool_calls": json.RawMessage(`[{"index":1,"id":"call_2","type":"function","function":{"name":"second","arguments":"{}"}}]`)}}}}},
+		{Choices: []compat.ChatCompletionChunkChoice{{Index: 0, Delta: compat.ChatMessageDelta{Extra: map[string]json.RawMessage{"tool_calls": json.RawMessage(`[{"index":0,"id":"call_1","type":"function","function":{"name":"first","arguments":"{}"}}]`)}}}}},
+		{Choices: []compat.ChatCompletionChunkChoice{{Index: 0, FinishReason: &finish}}},
+	}
+	var deltas []string
+	for _, chunk := range chunks {
+		events, err := decoder.Push(chunk)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, event := range events {
+			if event.FunctionCallDelta != nil {
+				deltas = append(deltas, event.FunctionCallDelta.CallID)
+			}
+		}
+	}
+	got, err := decoder.Finish()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(deltas) != 2 || deltas[0] != "call_2" || deltas[1] != "call_1" {
+		t.Fatalf("deltas=%#v", deltas)
+	}
+	if len(got.Turn.Items) != 2 || got.Turn.Items[0].(conversation.FunctionCall).CallID != "call_2" || got.Turn.Items[1].(conversation.FunctionCall).CallID != "call_1" {
+		t.Fatalf("turn=%#v", got.Turn)
+	}
+}

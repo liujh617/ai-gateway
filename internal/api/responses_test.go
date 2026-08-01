@@ -1019,6 +1019,27 @@ func TestResponsesStreamFunctionCall(t *testing.T) {
 	}
 }
 
+func TestResponsesStreamPreservesToolBeforeTextOutputOrder(t *testing.T) {
+	p := &functionStreamProvider{toolBeforeText: true}
+	rr := doResponsesJSON(newTestHandler(p), `{"model":"test-model","input":"weather","stream":true,"tools":[{"type":"function","name":"get_weather","parameters":{"type":"object"}}]}`, true)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	stream := rr.Body.String()
+	if strings.Contains(stream, "event: error\n") {
+		t.Fatalf("stream error: %s", stream)
+	}
+	functionPos := strings.Index(stream, `"type":"function_call"`)
+	messagePos := strings.Index(stream, `"type":"message"`)
+	if functionPos < 0 || messagePos < 0 || functionPos > messagePos {
+		t.Fatalf("function lifecycle must precede message lifecycle: %s", stream)
+	}
+	completed := completedResponseFromSSE(t, stream)
+	if len(completed.Output) != 2 || completed.Output[0].Type != "function_call" || completed.Output[1].Type != "message" {
+		t.Fatalf("completed output=%#v", completed.Output)
+	}
+}
+
 func TestResponsesCompletedFunctionStreamCanBeContinued(t *testing.T) {
 	p := &functionStreamProvider{}
 	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
@@ -1049,8 +1070,9 @@ func doResponsesJSON(handler http.Handler, body string, auth bool) *httptest.Res
 }
 
 type functionStreamProvider struct {
-	closed   bool
-	requests []compat.ChatCompletionRequest
+	closed         bool
+	requests       []compat.ChatCompletionRequest
+	toolBeforeText bool
 }
 
 func (p *functionStreamProvider) ListModels(context.Context) ([]compat.Model, error) { return nil, nil }
@@ -1105,8 +1127,14 @@ func (s *functionStream) Next(context.Context) (*compat.ChatCompletionChunk, err
 		finish := "tool_calls"
 		return &compat.ChatCompletionChunk{Choices: []compat.ChatCompletionChunkChoice{{Index: 0, FinishReason: &finish}}}, nil
 	}
+	if s.p.toolBeforeText && s.index == 1 {
+		s.index++
+		return &compat.ChatCompletionChunk{Choices: []compat.ChatCompletionChunkChoice{{Index: 0, Delta: compat.ChatMessageDelta{Content: "checking"}}}}, nil
+	}
 	arguments := `{"location":`
-	if s.index == 1 {
+	if s.p.toolBeforeText {
+		arguments = `{"location":"Paris"}`
+	} else if s.index == 1 {
 		arguments = `"Paris"}`
 	}
 	extra, _ := json.Marshal([]map[string]any{{"index": 0, "id": "call_1", "type": "function", "function": map[string]string{"name": "get_weather", "arguments": arguments}}})

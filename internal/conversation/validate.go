@@ -114,19 +114,11 @@ func validateReasoning(items []Item, index int, item Reasoning, limits Limits, e
 	if len(items)-callStart < len(declared) {
 		return fmt.Errorf("reasoning item does not match function calls")
 	}
-	matched := make(map[string]struct{}, len(declared))
-	for offset := 0; offset < len(declared); offset++ {
+	for offset := 0; offset < len(item.CallIDs); offset++ {
 		call, ok := items[callStart+offset].(FunctionCall)
-		if !ok || call.ReasoningEnvelopeID != item.EnvelopeID {
+		if !ok || call.ReasoningEnvelopeID != item.EnvelopeID || call.CallID != item.CallIDs[offset] {
 			return fmt.Errorf("reasoning item does not match function calls")
 		}
-		if _, ok := declared[call.CallID]; !ok {
-			return fmt.Errorf("reasoning item does not match function calls")
-		}
-		if _, duplicate := matched[call.CallID]; duplicate {
-			return fmt.Errorf("reasoning item does not match function calls")
-		}
-		matched[call.CallID] = struct{}{}
 	}
 	for callID := range declared {
 		expectedOwners[callID] = item.EnvelopeID

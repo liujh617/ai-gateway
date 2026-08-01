@@ -70,6 +70,11 @@ func TestValidateRequestRejectsInvalidCorrelationAndLimits(t *testing.T) {
 			Reasoning{EnvelopeID: "env_1", Content: "private", CallIDs: []string{"call_1"}, Route: route},
 			FunctionCall{CallID: "call_1", Name: "f", Arguments: `{}`, ReasoningEnvelopeID: "env_2"},
 		), limits: testLimits(), want: "does not match function calls"},
+		{name: "reordered reasoning calls", req: requestWithItems(
+			Reasoning{EnvelopeID: "env_1", Content: "private", CallIDs: []string{"call_1", "call_2"}, Route: route},
+			FunctionCall{CallID: "call_2", Name: "f", Arguments: `{}`, ReasoningEnvelopeID: "env_1"},
+			FunctionCall{CallID: "call_1", Name: "f", Arguments: `{}`, ReasoningEnvelopeID: "env_1"},
+		), limits: testLimits(), want: "does not match function calls"},
 		{name: "orphan reasoning owner", req: requestWithItems(
 			FunctionCall{CallID: "call_1", Name: "f", Arguments: `{}`, ReasoningEnvelopeID: "env_1"},
 		), limits: testLimits(), want: "reasoning owner"},

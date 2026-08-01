@@ -162,10 +162,7 @@ func validReasoningCallSequence(items []conversation.Item) bool {
 		}
 		for offset := 0; offset < len(reasoning.CallIDs); offset++ {
 			call, ok := items[callStart+offset].(conversation.FunctionCall)
-			if !ok || call.ReasoningEnvelopeID != reasoning.EnvelopeID {
-				return false
-			}
-			if _, ok := declared[call.CallID]; !ok {
+			if !ok || call.ReasoningEnvelopeID != reasoning.EnvelopeID || call.CallID != reasoning.CallIDs[offset] {
 				return false
 			}
 			delete(declared, call.CallID)
