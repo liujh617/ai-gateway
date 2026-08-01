@@ -53,11 +53,16 @@ func TestResponsesDeepSeekStatelessReasoningToolRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Unix(1000, 0)
-	codec, err := reasoningenvelope.New(reasoningenvelope.Config{
+	codecConfig := reasoningenvelope.Config{
 		ActiveKey: reasoningenvelope.Key{ID: "active", Bytes: bytes.Repeat([]byte{9}, 32)},
 		TTL:       time.Hour, MaxEnvelopeBytes: 1 << 20, MaxPlaintextBytes: 1 << 19,
 		Now: func() time.Time { return now },
-	})
+	}
+	codecA, err := reasoningenvelope.New(codecConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codecB, err := reasoningenvelope.New(codecConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,11 +70,15 @@ func TestResponsesDeepSeekStatelessReasoningToolRoundTrip(t *testing.T) {
 		ExternalModel: "codex-model", UpstreamModel: "deepseek-chat", ProviderName: "deepseek-primary",
 		Dialect: "deepseek", ReasoningReplay: true, Capabilities: map[string]bool{"chat": true}, Provider: provider,
 	}})
-	handler := api.NewServer(modelRouter, testAPIKey, slog.New(slog.NewTextHandler(io.Discard, nil)), api.Options{
-		Dialects: registry, ReasoningEnvelope: codec, ReasoningAudience: "test-audience",
+	handlerA := api.NewServer(modelRouter, testAPIKey, slog.New(slog.NewTextHandler(io.Discard, nil)), api.Options{
+		Dialects: registry, ReasoningEnvelope: codecA, ReasoningAudience: "test-audience",
 		ConversationLimits: conversation.Limits{MaxItems: 256, MaxToolCallsPerTurn: 64, MaxReasoningBytes: 1 << 19},
 	}).Handler()
-	first := doResponsesJSON(handler, `{"model":"codex-model","store":false,"input":"weather","tools":[{"type":"function","name":"lookup","parameters":{"type":"object"}}]}`, true)
+	handlerB := api.NewServer(modelRouter, testAPIKey, slog.New(slog.NewTextHandler(io.Discard, nil)), api.Options{
+		Dialects: registry, ReasoningEnvelope: codecB, ReasoningAudience: "test-audience",
+		ConversationLimits: conversation.Limits{MaxItems: 256, MaxToolCallsPerTurn: 64, MaxReasoningBytes: 1 << 19},
+	}).Handler()
+	first := doResponsesJSON(handlerA, `{"model":"codex-model","store":false,"input":"weather","tools":[{"type":"function","name":"lookup","parameters":{"type":"object"}}]}`, true)
 	if first.Code != http.StatusOK {
 		t.Fatalf("first status=%d body=%s", first.Code, first.Body.String())
 	}
@@ -89,7 +98,7 @@ func TestResponsesDeepSeekStatelessReasoningToolRoundTrip(t *testing.T) {
 		map[string]any{"type": "function_call_output", "call_id": "call_1", "output": "sunny"},
 	}
 	secondBody, _ := json.Marshal(map[string]any{"model": "codex-model", "store": false, "input": input})
-	second := doResponsesJSON(handler, string(secondBody), true)
+	second := doResponsesJSON(handlerB, string(secondBody), true)
 	if second.Code != http.StatusOK || !strings.Contains(second.Body.String(), "final answer") {
 		t.Fatalf("second status=%d body=%s", second.Code, second.Body.String())
 	}

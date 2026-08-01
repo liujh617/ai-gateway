@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,12 +19,16 @@ import (
 	"open-ai-gateway/internal/api"
 	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/config"
+	"open-ai-gateway/internal/conversation"
 	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/provider"
 	"open-ai-gateway/internal/provider/anthropic"
 	"open-ai-gateway/internal/provider/azureopenai"
+	"open-ai-gateway/internal/provider/deepseek"
+	providerdialect "open-ai-gateway/internal/provider/dialect"
 	"open-ai-gateway/internal/provider/fake"
 	"open-ai-gateway/internal/provider/openai"
+	"open-ai-gateway/internal/reasoningenvelope"
 	"open-ai-gateway/internal/responsestore"
 	"open-ai-gateway/internal/router"
 )
@@ -65,6 +70,11 @@ func main() {
 		logger.Error("failed to build model router", "error", err)
 		os.Exit(1)
 	}
+	dialects, reasoningCodec, conversationLimits, err := buildReasoningSupport(cfg)
+	if err != nil {
+		logger.Error("failed to configure reasoning support", "error", err)
+		os.Exit(1)
+	}
 
 	auditRecorder, err := buildAuditRecorder(cfg)
 	if err != nil {
@@ -95,6 +105,10 @@ func main() {
 			MaxContextBytes: cfg.ResponseStore.MaxContextBytes,
 			MaxTotalBytes:   cfg.ResponseStore.MaxTotalBytes,
 		}, nil),
+		Dialects:           dialects,
+		ReasoningEnvelope:  reasoningCodec,
+		ReasoningAudience:  cfg.ReasoningEnvelope.Audience,
+		ConversationLimits: conversationLimits,
 	})
 	httpServer := &http.Server{
 		Addr:              cfg.Addr,
@@ -340,6 +354,88 @@ func buildRouter(cfg *config.Config) (*router.ModelRouter, error) {
 		})
 	}
 	return router.NewModelRouter(routes), nil
+}
+
+func buildReasoningSupport(cfg *config.Config) (*providerdialect.Registry, *reasoningenvelope.Codec, conversation.Limits, error) {
+	registry := providerdialect.NewRegistry()
+	for _, dialect := range []providerdialect.Dialect{providerdialect.NewOpenAICompatible(), deepseek.NewDialect()} {
+		if err := registry.Register(dialect); err != nil {
+			return nil, nil, conversation.Limits{}, err
+		}
+	}
+	for modelName, model := range cfg.Models {
+		path := fmt.Sprintf("model %q", modelName)
+		if model.ReasoningReplay && !cfg.ReasoningEnvelope.Enabled {
+			return nil, nil, conversation.Limits{}, fmt.Errorf("%s: reasoning replay requires reasoning_envelope.enabled", path)
+		}
+		if err := preflightReasoningAttempt(registry, path, model.Dialect, model.ReasoningReplay); err != nil {
+			return nil, nil, conversation.Limits{}, err
+		}
+		for index, fallback := range model.Fallbacks {
+			fallbackPath := fmt.Sprintf("model %q fallback %d", modelName, index)
+			if fallback.ReasoningReplay && !cfg.ReasoningEnvelope.Enabled {
+				return nil, nil, conversation.Limits{}, fmt.Errorf("%s: reasoning replay requires reasoning_envelope.enabled", fallbackPath)
+			}
+			if err := preflightReasoningAttempt(registry, fallbackPath, fallback.Dialect, fallback.ReasoningReplay); err != nil {
+				return nil, nil, conversation.Limits{}, err
+			}
+		}
+	}
+	limits := conversation.Limits{
+		MaxItems:            cfg.ReasoningEnvelope.MaxItemsPerRequest,
+		MaxToolCallsPerTurn: cfg.ReasoningEnvelope.MaxToolCallsPerTurn,
+		MaxReasoningBytes:   cfg.ReasoningEnvelope.MaxPlaintextBytes,
+	}
+	if !cfg.ReasoningEnvelope.Enabled {
+		return registry, nil, limits, nil
+	}
+	active, err := reasoningEnvelopeKey("reasoning_envelope.active_key", cfg.ReasoningEnvelope.ActiveKey)
+	if err != nil {
+		return nil, nil, conversation.Limits{}, err
+	}
+	previous := make([]reasoningenvelope.Key, 0, len(cfg.ReasoningEnvelope.PreviousKeys))
+	for index, keyConfig := range cfg.ReasoningEnvelope.PreviousKeys {
+		key, err := reasoningEnvelopeKey(fmt.Sprintf("reasoning_envelope.previous_keys[%d]", index), keyConfig)
+		if err != nil {
+			return nil, nil, conversation.Limits{}, err
+		}
+		previous = append(previous, key)
+	}
+	codec, err := reasoningenvelope.New(reasoningenvelope.Config{
+		ActiveKey: active, PreviousKeys: previous,
+		TTL:              time.Duration(cfg.ReasoningEnvelope.TTLSeconds) * time.Second,
+		MaxEnvelopeBytes: cfg.ReasoningEnvelope.MaxEnvelopeBytes, MaxPlaintextBytes: cfg.ReasoningEnvelope.MaxPlaintextBytes,
+	})
+	if err != nil {
+		return nil, nil, conversation.Limits{}, fmt.Errorf("reasoning_envelope: %w", err)
+	}
+	return registry, codec, limits, nil
+}
+
+func preflightReasoningAttempt(registry *providerdialect.Registry, path, dialectName string, replay bool) error {
+	if dialectName == "" {
+		dialectName = "openai-compatible"
+	}
+	dialect, err := registry.Get(dialectName)
+	if err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	if replay && !dialect.Capabilities().ReasoningReplay {
+		return fmt.Errorf("%s: dialect %q does not support reasoning replay", path, dialectName)
+	}
+	return nil
+}
+
+func reasoningEnvelopeKey(path string, keyConfig config.ReasoningEnvelopeKeyConfig) (reasoningenvelope.Key, error) {
+	encoded, ok := os.LookupEnv(keyConfig.KeyEnv)
+	if !ok || encoded == "" {
+		return reasoningenvelope.Key{}, fmt.Errorf("%s.key_env %q is not set", path, keyConfig.KeyEnv)
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil || len(decoded) != 32 {
+		return reasoningenvelope.Key{}, fmt.Errorf("%s.key_env must contain a base64url-encoded 32-byte key", path)
+	}
+	return reasoningenvelope.Key{ID: keyConfig.ID, Bytes: decoded}, nil
 }
 
 type routerProvider = provider.Provider
