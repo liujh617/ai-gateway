@@ -8,8 +8,11 @@ import (
 
 	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
+	"open-ai-gateway/internal/conversation"
 	"open-ai-gateway/internal/middleware"
+	providerdialect "open-ai-gateway/internal/provider/dialect"
 	realtoken "open-ai-gateway/internal/realtimetoken"
+	"open-ai-gateway/internal/reasoningenvelope"
 	"open-ai-gateway/internal/requestctx"
 	"open-ai-gateway/internal/responsestore"
 	"open-ai-gateway/internal/router"
@@ -34,6 +37,10 @@ type Server struct {
 	realtimeTokens       *realtoken.Store
 	realtimeClientQuotas *wsproxy.ClientQuota
 	responseStore        *responsestore.Store
+	dialects             *providerdialect.Registry
+	reasoningEnvelope    *reasoningenvelope.Codec
+	reasoningAudience    string
+	conversationLimits   conversation.Limits
 }
 
 type Options struct {
@@ -48,6 +55,10 @@ type Options struct {
 	Audit                 audit.Recorder
 	ResponseStore         *responsestore.Store
 	RealtimeConfig        *wsproxy.Config
+	Dialects              *providerdialect.Registry
+	ReasoningEnvelope     *reasoningenvelope.Codec
+	ReasoningAudience     string
+	ConversationLimits    conversation.Limits
 }
 
 func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logger, options ...Options) *Server {
@@ -74,6 +85,13 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 	if opts.Audit == nil {
 		opts.Audit = audit.NoopRecorder{}
 	}
+	if opts.Dialects == nil {
+		opts.Dialects = providerdialect.NewRegistry()
+		_ = opts.Dialects.Register(providerdialect.NewOpenAICompatible())
+	}
+	if opts.ConversationLimits.MaxItems == 0 {
+		opts.ConversationLimits = conversation.Limits{MaxItems: 256, MaxToolCallsPerTurn: 64, MaxReasoningBytes: 524288}
+	}
 	if opts.RateLimiter != nil {
 		opts.RateLimiter.SetRejectionObserver(opts.Metrics)
 	}
@@ -90,20 +108,24 @@ func NewServer(modelRouter *router.ModelRouter, apiKey string, logger *slog.Logg
 		opts.Metrics.ObserveProviderHealth(providerName, true)
 	}
 	return &Server{
-		router:         modelRouter,
-		credentials:    credentials,
-		logger:         logger,
-		requestTimeout: opts.RequestTimeout,
-		streamTimeout:  opts.StreamTimeout,
-		rateLimiter:    opts.RateLimiter,
-		metrics:        opts.Metrics,
-		providerHealth: providerHealth,
-		clientModels:   copyClientModels(opts.ClientModels),
-		maxBodyBytes:   opts.MaxBodyBytes,
-		audit:          opts.Audit,
-		realtimeConfig: opts.RealtimeConfig,
-		realtimeTokens: realtoken.NewStore(),
-		responseStore:  opts.ResponseStore,
+		router:             modelRouter,
+		credentials:        credentials,
+		logger:             logger,
+		requestTimeout:     opts.RequestTimeout,
+		streamTimeout:      opts.StreamTimeout,
+		rateLimiter:        opts.RateLimiter,
+		metrics:            opts.Metrics,
+		providerHealth:     providerHealth,
+		clientModels:       copyClientModels(opts.ClientModels),
+		maxBodyBytes:       opts.MaxBodyBytes,
+		audit:              opts.Audit,
+		realtimeConfig:     opts.RealtimeConfig,
+		realtimeTokens:     realtoken.NewStore(),
+		responseStore:      opts.ResponseStore,
+		dialects:           opts.Dialects,
+		reasoningEnvelope:  opts.ReasoningEnvelope,
+		reasoningAudience:  opts.ReasoningAudience,
+		conversationLimits: opts.ConversationLimits,
 	}
 }
 

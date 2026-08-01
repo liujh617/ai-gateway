@@ -18,9 +18,13 @@ import (
 	"open-ai-gateway/internal/api"
 	"open-ai-gateway/internal/audit"
 	"open-ai-gateway/internal/compat"
+	"open-ai-gateway/internal/conversation"
 	"open-ai-gateway/internal/middleware"
 	"open-ai-gateway/internal/provider"
+	"open-ai-gateway/internal/provider/deepseek"
+	providerdialect "open-ai-gateway/internal/provider/dialect"
 	"open-ai-gateway/internal/provider/fake"
+	"open-ai-gateway/internal/reasoningenvelope"
 	"open-ai-gateway/internal/responsestore"
 	"open-ai-gateway/internal/router"
 )
@@ -37,6 +41,155 @@ func TestResponsesNonStreamOK(t *testing.T) {
 	if got.Object != "response" || got.Model != "test-model" || len(got.Output) != 1 || got.Output[0].Content[0].Text != "Hello from open-ai-gateway." {
 		t.Fatalf("unexpected response: %#v", got)
 	}
+}
+
+func TestResponsesDeepSeekStatelessReasoningToolRoundTrip(t *testing.T) {
+	provider := &deepseekRoundTripProvider{Provider: fake.New()}
+	registry := providerdialect.NewRegistry()
+	if err := registry.Register(providerdialect.NewOpenAICompatible()); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Register(deepseek.NewDialectWithIDGenerator(func() (string, error) { return "env_roundtrip", nil })); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1000, 0)
+	codec, err := reasoningenvelope.New(reasoningenvelope.Config{
+		ActiveKey: reasoningenvelope.Key{ID: "active", Bytes: bytes.Repeat([]byte{9}, 32)},
+		TTL:       time.Hour, MaxEnvelopeBytes: 1 << 20, MaxPlaintextBytes: 1 << 19,
+		Now: func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	modelRouter := router.NewModelRouter([]router.ModelRoute{{
+		ExternalModel: "codex-model", UpstreamModel: "deepseek-chat", ProviderName: "deepseek-primary",
+		Dialect: "deepseek", ReasoningReplay: true, Capabilities: map[string]bool{"chat": true}, Provider: provider,
+	}})
+	handler := api.NewServer(modelRouter, testAPIKey, slog.New(slog.NewTextHandler(io.Discard, nil)), api.Options{
+		Dialects: registry, ReasoningEnvelope: codec, ReasoningAudience: "test-audience",
+		ConversationLimits: conversation.Limits{MaxItems: 256, MaxToolCallsPerTurn: 64, MaxReasoningBytes: 1 << 19},
+	}).Handler()
+	first := doResponsesJSON(handler, `{"model":"codex-model","store":false,"input":"weather","tools":[{"type":"function","name":"lookup","parameters":{"type":"object"}}]}`, true)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status=%d body=%s", first.Code, first.Body.String())
+	}
+	if strings.Contains(first.Body.String(), "private reasoning") {
+		t.Fatalf("raw reasoning leaked: %s", first.Body.String())
+	}
+	var firstResponse compat.Response
+	if err := json.Unmarshal(first.Body.Bytes(), &firstResponse); err != nil {
+		t.Fatal(err)
+	}
+	if len(firstResponse.Output) != 2 || firstResponse.Output[0].Type != "reasoning" || firstResponse.Output[0].EncryptedContent == "" || firstResponse.Output[1].Type != "function_call" {
+		t.Fatalf("first response=%#v", firstResponse)
+	}
+	input := []any{
+		map[string]any{"type": "message", "role": "user", "content": "weather"},
+		firstResponse.Output[0], firstResponse.Output[1],
+		map[string]any{"type": "function_call_output", "call_id": "call_1", "output": "sunny"},
+	}
+	secondBody, _ := json.Marshal(map[string]any{"model": "codex-model", "store": false, "input": input})
+	second := doResponsesJSON(handler, string(secondBody), true)
+	if second.Code != http.StatusOK || !strings.Contains(second.Body.String(), "final answer") {
+		t.Fatalf("second status=%d body=%s", second.Code, second.Body.String())
+	}
+	if len(provider.requests) != 2 {
+		t.Fatalf("requests=%#v", provider.requests)
+	}
+	assistant := provider.requests[1].Messages[1]
+	if assistant.Role != "assistant" || string(assistant.Content) != `""` || string(assistant.Extra["reasoning_content"]) != `"private reasoning"` || !strings.Contains(string(assistant.Extra["tool_calls"]), `"id":"call_1"`) || provider.requests[1].Messages[2].Role != "tool" {
+		t.Fatalf("continuation=%#v", provider.requests[1].Messages)
+	}
+}
+
+func TestResponsesReasoningReplayStaysPinnedToOriginalRoute(t *testing.T) {
+	primary := &pinnedReasoningProvider{Provider: fake.New()}
+	fallback := &countingChatProvider{Provider: fake.New()}
+	registry := providerdialect.NewRegistry()
+	if err := registry.Register(providerdialect.NewOpenAICompatible()); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Register(deepseek.NewDialectWithIDGenerator(func() (string, error) { return "env_pinned", nil })); err != nil {
+		t.Fatal(err)
+	}
+	codec, err := reasoningenvelope.New(reasoningenvelope.Config{
+		ActiveKey: reasoningenvelope.Key{ID: "active", Bytes: bytes.Repeat([]byte{7}, 32)},
+		TTL:       time.Hour, MaxEnvelopeBytes: 1 << 20, MaxPlaintextBytes: 1 << 19,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	modelRouter := router.NewModelRouter([]router.ModelRoute{{
+		ExternalModel: "codex-model", UpstreamModel: "deepseek-chat", ProviderName: "primary",
+		Dialect: "deepseek", ReasoningReplay: true, Capabilities: map[string]bool{"chat": true}, Provider: primary,
+		Fallbacks: []router.ProviderRoute{{UpstreamModel: "deepseek-chat", ProviderName: "fallback", Dialect: "deepseek", ReasoningReplay: true, Provider: fallback}},
+	}})
+	handler := api.NewServer(modelRouter, testAPIKey, slog.New(slog.NewTextHandler(io.Discard, nil)), api.Options{
+		Dialects: registry, ReasoningEnvelope: codec, ReasoningAudience: "test-audience",
+	}).Handler()
+	first := doResponsesJSON(handler, `{"model":"codex-model","store":false,"input":"weather"}`, true)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status=%d body=%s", first.Code, first.Body.String())
+	}
+	var response compat.Response
+	if err := json.Unmarshal(first.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	input := []any{response.Output[0], response.Output[1], map[string]any{"type": "function_call_output", "call_id": "call_1", "output": "sunny"}}
+	body, _ := json.Marshal(map[string]any{"model": "codex-model", "store": false, "input": input})
+	second := doResponsesJSON(handler, string(body), true)
+	if second.Code != http.StatusServiceUnavailable {
+		t.Fatalf("second status=%d body=%s", second.Code, second.Body.String())
+	}
+	if fallback.calls != 0 {
+		t.Fatalf("reasoning replay crossed routes: fallback calls=%d", fallback.calls)
+	}
+}
+
+type deepseekRoundTripProvider struct {
+	*fake.Provider
+	requests []compat.ChatCompletionRequest
+}
+
+type pinnedReasoningProvider struct {
+	*fake.Provider
+	calls int
+}
+
+func (p *pinnedReasoningProvider) CreateChatCompletion(_ context.Context, _ compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	p.calls++
+	if p.calls > 1 {
+		return nil, compat.ServerError(http.StatusServiceUnavailable, "primary unavailable")
+	}
+	return &compat.ChatCompletionResponse{Choices: []compat.ChatCompletionChoice{{Index: 0, Message: compat.ChatMessage{
+		Role: "assistant", Content: json.RawMessage(`""`), Extra: map[string]json.RawMessage{
+			"reasoning_content": json.RawMessage(`"private reasoning"`),
+			"tool_calls":        json.RawMessage(`[{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{}"}}]`),
+		},
+	}, FinishReason: "tool_calls"}}}, nil
+}
+
+type countingChatProvider struct {
+	*fake.Provider
+	calls int
+}
+
+func (p *countingChatProvider) CreateChatCompletion(_ context.Context, _ compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	p.calls++
+	return &compat.ChatCompletionResponse{Choices: []compat.ChatCompletionChoice{{Index: 0, Message: compat.ChatMessage{Role: "assistant", Content: json.RawMessage(`"wrong route"`)}, FinishReason: "stop"}}}, nil
+}
+
+func (p *deepseekRoundTripProvider) CreateChatCompletion(_ context.Context, request compat.ChatCompletionRequest) (*compat.ChatCompletionResponse, error) {
+	p.requests = append(p.requests, request)
+	if len(p.requests) == 1 {
+		return &compat.ChatCompletionResponse{Choices: []compat.ChatCompletionChoice{{Index: 0, Message: compat.ChatMessage{
+			Role: "assistant", Content: json.RawMessage(`""`), Extra: map[string]json.RawMessage{
+				"reasoning_content": json.RawMessage(`"private reasoning"`),
+				"tool_calls":        json.RawMessage(`[{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{}"}}]`),
+			},
+		}, FinishReason: "tool_calls"}}}, nil
+	}
+	return &compat.ChatCompletionResponse{Choices: []compat.ChatCompletionChoice{{Index: 0, Message: compat.ChatMessage{Role: "assistant", Content: json.RawMessage(`"final answer"`)}, FinishReason: "stop"}}}, nil
 }
 
 func TestResponsesNonStreamContinuesStoredResponse(t *testing.T) {

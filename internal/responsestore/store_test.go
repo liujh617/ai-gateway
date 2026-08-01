@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"open-ai-gateway/internal/compat"
+	"open-ai-gateway/internal/conversation"
 )
 
 type fakeClock struct {
@@ -58,6 +59,30 @@ func TestPutGetReturnsDeepCopy(t *testing.T) {
 	again, _, _ := store.Get("resp_1", "client-a", "gpt")
 	if string(again.Transcript[0].Content) != `"hello"` {
 		t.Fatalf("Get exposed stored memory: %s", again.Transcript[0].Content)
+	}
+}
+
+func TestStoreClonesNormalizedConversation(t *testing.T) {
+	store := newTestStore(nil, nil)
+	record := Record{ID: "resp_ir", Client: "client-a", Model: "gpt", Conversation: conversation.Request{
+		Model: "gpt", Turn: conversation.Turn{Items: []conversation.Item{
+			conversation.Message{Role: "user", Text: "hello"},
+			conversation.Reasoning{EnvelopeID: "env_1", Content: "private", CallIDs: []string{"call_1"}, Route: conversation.RouteBinding{Dialect: "deepseek", Provider: "primary", UpstreamModel: "deepseek-chat"}},
+		}},
+	}}
+	if err := store.Put(record); err != nil {
+		t.Fatal(err)
+	}
+	record.Conversation.Turn.Items[0] = conversation.Message{Role: "user", Text: "mutated"}
+	reasoning := record.Conversation.Turn.Items[1].(conversation.Reasoning)
+	reasoning.CallIDs[0] = "mutated"
+
+	got, _, ok := store.Get("resp_ir", "client-a", "gpt")
+	if !ok {
+		t.Fatal("stored record not found")
+	}
+	if got.Conversation.Turn.Items[0].(conversation.Message).Text != "hello" || got.Conversation.Turn.Items[1].(conversation.Reasoning).CallIDs[0] != "call_1" {
+		t.Fatalf("conversation was not cloned: %#v", got.Conversation)
 	}
 }
 

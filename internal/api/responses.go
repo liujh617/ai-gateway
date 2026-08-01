@@ -34,6 +34,10 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 	}
 	middleware.SetLogStream(r.Context(), req.Stream)
 	middleware.SetLogPreviousResponse(r.Context(), req.PreviousResponseID != "")
+	if !req.Stream {
+		s.handleNonStreamingResponse(w, r, req)
+		return
+	}
 	chatReq, validationErr := req.ChatRequest()
 	if validationErr != nil {
 		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, validationErr)
@@ -323,7 +327,7 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 			}
 		}
 		if len(chunk.Choices) == 1 {
-				if raw := chunk.Choices[0].Delta.Extra["tool_calls"]; len(raw) > 0 {
+			if raw := chunk.Choices[0].Delta.Extra["tool_calls"]; len(raw) > 0 {
 				var deltas []chatToolCallDelta
 				if json.Unmarshal(raw, &deltas) != nil {
 					emit("error", map[string]any{"error": compat.ErrorResponseFor(compat.ServerError(http.StatusBadGateway, "provider returned invalid function call stream")).Error})

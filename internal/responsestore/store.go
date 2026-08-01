@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"open-ai-gateway/internal/compat"
+	"open-ai-gateway/internal/conversation"
 )
 
 var (
@@ -57,6 +58,7 @@ type Record struct {
 	Model          string
 	ConversationID string
 	Transcript     []compat.ChatMessage
+	Conversation   conversation.Request
 	Response       json.RawMessage
 }
 
@@ -270,11 +272,19 @@ func encodedRecordSize(record Record) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return transcriptSize + int64(len(record.Response)), nil
+	conversationSize := int64(0)
+	if record.Conversation.Model != "" || len(record.Conversation.Turn.Items) > 0 {
+		data, marshalErr := json.Marshal(record.Conversation)
+		if marshalErr != nil {
+			return 0, marshalErr
+		}
+		conversationSize = int64(len(data))
+	}
+	return transcriptSize + conversationSize + int64(len(record.Response)), nil
 }
 
 func cloneRecord(record Record) Record {
-	cloned := Record{ID: record.ID, Client: record.Client, Model: record.Model, ConversationID: record.ConversationID, Response: cloneRaw(record.Response)}
+	cloned := Record{ID: record.ID, Client: record.Client, Model: record.Model, ConversationID: record.ConversationID, Conversation: conversation.CloneRequest(record.Conversation), Response: cloneRaw(record.Response)}
 	if record.Transcript == nil {
 		return cloned
 	}
