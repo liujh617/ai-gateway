@@ -230,6 +230,25 @@ func TestResponsesNonStreamContinuesStoredResponse(t *testing.T) {
 	}
 }
 
+func TestResponsesContinuesLegacyStoredTranscript(t *testing.T) {
+	p := &responseStateProvider{}
+	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
+	if err := store.Put(responsestore.Record{ID: "resp_legacy", Client: "default", Model: "test-model", Transcript: []compat.ChatMessage{
+		{Role: "user", Content: json.RawMessage(`"hello"`)},
+		{Role: "assistant", Content: json.RawMessage(`"legacy answer"`)},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	handler := newTestHandlerWithOptions(p, api.Options{ResponseStore: store})
+	response := doResponsesJSON(handler, `{"model":"test-model","input":"again","previous_response_id":"resp_legacy","store":false}`, true)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if len(p.requests) != 1 || len(p.requests[0].Messages) != 3 || messageText(p.requests[0].Messages[1]) != "legacy answer" {
+		t.Fatalf("legacy transcript was not restored: %#v", p.requests)
+	}
+}
+
 func TestRetrieveStoredResponse(t *testing.T) {
 	p := &responseStateProvider{}
 	store := responsestore.New(responsestore.Config{TTL: time.Hour, MaxEntries: 10, MaxContextBytes: 1 << 20, MaxTotalBytes: 2 << 20}, nil)
