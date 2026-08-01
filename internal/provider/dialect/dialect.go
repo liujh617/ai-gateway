@@ -12,6 +12,7 @@ type Capabilities struct {
 type Request struct {
 	Conversation  conversation.Request
 	UpstreamModel string
+	Route         conversation.RouteBinding
 }
 
 type Response struct {
