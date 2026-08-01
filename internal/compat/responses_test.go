@@ -19,7 +19,7 @@ func TestResponseRequestStringInputToChat(t *testing.T) {
 	if chat.Model != "test-model" || len(chat.Messages) != 2 {
 		t.Fatalf("unexpected chat request: %#v", chat)
 	}
-	if chat.Messages[0].Role != "developer" || string(chat.Messages[0].Content) != `"be concise"` {
+	if chat.Messages[0].Role != "system" || string(chat.Messages[0].Content) != `"be concise"` {
 		t.Fatalf("unexpected instructions: %#v", chat.Messages[0])
 	}
 	if chat.Messages[1].Role != "user" || string(chat.Messages[1].Content) != `"hello"` {
@@ -96,6 +96,27 @@ func TestResponseRequestConvertsFunctionCallAndOutput(t *testing.T) {
 	}
 	if string(chat.Messages[1].Extra["tool_call_id"]) != `"call_1"` || string(chat.Messages[1].Content) != `"25C"` {
 		t.Fatalf("tool message=%#v", chat.Messages[1])
+	}
+}
+
+func TestResponseRequestToolChoiceWithoutTools(t *testing.T) {
+	// tool_choice without tools should be silently accepted (not an error).
+	for _, body := range []string{
+		`{"model":"m","input":"hello","tool_choice":"auto"}`,
+		`{"model":"m","input":"hello","tool_choice":"none"}`,
+		`{"model":"m","input":"hello","tool_choice":"required"}`,
+	} {
+		var req ResponseRequest
+		if err := json.Unmarshal([]byte(body), &req); err != nil {
+			t.Fatal(err)
+		}
+		chat, compatErr := req.ChatRequest()
+		if compatErr != nil {
+			t.Fatalf("body=%s err=%#v", body, compatErr)
+		}
+		if _, ok := chat.Extra["tool_choice"]; ok {
+			t.Fatalf("tool_choice should be dropped when no tools: body=%s", body)
+		}
 	}
 }
 

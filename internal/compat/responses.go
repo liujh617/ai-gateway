@@ -173,7 +173,7 @@ func (r ResponseRequest) ChatRequest() (ChatCompletionRequest, *Error) {
 	messages := make([]ChatMessage, 0, 2)
 	if r.Instructions != "" {
 		content, _ := json.Marshal(r.Instructions)
-		messages = append(messages, ChatMessage{Role: "developer", Content: content})
+		messages = append(messages, ChatMessage{Role: "system", Content: content})
 	}
 	var input string
 	if err := json.Unmarshal(r.Input, &input); err == nil {
@@ -222,12 +222,18 @@ func (r ResponseRequest) ChatRequest() (ChatCompletionRequest, *Error) {
 			return ChatCompletionRequest{}, InvalidRequest(fmt.Sprintf("invalid input item at index %d", i), "input")
 		}
 		role := strings.TrimSpace(item.Role)
-		if role != "user" && role != "assistant" && role != "system" && role != "developer" {
+		if role == "developer" {
+			role = "system"
+		}
+		if role != "user" && role != "assistant" && role != "system" {
 			return ChatCompletionRequest{}, InvalidRequest(fmt.Sprintf("invalid input role at index %d", i), "input")
 		}
 		text, err := responseMessageText(item.Content)
 		if err != nil {
-			return ChatCompletionRequest{}, InvalidRequest(fmt.Sprintf("invalid text content at input index %d", i), "input")
+			return ChatCompletionRequest{}, InvalidRequest(fmt.Sprintf("invalid text content at input idx %d: err=%s raw=%s", i, err.Error(), string(item.Content)), "input")
+		}
+		if text == "" {
+			continue
 		}
 		content, _ := json.Marshal(text)
 		messages = append(messages, ChatMessage{Role: role, Content: content})
@@ -284,7 +290,7 @@ func (r ResponseRequest) chatToolFields() (map[string]json.RawMessage, map[strin
 		}
 		extra["tools"], _ = json.Marshal(chatTools)
 	}
-	if len(r.ToolChoice) > 0 {
+	if len(r.ToolChoice) > 0 && len(names) > 0 {
 		var choice string
 		if json.Unmarshal(r.ToolChoice, &choice) == nil {
 			if choice != "auto" && choice != "none" && choice != "required" {
@@ -327,6 +333,9 @@ type responseInputText struct {
 }
 
 func responseMessageText(raw json.RawMessage) (string, error) {
+	if len(raw) == 0 {
+		return "", nil
+	}
 	var text string
 	if err := json.Unmarshal(raw, &text); err == nil {
 		if strings.TrimSpace(text) == "" {
@@ -334,18 +343,24 @@ func responseMessageText(raw json.RawMessage) (string, error) {
 		}
 		return text, nil
 	}
+	// Array of content parts, e.g. [{"type":"input_text","text":"hello"}].
 	var parts []responseInputText
-	if err := json.Unmarshal(raw, &parts); err != nil || len(parts) == 0 {
-		return "", fmt.Errorf("invalid content")
-	}
-	var out strings.Builder
-	for _, part := range parts {
-		if part.Type != "input_text" || strings.TrimSpace(part.Text) == "" {
-			return "", fmt.Errorf("unsupported content part")
+	if err := json.Unmarshal(raw, &parts); err == nil && len(parts) > 0 {
+		var out strings.Builder
+		for _, part := range parts {
+			if part.Type != "input_text" || strings.TrimSpace(part.Text) == "" {
+				return "", fmt.Errorf("unsupported content part")
+			}
+			out.WriteString(part.Text)
 		}
-		out.WriteString(part.Text)
+		return out.String(), nil
 	}
-	return out.String(), nil
+	// Single content part object, e.g. {"type":"input_text","text":"hello"}.
+	var single responseInputText
+	if err := json.Unmarshal(raw, &single); err == nil && single.Type == "input_text" && strings.TrimSpace(single.Text) != "" {
+		return single.Text, nil
+	}
+	return "", fmt.Errorf("invalid content")
 }
 
 type Response struct {
@@ -415,11 +430,6 @@ func NewResponseEnvelope(externalModel string, chat *ChatCompletionResponse, now
 		}
 	}
 	toolCallsRaw := choice.Message.Extra["tool_calls"]
-	for key := range choice.Message.Extra {
-		if key != "tool_calls" {
-			return nil, ServerError(502, "provider returned unsupported response content")
-		}
-	}
 	if len(toolCallsRaw) > 0 {
 		var calls []chatResponseToolCall
 		if json.Unmarshal(toolCallsRaw, &calls) != nil || len(calls) == 0 {

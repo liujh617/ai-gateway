@@ -26,8 +26,9 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
+	bodyBytes := s.requestBody(w, r)
 	var req compat.ResponseRequest
-	if err := decodeJSONBody(s.requestBody(w, r), &req); err != nil {
+	if err := decodeJSONBody(bodyBytes, &req); err != nil {
 		s.writeError(w, r, decodeError(err))
 		return
 	}
@@ -322,14 +323,7 @@ func (s *Server) streamResponse(w http.ResponseWriter, r *http.Request, route ro
 			}
 		}
 		if len(chunk.Choices) == 1 {
-			extra := chunk.Choices[0].Delta.Extra
-			for key := range extra {
-				if key != "tool_calls" {
-					emit("error", map[string]any{"error": compat.ErrorResponseFor(compat.ServerError(http.StatusBadGateway, "provider returned unsupported stream content")).Error})
-					return
-				}
-			}
-			if raw := extra["tool_calls"]; len(raw) > 0 {
+				if raw := chunk.Choices[0].Delta.Extra["tool_calls"]; len(raw) > 0 {
 				var deltas []chatToolCallDelta
 				if json.Unmarshal(raw, &deltas) != nil {
 					emit("error", map[string]any{"error": compat.ErrorResponseFor(compat.ServerError(http.StatusBadGateway, "provider returned invalid function call stream")).Error})
