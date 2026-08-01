@@ -1,5 +1,34 @@
 # open-ai-gateway
 
+## Codex 访问 DeepSeek thinking 模型
+
+网关现已支持 Codex 使用 `/v1/responses`、`store:false`、无 `previous_response_id` 的无状态工具调用闭环，并支持非流式和 SSE。DeepSeek reasoning 以 AES-256-GCM 加密 envelope 返回，后续请求可在共享配置的网关实例之间继续。当前仅验证 `deepseek` reasoning dialect；Kimi、GLM 将通过同一 dialect 接口后续接入。
+
+最小路由配置：
+
+```json
+{
+  "reasoning_envelope": {
+    "enabled": true,
+    "audience": "ai-gateway-prod",
+    "active_key": {"id": "reasoning-2026-08", "key_env": "GATEWAY_REASONING_KEY"}
+  },
+  "models": {
+    "codex-deepseek": {
+      "provider": "deepseek",
+      "upstream_model": "deepseek-chat",
+      "dialect": "deepseek",
+      "reasoning_replay": true,
+      "capabilities": ["chat"]
+    }
+  }
+}
+```
+
+`GATEWAY_REASONING_KEY` 必须是 base64url 编码的 32 字节随机密钥。轮换时先把旧 active key 放入 `previous_keys`，将相同 key 集合部署到所有实例，再切换 active key；至少等待一个 envelope TTL 后才能移除旧 key。配置缺失或 dialect 能力不匹配时服务拒绝启动。不要把真实 key 写入配置、日志或仓库。
+
+reasoning replay 会固定到 envelope 中的 provider、upstream model 和 dialect，不会跨 fallback。此功能不改变现有 audit 配置或 JSONL 格式；启用完整 body 审计时会记录 reasoning 密文，但不会记录网关内部 reasoning 明文。
+
 `open-ai-gateway` 是一个基于 Go 的 OpenAI-compatible API 代理。它对外提供接近 OpenAI API 的 HTTP 契约，对内连接一个或多个上游模型服务，并在中间层处理模型映射、鉴权、流式响应、错误转换和可观测性。
 
 ## 目标

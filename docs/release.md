@@ -36,6 +36,8 @@ make release-check VERSION=0.1.6
 - `make smoke-azure`
 - `make smoke-deepseek-skip`
 
+reasoning 功能发布前还必须确认所有实例使用相同 audience 和 key 集合，旧 active key 已先加入 `previous_keys`，并在至少一个 envelope TTL 后再移除。`make smoke-deepseek` 的离线部分为必跑项；真实 DeepSeek smoke 在安全提供 `DEEPSEEK_API_KEY` 时运行。
+
 ## Changelog
 
 发布前更新 [CHANGELOG.md](../CHANGELOG.md)：

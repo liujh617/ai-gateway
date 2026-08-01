@@ -26,6 +26,20 @@
     "max_context_bytes": 4194304,
     "max_total_bytes": 67108864
   },
+  "reasoning_envelope": {
+    "enabled": true,
+    "audience": "ai-gateway-local",
+    "ttl_seconds": 3600,
+    "max_envelope_bytes": 1048576,
+    "max_plaintext_bytes": 524288,
+    "max_items_per_request": 256,
+    "max_tool_calls_per_turn": 64,
+    "active_key": {
+      "id": "local-reasoning-key",
+      "key_env": "GATEWAY_REASONING_KEY"
+    },
+    "previous_keys": []
+  },
   "providers": {
     "deepseek": {
       "type": "openai-compatible",
@@ -38,11 +52,15 @@
     "deepseek-v4-pro": {
       "provider": "deepseek",
       "upstream_model": "deepseek-v4-pro",
+      "dialect": "deepseek",
+      "reasoning_replay": true,
       "capabilities": ["chat"]
     },
     "deepseek-v4-flash": {
       "provider": "deepseek",
       "upstream_model": "deepseek-v4-flash",
+      "dialect": "deepseek",
+      "reasoning_replay": true,
       "capabilities": ["chat"]
     }
   }

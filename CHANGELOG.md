@@ -6,7 +6,14 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- Added a Codex Responses-to-DeepSeek reasoning bridge with stateless encrypted reasoning items, streaming tool loops, route pinning, and cross-instance replay.
+- Added normalized conversation IR and extensible provider dialect registry; DeepSeek is the first verified reasoning dialect.
+- Added configurable AES-256-GCM reasoning envelope keys with active/previous-key rotation and startup capability preflight.
+
 ### Changed
+
+- Responses streaming now completes with `data: [DONE]` and never exposes raw DeepSeek reasoning as visible text or audit event bodies.
+- DeepSeek smoke always runs deterministic offline reasoning/tool-loop coverage; live upstream coverage remains optional when `DEEPSEEK_API_KEY` is set.
 
 ## 0.3.0 - 2026-07-26
 

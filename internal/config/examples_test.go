@@ -10,6 +10,7 @@ import (
 )
 
 func TestExampleConfigsLoad(t *testing.T) {
+	t.Setenv("GATEWAY_REASONING_KEY", "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU")
 	for _, path := range []string{
 		filepath.Join("..", "..", "config.example.json"),
 		filepath.Join("..", "..", "config.local.example.json"),

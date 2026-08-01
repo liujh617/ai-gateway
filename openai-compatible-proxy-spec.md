@@ -1,5 +1,21 @@
 # OpenAI-compatible Proxy Spec
 
+## Codex Responses 与 DeepSeek reasoning
+
+网关支持 Codex 通过 `POST /v1/responses` 使用 DeepSeek thinking mode，包括 `store:false`、不发送 `previous_response_id`、`stream:true` 和 function tools。首个已验证的 reasoning dialect 是 `deepseek`；Kimi、GLM 等模型需要后续增加独立 dialect adapter。
+
+DeepSeek 返回的 `reasoning_content` 不作为可见文本或 reasoning summary 返回。网关将其封装为 Responses reasoning item：
+
+```json
+{"type":"reasoning","summary":[],"encrypted_content":"gwre1.<key-id>.<ciphertext>"}
+```
+
+客户端在工具结果请求中必须按原顺序回传 reasoning item、对应的 `function_call` 和 `function_call_output`。envelope 使用 AES-256-GCM，绑定 deployment audience、gateway client、external model、provider、upstream model 和 dialect，并受 TTL、明文大小和密文大小限制。带活动 tool call 的 reasoning replay 固定到签发 envelope 的路由；该路由不可用时返回原 provider 错误，不跨 provider fallback。
+
+流式响应继续即时发送安全的 `response.output_text.delta`。reasoning delta 仅在内存中聚合；上游 turn 完成后，网关先发送加密 reasoning item，再发送 function-call item，最终发送 `response.completed` 和 `data: [DONE]`。上游 tool call 缢少 reasoning 时返回 `502 provider returned an incomplete reasoning tool call`；无效、过期或绑定不匹配的 envelope 返回 `400 invalid reasoning item`。
+
+启用任一 `reasoning_replay` 路由时，`reasoning_envelope`、有效 active key 和具备 replay 能力的 dialect 都是强制启动条件。审计开关、JSONL schema 和完整 body 记录策略保持不变；审计只看到 Responses wire body（其中 reasoning 为密文），不会记录网关内部解密出的 reasoning 明文。
+
 本文定义 `open-ai-gateway` 第一阶段需要支持的 OpenAI-compatible API 契约。该契约面向客户端，内部实现可以使用不同的数据结构和 provider 适配器。
 
 ## 基本约定

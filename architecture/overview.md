@@ -1,5 +1,22 @@
 # Architecture Overview
 
+## Responses reasoning bridge
+
+Codex reasoning 请求使用显式的分层转换链路：
+
+```text
+Codex Responses Items
+  -> internal/compat wire codec
+  -> internal/conversation normalized IR
+  -> internal/provider/dialect registry
+  -> DeepSeek or OpenAI-compatible dialect
+  -> provider transport
+```
+
+`internal/reasoningenvelope` 位于 wire codec 与 conversation IR 边界：入站 reasoning item 在进入 IR 前完成认证解密，出站 reasoning 在生成 Responses item 前完成加密。handler 只编排鉴权、限制、路由、fallback、SSE、store、metrics 和既有 audit，不包含 provider 专属字段判断。
+
+带未完成 tool call 的 reasoning IR 携带 `{dialect, provider, upstream_model}` route binding。API 层在调用 provider 前进行 route pinning，因此 replay 不会切换到语义不兼容的 fallback。新的 Kimi/GLM 支持应注册新的 dialect，而不是在 Responses handler 中增加 provider-name 分支。
+
 本文描述 `open-ai-gateway` 的第一阶段架构。详细决策见 [ADR 0001](../docs/adr/0001-go-openai-compatible-proxy.md)，外部 API 契约见 [OpenAI-compatible Proxy Spec](../openai-compatible-proxy-spec.md)。
 
 ## 架构目标

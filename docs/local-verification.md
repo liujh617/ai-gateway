@@ -251,6 +251,16 @@ curl -sS http://127.0.0.1:8080/v1/chat/completions \
 
 ## 交付记录
 
+## Codex + DeepSeek reasoning 验证
+
+离线验证不需要真实凭据：
+
+```bash
+make smoke-deepseek
+```
+
+该命令始终运行确定性的 fake-upstream 测试，覆盖 `store:false`、streaming、加密 reasoning item、tool output replay、`[DONE]` 和明文不泄漏。设置 `DEEPSEEK_API_KEY` 时才额外运行真实 upstream smoke。真实运行还需设置 base64url 编码的 32 字节 `GATEWAY_REASONING_KEY`；示例配置中的 key ID 和环境变量名不是密钥材料。
+
 提交或交付时记录实际执行过的命令：
 
 ```text

@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Always run the deterministic Codex Responses reasoning/tool loop. This covers
+# encrypted reasoning replay without requiring network access or real secrets.
+go test ./internal/api -run 'TestResponses(DeepSeekStatelessReasoningToolRoundTrip|DeepSeekStreamSealsReasoningBeforeFunctionCall)' -count=1
+echo "smoke-deepseek-deterministic-ok"
+
 if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
-  echo "smoke-deepseek-skip: DEEPSEEK_API_KEY is not set"
+	  echo "smoke-deepseek-live-skip: DEEPSEEK_API_KEY is not set"
   exit 0
 fi
 
@@ -10,10 +15,12 @@ addr="${GATEWAY_ADDR:-127.0.0.1:18081}"
 api_key="${GATEWAY_API_KEY:-trae-local-gateway-key}"
 model="${DEEPSEEK_SMOKE_MODEL:-deepseek-v4-flash}"
 log="${TMPDIR:-/tmp}/open-ai-gateway-deepseek-smoke.log"
+reasoning_key="${GATEWAY_REASONING_KEY:-BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU}"
 
 GATEWAY_CONFIG=config.deepseek.example.json \
   GATEWAY_ADDR="$addr" \
   GATEWAY_API_KEY="$api_key" \
+  GATEWAY_REASONING_KEY="$reasoning_key" \
   DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY" \
   go run ./cmd/gateway >"$log" 2>&1 &
 pid=$!

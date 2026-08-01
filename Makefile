@@ -65,7 +65,7 @@ smoke-deepseek:
 smoke-deepseek-skip:
 	DEEPSEEK_API_KEY= bash scripts/smoke-deepseek.sh
 
-release-check: verify check-config check-config-examples build smoke smoke-responses smoke-responses-tools smoke-responses-state smoke-rate-limit smoke-azure smoke-deepseek-skip
+release-check: verify check-config check-config-examples build smoke smoke-responses smoke-responses-tools smoke-responses-state smoke-rate-limit smoke-azure smoke-deepseek
 
 docker-build:
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_TIME=$(BUILD_TIME) -t $(IMAGE) .
