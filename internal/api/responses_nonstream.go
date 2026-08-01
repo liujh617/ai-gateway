@@ -13,7 +13,6 @@ import (
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/conversation"
 	"open-ai-gateway/internal/middleware"
-	"open-ai-gateway/internal/provider/deepseek"
 	providerdialect "open-ai-gateway/internal/provider/dialect"
 	"open-ai-gateway/internal/reasoningenvelope"
 	"open-ai-gateway/internal/responsestore"
@@ -54,11 +53,6 @@ func (s *Server) handleNonStreamingResponse(w http.ResponseWriter, r *http.Reque
 	}
 	if err := conversation.ValidateRequest(combined, s.conversationLimits); err != nil {
 		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, compat.InvalidRequest(err.Error(), "input"))
-		return
-	}
-	if !s.modelAllowedForRequest(r, req.Model) {
-		middleware.SetLogRoute(r.Context(), req.Model, "", "")
-		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, compat.ModelNotFound(req.Model))
 		return
 	}
 	modelRoute, resolveErr := s.router.ResolveFor(req.Model, "chat")
@@ -146,7 +140,7 @@ func (s *Server) executeResponseDialect(ctx context.Context, r *http.Request, ex
 			return providerdialect.Response{}, router.ProviderRoute{}, err
 		}
 		if hasReasoningReplay(request) && (!attempt.ReasoningReplay || !dialect.Capabilities().ReasoningReplay) {
-			return providerdialect.Response{}, router.ProviderRoute{}, deepseek.ErrReasoningRouteMismatch
+			return providerdialect.Response{}, router.ProviderRoute{}, providerdialect.ErrReasoningRouteMismatch
 		}
 		route := conversation.RouteBinding{Dialect: dialect.Name(), Provider: attempt.ProviderName, UpstreamModel: attempt.UpstreamModel}
 		chatRequest, err := dialect.BuildChatRequest(providerdialect.Request{Conversation: request, UpstreamModel: attempt.UpstreamModel, Route: route})
@@ -316,12 +310,12 @@ func responseDialectName(name string) string {
 
 func responseDialectError(err error) *compat.Error {
 	switch {
-	case errors.Is(err, deepseek.ErrReasoningRequired):
+	case errors.Is(err, providerdialect.ErrReasoningRequired):
 		return compat.InvalidRequest("reasoning item is required for this tool call", "input")
-	case errors.Is(err, deepseek.ErrReasoningRouteMismatch), errors.Is(err, reasoningenvelope.ErrInvalid):
+	case errors.Is(err, providerdialect.ErrReasoningRouteMismatch), errors.Is(err, reasoningenvelope.ErrInvalid):
 		return compat.InvalidRequest("invalid reasoning item", "input")
-	case errors.Is(err, deepseek.ErrIncompleteReasoningToolCall):
-		return compat.ServerError(http.StatusBadGateway, deepseek.ErrIncompleteReasoningToolCall.Error())
+	case errors.Is(err, providerdialect.ErrIncompleteReasoningToolCall):
+		return compat.ServerError(http.StatusBadGateway, providerdialect.ErrIncompleteReasoningToolCall.Error())
 	default:
 		return providerError(err)
 	}

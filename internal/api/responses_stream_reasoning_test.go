@@ -59,10 +59,11 @@ func TestResponsesDeepSeekStreamSealsReasoningBeforeFunctionCall(t *testing.T) {
 	if !strings.Contains(body, "data: [DONE]\n\n") {
 		t.Fatalf("missing stream sentinel: %s", body)
 	}
-	reasoningDone := strings.Index(body, `"type":"reasoning"`)
+	reasoningAdded := strings.Index(body, `"type":"reasoning"`)
+	messageAdded := strings.Index(body, `"type":"message"`)
 	functionAdded := strings.Index(body, `"type":"function_call"`)
-	if reasoningDone < 0 || functionAdded <= reasoningDone {
-		t.Fatalf("reasoning item was not emitted before function call: %s", body)
+	if reasoningAdded < 0 || messageAdded <= reasoningAdded || functionAdded <= messageAdded {
+		t.Fatalf("stream item lifecycle disagrees with completed output order: %s", body)
 	}
 	completed := completedResponseFromSSE(t, body)
 	if len(completed.Output) != 3 || completed.Output[0].Type != "reasoning" || completed.Output[1].Type != "message" || completed.Output[2].Type != "function_call" {
@@ -112,9 +113,46 @@ func TestResponsesDialectStreamCancellationClosesUpstreamWithoutCompletion(t *te
 	}
 }
 
+func TestResponsesDeepSeekStreamAllowsVisibleTextWithoutReasoning(t *testing.T) {
+	upstream := &deepseekStreamingProvider{Provider: fake.New(), noReasoning: true}
+	registry := providerdialect.NewRegistry()
+	if err := registry.Register(providerdialect.NewOpenAICompatible()); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Register(deepseek.NewDialect()); err != nil {
+		t.Fatal(err)
+	}
+	codec, err := reasoningenvelope.New(reasoningenvelope.Config{
+		ActiveKey: reasoningenvelope.Key{ID: "active", Bytes: bytes.Repeat([]byte{6}, 32)},
+		TTL:       time.Hour, MaxEnvelopeBytes: 1 << 20, MaxPlaintextBytes: 1 << 19,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	modelRouter := router.NewModelRouter([]router.ModelRoute{{
+		ExternalModel: "codex-model", UpstreamModel: "deepseek-chat", ProviderName: "deepseek-primary",
+		Dialect: "deepseek", ReasoningReplay: true, Capabilities: map[string]bool{"chat": true}, Provider: upstream,
+	}})
+	handler := api.NewServer(modelRouter, testAPIKey, slog.New(slog.NewTextHandler(io.Discard, nil)), api.Options{
+		Dialects: registry, ReasoningEnvelope: codec, ReasoningAudience: "test-audience",
+	}).Handler()
+	recorder := doResponsesJSON(handler, `{"model":"codex-model","input":"hello","stream":true,"store":false}`, true)
+	if recorder.Code != http.StatusOK || strings.Contains(recorder.Body.String(), "event: error") {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	completed := completedResponseFromSSE(t, recorder.Body.String())
+	if len(completed.Output) != 1 || completed.Output[0].Type != "message" || completed.Output[0].Content[0].Text != "plain answer" {
+		t.Fatalf("output=%#v", completed.Output)
+	}
+	if !strings.Contains(recorder.Body.String(), `"output_index":0`) {
+		t.Fatalf("text did not use output index 0: %s", recorder.Body.String())
+	}
+}
+
 type deepseekStreamingProvider struct {
 	*fake.Provider
-	closed bool
+	closed      bool
+	noReasoning bool
 }
 
 type cancelStreamingProvider struct {
@@ -147,6 +185,13 @@ func (s *cancelResponseStream) Close() error {
 }
 
 func (p *deepseekStreamingProvider) StreamChatCompletion(context.Context, compat.ChatCompletionRequest) (provider.ChatCompletionStream, error) {
+	if p.noReasoning {
+		finish := "stop"
+		return &deepseekReasoningStream{provider: p, chunks: []*compat.ChatCompletionChunk{
+			{Choices: []compat.ChatCompletionChunkChoice{{Index: 0, Delta: compat.ChatMessageDelta{Content: "plain answer"}}}},
+			{Choices: []compat.ChatCompletionChunkChoice{{Index: 0, FinishReason: &finish}}},
+		}}, nil
+	}
 	finish := "tool_calls"
 	chunks := []*compat.ChatCompletionChunk{
 		{Choices: []compat.ChatCompletionChunkChoice{{Index: 0, Delta: compat.ChatMessageDelta{Extra: map[string]json.RawMessage{

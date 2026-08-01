@@ -365,18 +365,12 @@ func buildReasoningSupport(cfg *config.Config) (*providerdialect.Registry, *reas
 	}
 	for modelName, model := range cfg.Models {
 		path := fmt.Sprintf("model %q", modelName)
-		if model.ReasoningReplay && !cfg.ReasoningEnvelope.Enabled {
-			return nil, nil, conversation.Limits{}, fmt.Errorf("%s: reasoning replay requires reasoning_envelope.enabled", path)
-		}
-		if err := preflightReasoningAttempt(registry, path, model.Dialect, model.ReasoningReplay); err != nil {
+		if err := preflightReasoningAttempt(registry, path, model.Dialect, model.ReasoningReplay, cfg.ReasoningEnvelope.Enabled); err != nil {
 			return nil, nil, conversation.Limits{}, err
 		}
 		for index, fallback := range model.Fallbacks {
 			fallbackPath := fmt.Sprintf("model %q fallback %d", modelName, index)
-			if fallback.ReasoningReplay && !cfg.ReasoningEnvelope.Enabled {
-				return nil, nil, conversation.Limits{}, fmt.Errorf("%s: reasoning replay requires reasoning_envelope.enabled", fallbackPath)
-			}
-			if err := preflightReasoningAttempt(registry, fallbackPath, fallback.Dialect, fallback.ReasoningReplay); err != nil {
+			if err := preflightReasoningAttempt(registry, fallbackPath, fallback.Dialect, fallback.ReasoningReplay, cfg.ReasoningEnvelope.Enabled); err != nil {
 				return nil, nil, conversation.Limits{}, err
 			}
 		}
@@ -412,7 +406,7 @@ func buildReasoningSupport(cfg *config.Config) (*providerdialect.Registry, *reas
 	return registry, codec, limits, nil
 }
 
-func preflightReasoningAttempt(registry *providerdialect.Registry, path, dialectName string, replay bool) error {
+func preflightReasoningAttempt(registry *providerdialect.Registry, path, dialectName string, replay, envelopeEnabled bool) error {
 	if dialectName == "" {
 		dialectName = "openai-compatible"
 	}
@@ -422,6 +416,9 @@ func preflightReasoningAttempt(registry *providerdialect.Registry, path, dialect
 	}
 	if replay && !dialect.Capabilities().ReasoningReplay {
 		return fmt.Errorf("%s: dialect %q does not support reasoning replay", path, dialectName)
+	}
+	if (replay || dialect.Capabilities().ProducesReasoning) && !envelopeEnabled {
+		return fmt.Errorf("%s: dialect %q requires reasoning_envelope.enabled", path, dialectName)
 	}
 	return nil
 }

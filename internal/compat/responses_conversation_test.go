@@ -71,6 +71,17 @@ func TestResponseRequestConversationRejectsInvalidReasoningItem(t *testing.T) {
 	}
 }
 
+func TestResponseRequestConversationRejectsUnknownTypedItem(t *testing.T) {
+	var request ResponseRequest
+	if err := json.Unmarshal([]byte(`{"model":"m","input":[{"type":"computer_call","role":"assistant","content":"hidden"}]}`), &request); err != nil {
+		t.Fatal(err)
+	}
+	_, compatErr := request.ConversationRequest(nil)
+	if compatErr == nil || compatErr.Status != 400 || compatErr.Param == nil || *compatErr.Param != "input" {
+		t.Fatalf("error=%#v", compatErr)
+	}
+}
+
 func TestResponseRequestConversationRejectsReasoningCallMismatch(t *testing.T) {
 	var request ResponseRequest
 	if err := json.Unmarshal([]byte(`{

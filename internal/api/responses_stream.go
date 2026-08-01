@@ -61,11 +61,6 @@ func (s *Server) handleDialectStreamingResponse(w http.ResponseWriter, r *http.R
 		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, compat.InvalidRequest(err.Error(), "input"))
 		return
 	}
-	if !s.modelAllowedForRequest(r, req.Model) {
-		middleware.SetLogRoute(r.Context(), req.Model, "", "")
-		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, compat.ModelNotFound(req.Model))
-		return
-	}
 	modelRoute, resolveErr := s.router.ResolveFor(req.Model, "chat")
 	if resolveErr != nil {
 		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, resolveErr)
@@ -118,12 +113,18 @@ func (s *Server) handleDialectStreamingResponse(w http.ResponseWriter, r *http.R
 	}
 
 	dialectName := responseDialectName(attempt.Dialect)
-	textOutputIndex := 0
-	if dialectName == "deepseek" {
-		textOutputIndex = 1
+	activeDialect, dialectErr := s.dialects.Get(dialectName)
+	if dialectErr != nil {
+		emit("error", map[string]any{"error": compat.ErrorResponseFor(responseDialectError(dialectErr)).Error})
+		return
 	}
+	bufferUntilFinish := activeDialect.Capabilities().BufferStreamUntilFinish
+	nextOutputIndex := 0
+	textOutputIndex := -1
 	textStarted := false
 	text := strings.Builder{}
+	textDeltas := make([]string, 0)
+	functionStates := make(map[int]*dialectResponseFunctionState)
 	for {
 		chunk, err := stream.Next(ctx)
 		if err != nil {
@@ -145,18 +146,48 @@ func (s *Server) handleDialectStreamingResponse(w http.ResponseWriter, r *http.R
 			return
 		}
 		for _, event := range events {
-			if event.TextDelta == "" {
-				continue
-			}
-			if !textStarted {
-				textStarted = true
-				if !emit("response.output_item.added", map[string]any{"output_index": textOutputIndex, "item": compat.ResponseOutputMessage{ID: messageID, Type: "message", Status: "in_progress", Role: "assistant"}}) || !emit("response.content_part.added", map[string]any{"item_id": messageID, "output_index": textOutputIndex, "content_index": 0, "part": compat.ResponseOutputText{Type: "output_text", Text: "", Annotations: []any{}}}) {
+			if event.TextDelta != "" {
+				text.WriteString(event.TextDelta)
+				textDeltas = append(textDeltas, event.TextDelta)
+				if bufferUntilFinish {
+					continue
+				}
+				if !textStarted {
+					textStarted = true
+					textOutputIndex = nextOutputIndex
+					nextOutputIndex++
+					if !emit("response.output_item.added", map[string]any{"output_index": textOutputIndex, "item": compat.ResponseOutputMessage{ID: messageID, Type: "message", Status: "in_progress", Role: "assistant"}}) || !emit("response.content_part.added", map[string]any{"item_id": messageID, "output_index": textOutputIndex, "content_index": 0, "part": compat.ResponseOutputText{Type: "output_text", Text: "", Annotations: []any{}}}) {
+						return
+					}
+				}
+				if !emit("response.output_text.delta", map[string]any{"item_id": messageID, "output_index": textOutputIndex, "content_index": 0, "delta": event.TextDelta}) {
 					return
 				}
 			}
-			text.WriteString(event.TextDelta)
-			if !emit("response.output_text.delta", map[string]any{"item_id": messageID, "output_index": textOutputIndex, "content_index": 0, "delta": event.TextDelta}) {
-				return
+			if event.FunctionCallDelta != nil && !bufferUntilFinish {
+				delta := event.FunctionCallDelta
+				state := functionStates[delta.Index]
+				if state == nil {
+					state = &dialectResponseFunctionState{ItemID: responseIdentifier("fc"), OutputIndex: -1}
+					functionStates[delta.Index] = state
+				}
+				if delta.CallID != "" {
+					state.CallID = delta.CallID
+				}
+				state.Name.WriteString(delta.Name)
+				state.Arguments.WriteString(delta.Arguments)
+				if !state.Started && state.CallID != "" && state.Name.Len() > 0 {
+					state.Started = true
+					state.OutputIndex = nextOutputIndex
+					nextOutputIndex++
+					pending := compat.ResponseOutputMessage{ID: state.ItemID, Type: "function_call", Status: "in_progress", CallID: state.CallID, Name: state.Name.String()}
+					if !emit("response.output_item.added", map[string]any{"output_index": state.OutputIndex, "item": pending}) {
+						return
+					}
+				}
+				if state.Started && delta.Arguments != "" && !emit("response.function_call_arguments.delta", map[string]any{"item_id": state.ItemID, "output_index": state.OutputIndex, "delta": delta.Arguments}) {
+					return
+				}
 			}
 		}
 	}
@@ -185,16 +216,32 @@ func (s *Server) handleDialectStreamingResponse(w http.ResponseWriter, r *http.R
 				return
 			}
 		case "message":
-			if !textStarted {
+			if bufferUntilFinish || !textStarted {
 				if !emit("response.output_item.added", map[string]any{"output_index": outputIndex, "item": compat.ResponseOutputMessage{ID: item.ID, Type: "message", Status: "in_progress", Role: "assistant"}}) || !emit("response.content_part.added", map[string]any{"item_id": item.ID, "output_index": outputIndex, "content_index": 0, "part": compat.ResponseOutputText{Type: "output_text", Text: "", Annotations: []any{}}}) {
 					return
 				}
 			}
 			visible := item.Content[0]
+			if bufferUntilFinish {
+				for _, delta := range textDeltas {
+					if !emit("response.output_text.delta", map[string]any{"item_id": item.ID, "output_index": outputIndex, "content_index": 0, "delta": delta}) {
+						return
+					}
+				}
+			}
 			if !emit("response.output_text.done", map[string]any{"item_id": item.ID, "output_index": outputIndex, "content_index": 0, "text": visible.Text}) || !emit("response.content_part.done", map[string]any{"item_id": item.ID, "output_index": outputIndex, "content_index": 0, "part": visible}) || !emit("response.output_item.done", map[string]any{"output_index": outputIndex, "item": item}) {
 				return
 			}
 		case "function_call":
+			state := responseFunctionStateByCallID(functionStates, item.CallID)
+			if state != nil && state.Started {
+				item.ID = state.ItemID
+				completed.Output[outputIndex] = item
+				if !emit("response.function_call_arguments.done", map[string]any{"item_id": item.ID, "output_index": state.OutputIndex, "arguments": item.Arguments}) || !emit("response.output_item.done", map[string]any{"output_index": state.OutputIndex, "item": item}) {
+					return
+				}
+				continue
+			}
 			pending := item
 			pending.Status, pending.Arguments = "in_progress", ""
 			if !emit("response.output_item.added", map[string]any{"output_index": outputIndex, "item": pending}) {
@@ -208,7 +255,7 @@ func (s *Server) handleDialectStreamingResponse(w http.ResponseWriter, r *http.R
 			}
 		}
 	}
-	if textStarted {
+	if textStarted && !bufferUntilFinish {
 		found := false
 		for index, item := range completed.Output {
 			if item.Type == "message" && index == textOutputIndex && item.Content[0].Text == text.String() {
@@ -239,6 +286,24 @@ func (s *Server) handleDialectStreamingResponse(w http.ResponseWriter, r *http.R
 	doneEvent := s.auditBaseEvent(r, audit.EventStreamDone, routes.ResponsesPath, req.Model)
 	doneEvent.Provider, doneEvent.UpstreamModel, doneEvent.Status = attempt.ProviderName, attempt.UpstreamModel, http.StatusOK
 	s.audit.Record(r.Context(), doneEvent)
+}
+
+type dialectResponseFunctionState struct {
+	ItemID      string
+	OutputIndex int
+	CallID      string
+	Name        strings.Builder
+	Arguments   strings.Builder
+	Started     bool
+}
+
+func responseFunctionStateByCallID(states map[int]*dialectResponseFunctionState, callID string) *dialectResponseFunctionState {
+	for _, state := range states {
+		if state.CallID == callID {
+			return state
+		}
+	}
+	return nil
 }
 
 func (s *Server) openResponseDialectStream(ctx context.Context, r *http.Request, externalModel string, request conversation.Request, attempts []router.ProviderRoute) (provider.ChatCompletionStream, providerdialect.StreamDecoder, router.ProviderRoute, error) {

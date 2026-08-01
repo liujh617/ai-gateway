@@ -623,6 +623,9 @@ func (c *Config) Validate() error {
 		if model.ReasoningReplay && !c.ReasoningEnvelope.Enabled {
 			return fmt.Errorf("model %q reasoning_replay requires reasoning_envelope.enabled", externalModel)
 		}
+		if model.Dialect == "deepseek" && !c.ReasoningEnvelope.Enabled {
+			return fmt.Errorf("model %q dialect %q requires reasoning_envelope.enabled", externalModel, model.Dialect)
+		}
 		for _, capability := range model.Capabilities {
 			switch capability {
 			case "chat", "completions", "embeddings", "images", "moderations", "transcriptions", "translations", "speech", "batches", "files", "fine_tuning", "realtime":
@@ -648,6 +651,9 @@ func (c *Config) Validate() error {
 			}
 			if fallback.ReasoningReplay && !c.ReasoningEnvelope.Enabled {
 				return fmt.Errorf("model %q fallback %d reasoning_replay requires reasoning_envelope.enabled", externalModel, index)
+			}
+			if fallback.Dialect == "deepseek" && !c.ReasoningEnvelope.Enabled {
+				return fmt.Errorf("model %q fallback %d dialect %q requires reasoning_envelope.enabled", externalModel, index, fallback.Dialect)
 			}
 			if err := validatePricing(fallback.Pricing); err != nil {
 				return fmt.Errorf("model %q fallback %d pricing %w", externalModel, index, err)

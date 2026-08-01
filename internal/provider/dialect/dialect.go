@@ -1,12 +1,22 @@
 package dialect
 
 import (
+	"errors"
+
 	"open-ai-gateway/internal/compat"
 	"open-ai-gateway/internal/conversation"
 )
 
+var (
+	ErrReasoningRequired           = errors.New("reasoning item is required for this tool call")
+	ErrReasoningRouteMismatch      = errors.New("reasoning item route does not match provider route")
+	ErrIncompleteReasoningToolCall = errors.New("provider returned an incomplete reasoning tool call")
+)
+
 type Capabilities struct {
-	ReasoningReplay bool
+	ReasoningReplay         bool
+	ProducesReasoning       bool
+	BufferStreamUntilFinish bool
 }
 
 type Request struct {
@@ -21,8 +31,16 @@ type Response struct {
 }
 
 type StreamEvent struct {
-	TextDelta string
-	Usage     *compat.Usage
+	TextDelta         string
+	FunctionCallDelta *FunctionCallDelta
+	Usage             *compat.Usage
+}
+
+type FunctionCallDelta struct {
+	Index     int
+	CallID    string
+	Name      string
+	Arguments string
 }
 
 type StreamDecoder interface {

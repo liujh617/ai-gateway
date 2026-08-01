@@ -56,6 +56,15 @@ func TestBuildReasoningSupportRejectsReplayWithoutEnvelope(t *testing.T) {
 	}
 }
 
+func TestBuildReasoningSupportRejectsReasoningProducerWithoutEnvelope(t *testing.T) {
+	cfg := config.Default()
+	cfg.Models = map[string]config.ModelConfig{"broken": {Dialect: "deepseek"}}
+	_, _, _, err := buildReasoningSupport(cfg)
+	if err == nil || !strings.Contains(err.Error(), `model "broken"`) || !strings.Contains(err.Error(), "reasoning_envelope.enabled") {
+		t.Fatalf("error=%v", err)
+	}
+}
+
 func TestBuildReasoningSupportAcceptsPreviousKeyAfterRotation(t *testing.T) {
 	t.Setenv("TEST_OLD_REASONING_KEY", base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)))
 	t.Setenv("TEST_NEW_REASONING_KEY", base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32)))

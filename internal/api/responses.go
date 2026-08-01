@@ -34,11 +34,31 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 	}
 	middleware.SetLogStream(r.Context(), req.Stream)
 	middleware.SetLogPreviousResponse(r.Context(), req.PreviousResponseID != "")
+	if !s.modelAllowedForRequest(r, req.Model) {
+		middleware.SetLogRoute(r.Context(), req.Model, "", "")
+		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, compat.ModelNotFound(req.Model))
+		return
+	}
+	if limitErr := validateResponseRawItemLimit(req, s.conversationLimits.MaxItems); limitErr != nil {
+		s.writeAuditedError(w, r, routes.ResponsesPath, req.Model, limitErr)
+		return
+	}
 	if req.Stream {
 		s.handleDialectStreamingResponse(w, r, req)
 		return
 	}
 	s.handleNonStreamingResponse(w, r, req)
+}
+
+func validateResponseRawItemLimit(req compat.ResponseRequest, maxItems int) *compat.Error {
+	if maxItems <= 0 {
+		return compat.InvalidRequest("conversation limits are invalid", "input")
+	}
+	var items []json.RawMessage
+	if json.Unmarshal(req.Input, &items) == nil && len(items) > maxItems {
+		return compat.InvalidRequest("too many conversation items", "input")
+	}
+	return nil
 }
 
 func (s *Server) handleResponse(w http.ResponseWriter, r *http.Request) {

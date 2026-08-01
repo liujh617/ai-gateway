@@ -108,6 +108,9 @@ func (r ResponseRequest) ConversationRequest(open OpenReasoning) (conversation.R
 			}
 			request.Tools = append(request.Tools, additional...)
 		default:
+			if header.Type != "" && header.Type != "message" {
+				return conversation.Request{}, InvalidRequest(fmt.Sprintf("unsupported input item type at index %d", index), "input")
+			}
 			var item responseInputMessage
 			if json.Unmarshal(raw, &item) != nil {
 				return conversation.Request{}, InvalidRequest(fmt.Sprintf("invalid input item at index %d", index), "input")
@@ -141,7 +144,13 @@ func validReasoningCallSequence(items []conversation.Item) bool {
 		if !ok || len(reasoning.CallIDs) == 0 {
 			continue
 		}
-		if len(items)-index-1 < len(reasoning.CallIDs) {
+		callStart := index + 1
+		if callStart < len(items) {
+			if message, ok := items[callStart].(conversation.Message); ok && message.Role == "assistant" && message.Text == reasoning.AssistantContent && message.Text != "" {
+				callStart++
+			}
+		}
+		if len(items)-callStart < len(reasoning.CallIDs) {
 			return false
 		}
 		declared := make(map[string]struct{}, len(reasoning.CallIDs))
@@ -151,8 +160,8 @@ func validReasoningCallSequence(items []conversation.Item) bool {
 			}
 			declared[callID] = struct{}{}
 		}
-		for offset := 1; offset <= len(reasoning.CallIDs); offset++ {
-			call, ok := items[index+offset].(conversation.FunctionCall)
+		for offset := 0; offset < len(reasoning.CallIDs); offset++ {
+			call, ok := items[callStart+offset].(conversation.FunctionCall)
 			if !ok || call.ReasoningEnvelopeID != reasoning.EnvelopeID {
 				return false
 			}

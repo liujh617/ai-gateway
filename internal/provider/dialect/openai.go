@@ -175,9 +175,11 @@ func (d *openAIStreamDecoder) Push(chunk compat.ChatCompletionChunk) ([]StreamEv
 			events = append(events, StreamEvent{TextDelta: choice.Delta.Content})
 		}
 		if raw := choice.Delta.Extra["tool_calls"]; len(raw) > 0 {
-			if err := d.pushToolDeltas(raw); err != nil {
+			toolEvents, err := d.pushToolDeltas(raw)
+			if err != nil {
 				return nil, err
 			}
+			events = append(events, toolEvents...)
 		}
 		if choice.FinishReason != nil {
 			d.seenFinish = true
@@ -190,7 +192,7 @@ func (d *openAIStreamDecoder) Push(chunk compat.ChatCompletionChunk) ([]StreamEv
 	return events, nil
 }
 
-func (d *openAIStreamDecoder) pushToolDeltas(raw json.RawMessage) error {
+func (d *openAIStreamDecoder) pushToolDeltas(raw json.RawMessage) ([]StreamEvent, error) {
 	var deltas []struct {
 		Index    int    `json:"index"`
 		ID       string `json:"id"`
@@ -201,11 +203,12 @@ func (d *openAIStreamDecoder) pushToolDeltas(raw json.RawMessage) error {
 		} `json:"function"`
 	}
 	if json.Unmarshal(raw, &deltas) != nil || len(deltas) == 0 {
-		return fmt.Errorf("provider returned malformed tool call delta")
+		return nil, fmt.Errorf("provider returned malformed tool call delta")
 	}
+	events := make([]StreamEvent, 0, len(deltas))
 	for _, delta := range deltas {
 		if delta.Index < 0 {
-			return fmt.Errorf("provider returned malformed tool call delta")
+			return nil, fmt.Errorf("provider returned malformed tool call delta")
 		}
 		state := d.tools[delta.Index]
 		if state == nil {
@@ -214,20 +217,21 @@ func (d *openAIStreamDecoder) pushToolDeltas(raw json.RawMessage) error {
 		}
 		if delta.ID != "" {
 			if state.id != "" && state.id != delta.ID {
-				return fmt.Errorf("provider changed tool call ID")
+				return nil, fmt.Errorf("provider changed tool call ID")
 			}
 			state.id = delta.ID
 		}
 		if delta.Type != "" {
 			if state.typeName != "" && state.typeName != delta.Type {
-				return fmt.Errorf("provider changed tool call type")
+				return nil, fmt.Errorf("provider changed tool call type")
 			}
 			state.typeName = delta.Type
 		}
 		state.name.WriteString(delta.Function.Name)
 		state.arguments.WriteString(delta.Function.Arguments)
+		events = append(events, StreamEvent{FunctionCallDelta: &FunctionCallDelta{Index: delta.Index, CallID: delta.ID, Name: delta.Function.Name, Arguments: delta.Function.Arguments}})
 	}
-	return nil
+	return events, nil
 }
 
 func (d *openAIStreamDecoder) Finish() (Response, error) {

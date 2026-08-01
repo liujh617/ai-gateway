@@ -105,12 +105,18 @@ func validateReasoning(items []Item, index int, item Reasoning, limits Limits, e
 		}
 		declared[callID] = struct{}{}
 	}
-	if len(items)-index-1 < len(declared) {
+	callStart := index + 1
+	if callStart < len(items) {
+		if message, ok := items[callStart].(Message); ok && message.Role == "assistant" && message.Text == item.AssistantContent && message.Text != "" {
+			callStart++
+		}
+	}
+	if len(items)-callStart < len(declared) {
 		return fmt.Errorf("reasoning item does not match function calls")
 	}
 	matched := make(map[string]struct{}, len(declared))
-	for offset := 1; offset <= len(declared); offset++ {
-		call, ok := items[index+offset].(FunctionCall)
+	for offset := 0; offset < len(declared); offset++ {
+		call, ok := items[callStart+offset].(FunctionCall)
 		if !ok || call.ReasoningEnvelopeID != item.EnvelopeID {
 			return fmt.Errorf("reasoning item does not match function calls")
 		}

@@ -89,12 +89,12 @@ func TestResponsesDeepSeekStatelessReasoningToolRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(first.Body.Bytes(), &firstResponse); err != nil {
 		t.Fatal(err)
 	}
-	if len(firstResponse.Output) != 2 || firstResponse.Output[0].Type != "reasoning" || firstResponse.Output[0].EncryptedContent == "" || firstResponse.Output[1].Type != "function_call" {
+	if len(firstResponse.Output) != 3 || firstResponse.Output[0].Type != "reasoning" || firstResponse.Output[0].EncryptedContent == "" || firstResponse.Output[1].Type != "message" || firstResponse.Output[2].Type != "function_call" {
 		t.Fatalf("first response=%#v", firstResponse)
 	}
 	input := []any{
 		map[string]any{"type": "message", "role": "user", "content": "weather"},
-		firstResponse.Output[0], firstResponse.Output[1],
+		firstResponse.Output[0], firstResponse.Output[1], firstResponse.Output[2],
 		map[string]any{"type": "function_call_output", "call_id": "call_1", "output": "sunny"},
 	}
 	secondBody, _ := json.Marshal(map[string]any{"model": "codex-model", "store": false, "input": input})
@@ -106,7 +106,7 @@ func TestResponsesDeepSeekStatelessReasoningToolRoundTrip(t *testing.T) {
 		t.Fatalf("requests=%#v", provider.requests)
 	}
 	assistant := provider.requests[1].Messages[1]
-	if assistant.Role != "assistant" || string(assistant.Content) != `""` || string(assistant.Extra["reasoning_content"]) != `"private reasoning"` || !strings.Contains(string(assistant.Extra["tool_calls"]), `"id":"call_1"`) || provider.requests[1].Messages[2].Role != "tool" {
+	if assistant.Role != "assistant" || string(assistant.Content) != `"checking"` || string(assistant.Extra["reasoning_content"]) != `"private reasoning"` || !strings.Contains(string(assistant.Extra["tool_calls"]), `"id":"call_1"`) || provider.requests[1].Messages[2].Role != "tool" {
 		t.Fatalf("continuation=%#v", provider.requests[1].Messages)
 	}
 }
@@ -192,7 +192,7 @@ func (p *deepseekRoundTripProvider) CreateChatCompletion(_ context.Context, requ
 	p.requests = append(p.requests, request)
 	if len(p.requests) == 1 {
 		return &compat.ChatCompletionResponse{Choices: []compat.ChatCompletionChoice{{Index: 0, Message: compat.ChatMessage{
-			Role: "assistant", Content: json.RawMessage(`""`), Extra: map[string]json.RawMessage{
+			Role: "assistant", Content: json.RawMessage(`"checking"`), Extra: map[string]json.RawMessage{
 				"reasoning_content": json.RawMessage(`"private reasoning"`),
 				"tool_calls":        json.RawMessage(`[{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{}"}}]`),
 			},
@@ -1010,6 +1010,9 @@ func TestResponsesStreamFunctionCall(t *testing.T) {
 	}
 	if !strings.Contains(text, `"arguments":"{\"location\":\"Paris\"}"`) || !strings.Contains(text, `"call_id":"call_1"`) {
 		t.Fatalf("stream=%s", text)
+	}
+	if strings.Count(text, "event: response.function_call_arguments.delta\n") != 2 || strings.Index(text, "event: response.function_call_arguments.delta\n") > strings.Index(text, "event: response.function_call_arguments.done\n") {
+		t.Fatalf("function arguments were not emitted incrementally: %s", text)
 	}
 	if !p.closed {
 		t.Fatal("stream not closed")

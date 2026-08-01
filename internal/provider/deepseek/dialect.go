@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	ErrReasoningRequired           = errors.New("reasoning item is required for this tool call")
-	ErrReasoningRouteMismatch      = errors.New("reasoning item route does not match provider route")
-	ErrIncompleteReasoningToolCall = errors.New("provider returned an incomplete reasoning tool call")
+	ErrReasoningRequired           = providerdialect.ErrReasoningRequired
+	ErrReasoningRouteMismatch      = providerdialect.ErrReasoningRouteMismatch
+	ErrIncompleteReasoningToolCall = providerdialect.ErrIncompleteReasoningToolCall
 )
 
 type IDGenerator func() (string, error)
@@ -39,7 +39,7 @@ func NewDialectWithIDGenerator(generator IDGenerator) providerdialect.Dialect {
 func (d *deepseekDialect) Name() string { return "deepseek" }
 
 func (d *deepseekDialect) Capabilities() providerdialect.Capabilities {
-	return providerdialect.Capabilities{ReasoningReplay: true}
+	return providerdialect.Capabilities{ReasoningReplay: true, ProducesReasoning: true, BufferStreamUntilFinish: true}
 }
 
 func (d *deepseekDialect) BuildChatRequest(input providerdialect.Request) (compat.ChatCompletionRequest, error) {
@@ -81,9 +81,15 @@ func (d *deepseekDialect) BuildChatRequest(input providerdialect.Request) (compa
 			if len(item.CallIDs) > 0 && item.Route != input.Route {
 				return compat.ChatCompletionRequest{}, ErrReasoningRouteMismatch
 			}
+			callStart := index + 1
+			if callStart < len(items) {
+				if message, ok := items[callStart].(conversation.Message); ok && message.Role == "assistant" && message.Text == item.AssistantContent && message.Text != "" {
+					callStart++
+				}
+			}
 			calls := make([]chatToolCall, 0, len(item.CallIDs))
 			for offset, callID := range item.CallIDs {
-				position := index + 1 + offset
+				position := callStart + offset
 				if position >= len(items) {
 					return compat.ChatCompletionRequest{}, errors.New("reasoning item does not match function calls")
 				}
@@ -100,7 +106,7 @@ func (d *deepseekDialect) BuildChatRequest(input providerdialect.Request) (compa
 				extra["tool_calls"], _ = json.Marshal(calls)
 			}
 			request.Messages = append(request.Messages, compat.ChatMessage{Role: "assistant", Content: content, Extra: extra})
-			index += len(calls)
+			index = callStart + len(calls) - 1
 		case conversation.FunctionCall:
 			return compat.ChatCompletionRequest{}, ErrReasoningRequired
 		case conversation.FunctionOutput:
