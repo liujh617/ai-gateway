@@ -2,6 +2,7 @@ package compat
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -112,6 +113,18 @@ func TestResponseRequestBufferedOutputBeforeCall(t *testing.T) {
 	}
 	if len(chat.Messages) != 2 || chat.Messages[0].Role != "assistant" || chat.Messages[1].Role != "tool" {
 		t.Fatalf("messages=%#v", chat.Messages)
+	}
+}
+
+func TestResponseRequestRejectsFunctionOutputWithoutCallOrHistory(t *testing.T) {
+	body := `{"model":"m","input":[{"type":"function_call_output","call_id":"call_missing","output":"result"}]}`
+	var req ResponseRequest
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
+		t.Fatal(err)
+	}
+	_, compatErr := req.ChatRequest()
+	if compatErr == nil || compatErr.Status != http.StatusBadRequest || compatErr.Param == nil || *compatErr.Param != "input" {
+		t.Fatalf("error=%#v", compatErr)
 	}
 }
 

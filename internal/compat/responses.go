@@ -191,6 +191,7 @@ func (r ResponseRequest) ChatRequest() (ChatCompletionRequest, *Error) {
 	allTools := []responseFunctionTool{}
 	seenCallIDs := map[string]bool{}
 	bufferedOutputs := map[string]responseFunctionCallOutputInput{}
+	bufferedOutputOrder := []string{}
 	for i, raw := range items {
 		var header struct {
 			Type string `json:"type"`
@@ -243,6 +244,9 @@ func (r ResponseRequest) ChatRequest() (ChatCompletionRequest, *Error) {
 			if seenCallIDs[callID] {
 				messages = append(messages, toolMsg)
 			} else {
+				if _, exists := bufferedOutputs[callID]; !exists {
+					bufferedOutputOrder = append(bufferedOutputOrder, callID)
+				}
 				bufferedOutputs[callID] = item
 			}
 			continue
@@ -267,6 +271,20 @@ func (r ResponseRequest) ChatRequest() (ChatCompletionRequest, *Error) {
 		}
 		content, _ := json.Marshal(text)
 		messages = append(messages, ChatMessage{Role: role, Content: content})
+	}
+	if len(bufferedOutputs) > 0 {
+		if r.PreviousResponseID == "" && r.ConversationID() == "" {
+			return ChatCompletionRequest{}, InvalidRequest("function_call_output references an unknown call", "input")
+		}
+		for _, callID := range bufferedOutputOrder {
+			out, ok := bufferedOutputs[callID]
+			if !ok {
+				continue
+			}
+			callIDJSON, _ := json.Marshal(callID)
+			outputJSON, _ := json.Marshal(*out.Output)
+			messages = append(messages, ChatMessage{Role: "tool", Content: outputJSON, Extra: map[string]json.RawMessage{"tool_call_id": callIDJSON}})
+		}
 	}
 	// Merge tools from additional_tools input items.
 	if len(allTools) > 0 {

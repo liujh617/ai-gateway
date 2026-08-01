@@ -259,15 +259,11 @@ func TransportError(err error) error {
 
 func UpstreamError(resp *http.Response) error {
 	var upstream compat.ErrorResponse
-	bodyBytes, _ := io.ReadAll(resp.Body)
 	if ResponseContentTypeIs(resp, "application/json") {
 		var decoded compat.ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &decoded); err == nil {
+		if err := DecodeLimited(resp.Body, &decoded); err == nil {
 			upstream = decoded
 		}
-	}
-	if upstream.Error.Message == "" {
-		upstream.Error.Message = fmt.Sprintf("%s (body=%s)", http.StatusText(resp.StatusCode), strings.TrimSpace(string(bodyBytes)))
 	}
 
 	message := http.StatusText(resp.StatusCode)
