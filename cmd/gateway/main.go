@@ -135,6 +135,8 @@ func main() {
 		"log_level", cfg.Log.Level,
 		"audit_enabled", cfg.Audit.Enabled,
 		"audit_path", cfg.Audit.Path,
+		"audit_encryption_enabled", cfg.Audit.Encryption.Enabled,
+		"audit_encryption_algorithm", cfg.Audit.Encryption.Algorithm,
 		"rate_limit_requests_per_minute", cfg.RateLimit.RequestsPerMinute,
 		"client_rate_limit_overrides", len(gatewayClientRateLimits(cfg)),
 		"client_model_overrides", len(gatewayClientModels(cfg)),
@@ -238,9 +240,41 @@ func buildAuditRecorder(cfg *config.Config) (audit.Recorder, error) {
 	if !cfg.Audit.Enabled {
 		return audit.NoopRecorder{}, nil
 	}
+
+	// Build encryptor if encryption is enabled
+	var encryptor audit.Encryptor
+	if cfg.Audit.Encryption.Enabled {
+		key, err := loadEncryptionKey(cfg.Audit.Encryption.KeyEnv)
+		if err != nil {
+			return nil, fmt.Errorf("load audit encryption key: %w", err)
+		}
+		encryptor, err = audit.NewAES256GCMEncryptor(key)
+		if err != nil {
+			return nil, fmt.Errorf("create audit encryptor: %w", err)
+		}
+	}
+
 	return audit.NewJSONLRecorderWithOptions(cfg.Audit.Path, audit.JSONLRecorderOptions{
 		MaxFileBytes: cfg.Audit.MaxFileBytes,
-	})
+	}, encryptor)
+}
+
+func loadEncryptionKey(keyEnv string) ([]byte, error) {
+	if keyEnv == "" {
+		return nil, fmt.Errorf("encryption key environment variable name is empty")
+	}
+	keyB64 := os.Getenv(keyEnv)
+	if keyB64 == "" {
+		return nil, fmt.Errorf("environment variable %q is not set", keyEnv)
+	}
+	key, err := base64.StdEncoding.DecodeString(keyB64)
+	if err != nil {
+		return nil, fmt.Errorf("decode base64 key: %w", err)
+	}
+	if len(key) != 32 {
+		return nil, fmt.Errorf("key must be 32 bytes, got %d", len(key))
+	}
+	return key, nil
 }
 
 func newLogger(cfg config.LogConfig) *slog.Logger {
