@@ -38,6 +38,7 @@ type Event struct {
 	Status             int             `json:"status,omitempty"`
 	DurationMS         int64           `json:"duration_ms,omitempty"`
 	Body               json.RawMessage `json:"body,omitempty"`
+	BodyEncrypted      bool            `json:"body_encrypted,omitempty"` // 标记Body是否加密
 	Error              string          `json:"error,omitempty"`
 }
 
@@ -62,6 +63,7 @@ type JSONLRecorder struct {
 	maxFileBytes int64
 	logger       *slog.Logger
 	now          func() time.Time
+	encryptor    Encryptor // 加密器（可选）
 }
 
 type JSONLRecorderOptions struct {
@@ -69,10 +71,10 @@ type JSONLRecorderOptions struct {
 }
 
 func NewJSONLRecorder(path string) (*JSONLRecorder, error) {
-	return NewJSONLRecorderWithOptions(path, JSONLRecorderOptions{})
+	return NewJSONLRecorderWithOptions(path, JSONLRecorderOptions{}, nil)
 }
 
-func NewJSONLRecorderWithOptions(path string, options JSONLRecorderOptions) (*JSONLRecorder, error) {
+func NewJSONLRecorderWithOptions(path string, options JSONLRecorderOptions, encryptor Encryptor) (*JSONLRecorder, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
@@ -92,6 +94,7 @@ func NewJSONLRecorderWithOptions(path string, options JSONLRecorderOptions) (*JS
 		maxFileBytes: options.MaxFileBytes,
 		logger:       slog.Default(),
 		now:          time.Now,
+		encryptor:    encryptor,
 	}, nil
 }
 
@@ -102,6 +105,21 @@ func (r *JSONLRecorder) Record(ctx context.Context, event Event) {
 	if event.Timestamp.IsZero() {
 		event.Timestamp = r.now().UTC()
 	}
+
+	// 加密Body字段（如果启用加密且Body非空）
+	if r.encryptor != nil && len(event.Body) > 0 {
+		encryptedBody, err := r.encryptor.Encrypt(event.Body)
+		if err != nil {
+			r.logger.Debug("failed to encrypt audit body", "error", err)
+			// 加密失败，继续记录但标记未加密（降级处理）
+			event.BodyEncrypted = false
+		} else {
+			// 用加密后的字符串替换Body
+			event.Body = json.RawMessage(encryptedBody)
+			event.BodyEncrypted = true
+		}
+	}
+
 	payload, err := json.Marshal(event)
 	if err != nil {
 		r.logger.Debug("failed to marshal audit event", "error", err)
