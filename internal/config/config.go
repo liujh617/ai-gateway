@@ -39,8 +39,9 @@ type Config struct {
 	Providers                map[string]ProviderConfig `json:"providers"`
 	Models                   map[string]ModelConfig    `json:"models"`
 
-	auditEnabledEnvInvalid      bool
-	auditMaxFileBytesEnvInvalid bool
+	auditEnabledEnvInvalid         bool
+	auditMaxFileBytesEnvInvalid    bool
+	auditEncryptionKeyEnvInvalid   bool
 }
 
 type ProviderConfig struct {
@@ -151,9 +152,16 @@ type LogConfig struct {
 }
 
 type AuditConfig struct {
-	Enabled      bool   `json:"enabled"`
-	Path         string `json:"path"`
-	MaxFileBytes int64  `json:"max_file_bytes"`
+	Enabled      bool                     `json:"enabled"`
+	Path         string                   `json:"path"`
+	MaxFileBytes int64                    `json:"max_file_bytes"`
+	Encryption   AuditEncryptionConfig    `json:"encryption"`
+}
+
+type AuditEncryptionConfig struct {
+	Enabled   bool   `json:"enabled"`
+	Algorithm string `json:"algorithm"` // "aes-256-gcm"
+	KeyEnv    string `json:"key_env"`   // 环境变量名，如 "AUDIT_ENCRYPTION_KEY"
 }
 
 type RealtimeConfig struct {
@@ -181,6 +189,8 @@ type CheckReport struct {
 	AuditEnabled                   bool                     `json:"audit_enabled"`
 	AuditPath                      string                   `json:"audit_path"`
 	AuditMaxFileBytes              int64                    `json:"audit_max_file_bytes"`
+	AuditEncryptionEnabled         bool                     `json:"audit_encryption_enabled"`
+	AuditEncryptionAlgorithm       string                   `json:"audit_encryption_algorithm"`
 	RateLimitRequestsPerMinute     int                      `json:"rate_limit_requests_per_minute"`
 	ProviderHealthFailureThreshold int                      `json:"provider_health_failure_threshold"`
 	ProviderHealthCooldownSeconds  int                      `json:"provider_health_cooldown_seconds"`
@@ -252,6 +262,9 @@ type ModelFallbackSummary struct {
 
 func Load(path string) (*Config, error) {
 	if path == "" {
+		path = findConfig()
+	}
+	if path == "" {
 		cfg := Default()
 		if err := cfg.Validate(); err != nil {
 			return nil, err
@@ -285,6 +298,19 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
+// findConfig looks for config.json in the current working directory.
+// It returns the path if found, or empty string otherwise.
+func findConfig() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	path := cwd + string(os.PathSeparator) + "config.json"
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	return path
+}
 func Check(path string) (*Config, CheckReport, error) {
 	cfg, err := Load(path)
 	if err != nil {
@@ -313,6 +339,8 @@ func (c *Config) CheckReport() CheckReport {
 		AuditEnabled:                   c.Audit.Enabled,
 		AuditPath:                      c.Audit.Path,
 		AuditMaxFileBytes:              c.Audit.MaxFileBytes,
+		AuditEncryptionEnabled:         c.Audit.Encryption.Enabled,
+		AuditEncryptionAlgorithm:       c.Audit.Encryption.Algorithm,
 		RateLimitRequestsPerMinute:     c.RateLimit.RequestsPerMinute,
 		ProviderHealthFailureThreshold: c.ProviderHealth.FailureThreshold,
 		ProviderHealthCooldownSeconds:  c.ProviderHealth.CooldownSeconds,
@@ -437,6 +465,11 @@ func Default() *Config {
 		},
 		Audit: AuditConfig{
 			Path: "audit/agent-trace.jsonl",
+			Encryption: AuditEncryptionConfig{
+				Enabled:   false,
+				Algorithm: "aes-256-gcm",
+				KeyEnv:    "AUDIT_ENCRYPTION_KEY",
+			},
 		},
 		Providers: map[string]ProviderConfig{
 			"fake": {
@@ -545,6 +578,20 @@ func (c *Config) Validate() error {
 	}
 	if c.Audit.MaxFileBytes < 0 {
 		return fmt.Errorf("audit.max_file_bytes must be non-negative")
+	}
+	// 验证审计加密配置
+	if c.auditEncryptionKeyEnvInvalid {
+		return fmt.Errorf("GATEWAY_AUDIT_ENCRYPTION_ENABLED must be true or false, or GATEWAY_AUDIT_ENCRYPTION_KEY must be 32 bytes")
+	}
+	if c.Audit.Encryption.Enabled {
+		// 验证算法
+		if c.Audit.Encryption.Algorithm != "aes-256-gcm" {
+			return fmt.Errorf("audit.encryption.algorithm must be 'aes-256-gcm'")
+		}
+		// 验证密钥环境变量名
+		if c.Audit.Encryption.KeyEnv == "" {
+			return fmt.Errorf("audit.encryption.key_env must be non-empty when encryption is enabled")
+		}
 	}
 	switch c.Log.Format {
 	case "text", "json":
@@ -820,6 +867,27 @@ func (c *Config) applyDefaults() {
 		} else {
 			c.Audit.MaxFileBytes = maxFileBytes
 		}
+	}
+	// 审计加密配置
+	if env := os.Getenv("GATEWAY_AUDIT_ENCRYPTION_ENABLED"); env != "" {
+		enabled, ok := parseBoolEnv(env)
+		if !ok {
+			c.auditEncryptionKeyEnvInvalid = true
+		} else {
+			c.Audit.Encryption.Enabled = enabled
+		}
+	}
+	if env := os.Getenv("GATEWAY_AUDIT_ENCRYPTION_KEY"); env != "" {
+		// 密钥长度验证：AES-256需要32字节
+		if len(env) != 32 {
+			c.auditEncryptionKeyEnvInvalid = true
+		} else {
+			c.Audit.Encryption.KeyEnv = "GATEWAY_AUDIT_ENCRYPTION_KEY"
+		}
+	}
+	// 设置默认加密算法
+	if c.Audit.Encryption.Algorithm == "" {
+		c.Audit.Encryption.Algorithm = "aes-256-gcm"
 	}
 	if c.ProviderHealth.FailureThreshold == 0 {
 		c.ProviderHealth.FailureThreshold = 2
