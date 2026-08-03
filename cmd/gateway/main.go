@@ -137,6 +137,8 @@ func main() {
 		"audit_path", cfg.Audit.Path,
 		"audit_encryption_enabled", cfg.Audit.Encryption.Enabled,
 		"audit_encryption_algorithm", cfg.Audit.Encryption.Algorithm,
+		"pii_detection_enabled", cfg.PIIDetection.Enabled,
+		"pii_detection_action", cfg.PIIDetection.Action,
 		"rate_limit_requests_per_minute", cfg.RateLimit.RequestsPerMinute,
 		"client_rate_limit_overrides", len(gatewayClientRateLimits(cfg)),
 		"client_model_overrides", len(gatewayClientModels(cfg)),
@@ -254,9 +256,27 @@ func buildAuditRecorder(cfg *config.Config) (audit.Recorder, error) {
 		}
 	}
 
-	return audit.NewJSONLRecorderWithOptions(cfg.Audit.Path, audit.JSONLRecorderOptions{
+	// Build PII detector if PII detection is enabled
+	var detector audit.Detector
+	if cfg.PIIDetection.Enabled {
+		detector = audit.NewRegexDetector()
+	}
+
+	// Build base recorder
+	recorder, err := audit.NewJSONLRecorderWithOptions(cfg.Audit.Path, audit.JSONLRecorderOptions{
 		MaxFileBytes: cfg.Audit.MaxFileBytes,
 	}, encryptor)
+	if err != nil {
+		return nil, err
+	}
+
+	// Wrap recorder with PII detection if enabled
+	if detector != nil {
+		action := audit.PIIDetectionAction(cfg.PIIDetection.Action)
+		return audit.NewPIIAuditorRecorder(recorder, audit.NewPIIAuditor(detector, action, nil)), nil
+	}
+
+	return recorder, nil
 }
 
 func loadEncryptionKey(keyEnv string) ([]byte, error) {
