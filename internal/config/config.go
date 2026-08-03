@@ -31,6 +31,7 @@ type Config struct {
 	MaxRequestBodyBytes      int64                     `json:"max_request_body_bytes"`
 	Log                      LogConfig                 `json:"log"`
 	Audit                    AuditConfig               `json:"audit"`
+	PIIDetection             PIIDetectionConfig        `json:"pii_detection"`
 	Realtime                 RealtimeConfig            `json:"realtime"`
 	RateLimit                RateLimitConfig           `json:"rate_limit"`
 	ProviderHealth           ProviderHealthConfig      `json:"provider_health"`
@@ -470,6 +471,15 @@ func Default() *Config {
 				Algorithm: "aes-256-gcm",
 				KeyEnv:    "AUDIT_ENCRYPTION_KEY",
 			},
+		},
+		PIIDetection: PIIDetectionConfig{
+			Enabled:              false,
+			Action:               string(PIIActionAlert),
+			LogPII:               false,
+			RedactPII:            true,
+			DetectPhoneNumber:    true,
+			DetectIDCard:         true,
+			DetectBankCardNumber: true,
 		},
 		Providers: map[string]ProviderConfig{
 			"fake": {
