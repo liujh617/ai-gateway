@@ -139,6 +139,10 @@ func main() {
 		"audit_encryption_algorithm", cfg.Audit.Encryption.Algorithm,
 		"pii_detection_enabled", cfg.PIIDetection.Enabled,
 		"pii_detection_action", cfg.PIIDetection.Action,
+		"content_safety_enabled", cfg.ContentSafety.Enabled,
+		"content_safety_action", cfg.ContentSafety.Action,
+		"content_safety_threshold", cfg.ContentSafety.Threshold,
+		"content_safety_categories", cfg.ContentSafety.GetCategoriesString(),
 		"rate_limit_requests_per_minute", cfg.RateLimit.RequestsPerMinute,
 		"client_rate_limit_overrides", len(gatewayClientRateLimits(cfg)),
 		"client_model_overrides", len(gatewayClientModels(cfg)),
@@ -262,6 +266,44 @@ func buildAuditRecorder(cfg *config.Config) (audit.Recorder, error) {
 		detector = audit.NewRegexDetector()
 	}
 
+	// Build content safety detector if content safety is enabled
+	var contentSafetyDetector *audit.KeywordDetector
+	if cfg.ContentSafety.Enabled {
+		// Create keyword detector
+		threshold := audit.Threshold(cfg.ContentSafety.Threshold)
+		categories := make([]audit.ContentSafetyCategory, len(cfg.ContentSafety.Categories))
+		for i, cat := range cfg.ContentSafety.Categories {
+			categories[i] = audit.ContentSafetyCategory(cat)
+		}
+		contentSafetyDetector = audit.NewKeywordDetector(threshold, categories)
+
+		// Load built-in keywords
+		loader := audit.NewKeywordLoader("internal/audit/keywords")
+		builtins, err := loader.LoadBuiltinKeywords()
+		if err != nil {
+			// Log warning but continue
+			slog.Default().Warn("failed to load built-in keywords", "error", err)
+		}
+		for category, keywords := range builtins {
+			if err := contentSafetyDetector.LoadKeywords(category, keywords); err != nil {
+				slog.Default().Warn("failed to load keywords", "category", category, "error", err)
+			}
+		}
+
+		// Load custom keywords if configured
+		if cfg.ContentSafety.CustomKeywords.Enabled && len(cfg.ContentSafety.CustomKeywords.Paths) > 0 {
+			customKeywords, err := loader.LoadCustomKeywords(cfg.ContentSafety.CustomKeywords.Paths)
+			if err != nil {
+				return nil, fmt.Errorf("load custom keywords: %w", err)
+			}
+			for category, keywords := range customKeywords {
+				if err := contentSafetyDetector.LoadKeywords(category, keywords); err != nil {
+					return nil, fmt.Errorf("load custom keywords for category %s: %w", category, err)
+				}
+			}
+		}
+	}
+
 	// Build base recorder
 	recorder, err := audit.NewJSONLRecorderWithOptions(cfg.Audit.Path, audit.JSONLRecorderOptions{
 		MaxFileBytes: cfg.Audit.MaxFileBytes,
@@ -273,7 +315,13 @@ func buildAuditRecorder(cfg *config.Config) (audit.Recorder, error) {
 	// Wrap recorder with PII detection if enabled
 	if detector != nil {
 		action := audit.PIIDetectionAction(cfg.PIIDetection.Action)
-		return audit.NewPIIAuditorRecorder(recorder, audit.NewPIIAuditor(detector, action, nil)), nil
+		recorder = audit.NewPIIAuditorRecorder(recorder, audit.NewPIIAuditor(detector, action, nil))
+	}
+
+	// Wrap recorder with content safety detection if enabled
+	if contentSafetyDetector != nil {
+		action := audit.ContentSafetyAction(cfg.ContentSafety.Action)
+		recorder = audit.NewContentSafetyAuditorRecorder(recorder, audit.NewContentSafetyAuditor(contentSafetyDetector, action, nil))
 	}
 
 	return recorder, nil
