@@ -33,6 +33,7 @@ type Config struct {
 	Audit                    AuditConfig               `json:"audit"`
 	PIIDetection             PIIDetectionConfig        `json:"pii_detection"`
 	ContentSafety            ContentSafetyConfig       `json:"content_safety"`
+	Alerting                 AlertingConfig            `json:"alerting"`
 	Realtime                 RealtimeConfig            `json:"realtime"`
 	RateLimit                RateLimitConfig           `json:"rate_limit"`
 	ProviderHealth           ProviderHealthConfig      `json:"provider_health"`
@@ -493,6 +494,24 @@ func Default() *Config {
 			LogMatches: true,
 			Threshold:  string(ThresholdMedium),
 		},
+		Alerting: AlertingConfig{
+			Enabled: false,
+			RateLimit: RateLimitConfig{
+				Enabled:            true,
+				MaxAlertsPerMinute: 10,
+				BurstSize:         20,
+			},
+			Retry: RetryConfig{
+				Enabled:           true,
+				MaxRetries:        3,
+				RetryDelaySeconds: 5,
+			},
+			Storage: StorageConfig{
+				Enabled:       true,
+				Path:          "data/alerts.jsonl",
+				MaxFileBytes:  100 * 1024 * 1024,
+			},
+		},
 		Providers: map[string]ProviderConfig{
 			"fake": {
 				Type: "fake",
@@ -738,6 +757,10 @@ func (c *Config) Validate() error {
 	}
 	// 验证内容安全配置
 	if err := c.ContentSafety.Validate(); err != nil {
+		return err
+	}
+	// 验证告警配置
+	if err := c.Alerting.Validate(); err != nil {
 		return err
 	}
 	return nil
