@@ -32,6 +32,7 @@ type Config struct {
 	Log                      LogConfig                 `json:"log"`
 	Audit                    AuditConfig               `json:"audit"`
 	PIIDetection             PIIDetectionConfig        `json:"pii_detection"`
+	ContentSafety            ContentSafetyConfig       `json:"content_safety"`
 	Realtime                 RealtimeConfig            `json:"realtime"`
 	RateLimit                RateLimitConfig           `json:"rate_limit"`
 	ProviderHealth           ProviderHealthConfig      `json:"provider_health"`
@@ -481,6 +482,17 @@ func Default() *Config {
 			DetectIDCard:         true,
 			DetectBankCardNumber: true,
 		},
+		ContentSafety: ContentSafetyConfig{
+			Enabled:    false,
+			Action:     string(ContentSafetyActionAlert),
+			Categories: []string{"politics", "pornography", "violence", "advertising"},
+			CustomKeywords: CustomKeywordsConfig{
+				Enabled: false,
+				Paths:   []string{},
+			},
+			LogMatches: true,
+			Threshold:  string(ThresholdMedium),
+		},
 		Providers: map[string]ProviderConfig{
 			"fake": {
 				Type: "fake",
@@ -718,6 +730,14 @@ func (c *Config) Validate() error {
 		}
 	}
 	if err := c.validateGatewayClientModels(); err != nil {
+		return err
+	}
+	// 验证PII检测配置
+	if err := c.PIIDetection.Validate(); err != nil {
+		return err
+	}
+	// 验证内容安全配置
+	if err := c.ContentSafety.Validate(); err != nil {
 		return err
 	}
 	return nil
