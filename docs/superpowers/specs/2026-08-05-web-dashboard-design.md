@@ -122,16 +122,269 @@ Add a simple web dashboard for AI Gateway management and monitoring. Provide vis
 
 **Data Source**: Alert storage (`alerts.jsonl`)
 
-### Page 6: Configuration (Optional)
+### Page 6: Configuration Management
 
-**Purpose**: View and edit gateway configuration
+**Purpose**: Manage gateway configuration with validation
+
+**Components**: 3 tabs
+
+#### Tab 1: Model Configuration
+
+**Purpose**: Configure AI providers and models
 
 **Components**:
-- View current config (read-only in MVP)
-- Download config file
-- Restart gateway button (requires confirmation)
+- Provider list:
+  - Provider name (OpenAI/Anthropic/...)
+  - API base URL
+  - API key (masked: `sk-****abcd`)
+  - Enabled toggle
+  - Edit button
+- Add provider form:
+  - Provider name (dropdown)
+  - API base URL (input)
+  - API key (password input)
+  - Default model (dropdown)
+  - Requests per minute limit (number input)
+- Model list per provider:
+  - Model name
+  - Enabled toggle
+  - Rate limit (requests/minute)
+  - Timeout (seconds)
 
-**Data Source**: `config.json`
+**Actions**:
+- Add new provider
+- Edit provider (API key, base URL, limits)
+- Enable/disable provider
+- Test connection (optional)
+- Save changes (requires confirmation)
+
+**API Endpoints**:
+- `GET /api/v1/config/providers` - List providers
+- `POST /api/v1/config/providers` - Add provider
+- `PUT /api/v1/config/providers/:name` - Update provider
+- `DELETE /api/v1/config/providers/:name` - Delete provider
+
+#### Tab 2: Audit Configuration
+
+**Purpose**: Configure audit logging settings
+
+**Components**:
+- Audit settings:
+  - Audit enabled (toggle)
+  - Audit log path (input)
+  - Max file bytes (number input, MB)
+  - Rotation enabled (toggle)
+- Encryption settings:
+  - Encryption enabled (toggle)
+  - Encryption key path (input, readonly)
+  - Generate new key button (requires confirmation)
+  - Show current key ID
+- PII audit settings:
+  - Log PII (toggle)
+  - Redact PII in logs (toggle)
+
+**Actions**:
+- Update audit settings
+- Generate new encryption key
+- Clear audit logs (requires confirmation)
+
+**API Endpoints**:
+- `GET /api/v1/config/audit` - Get audit config
+- `PUT /api/v1/config/audit` - Update audit config
+- `POST /api/v1/config/audit/key` - Generate new encryption key
+
+#### Tab 3: Detection Configuration
+
+**Purpose**: Configure PII and content safety detection
+
+**Components**: 2 sections
+
+**Section 1: PII Detection**
+- PII detection enabled (toggle)
+- Detection types:
+  - Phone number (toggle + regex pattern)
+  - ID card (toggle + regex pattern)
+  - Bank card (toggle + regex pattern)
+- Action mode (dropdown: alert/reject/allow)
+- Log PII matches (toggle)
+- Redact PII in audit (toggle)
+
+**Section 2: Content Safety Detection**
+- Content safety enabled (toggle)
+- Detection categories:
+  - Politics (toggle + edit keywords button)
+  - Pornography (toggle + edit keywords button)
+  - Violence (toggle + edit keywords button)
+  - Advertising (toggle + edit keywords button)
+- Action mode (dropdown: alert/reject/allow)
+- Threshold level (dropdown: low/medium/high)
+- Custom keywords:
+  - List custom keyword files
+  - Upload new keyword file (JSON format)
+  - Delete custom keyword file
+
+**Actions**:
+- Update PII detection settings
+- Update content safety settings
+- Upload custom keywords file
+- Edit keyword list (modal editor)
+- Delete custom keywords file
+
+**API Endpoints**:
+- `GET /api/v1/config/pii` - Get PII config
+- `PUT /api/v1/config/pii` - Update PII config
+- `GET /api/v1/config/content-safety` - Get content safety config
+- `PUT /api/v1/config/content-safety` - Update content safety config
+- `GET /api/v1/config/keywords` - List keyword files
+- `POST /api/v1/config/keywords` - Upload keyword file
+- `DELETE /api/v1/config/keywords/:file` - Delete keyword file
+
+**Data Source**: `config.json`, keyword files
+
+## Configuration Management
+
+### Config Save and Apply
+
+**Workflow**:
+1. User modifies config in Dashboard
+2. Frontend validates changes (required fields, format checks)
+3. Frontend sends PUT request to API
+4. Backend validates config (business rules, security checks)
+5. Backend saves new config to `config.json`
+6. Backend returns success/error
+7. Frontend shows confirmation message
+8. Backend reloads config (or requires restart)
+
+**Config Reload Strategy**:
+- **Hot reload**: Some configs can be applied without restart
+  - PII detection settings (enable/disable, action mode)
+  - Content safety settings (enable/disable, threshold)
+  - Audit settings (rotation, redaction)
+- **Restart required**: Some configs need gateway restart
+  - Provider API keys
+  - Network settings (port, TLS)
+  - Encryption key
+
+**Implementation**:
+```go
+// ConfigReloader interface
+type ConfigReloader interface {
+    Reload() error
+    RequiresRestart(old, new *Config) bool
+}
+```
+
+### Config Validation
+
+**Frontend Validation**:
+- Required fields check
+- Format validation (URL, email, regex)
+- Number range validation
+- Duplicate check (provider name, model name)
+
+**Backend Validation**:
+- Business rules validation
+  - At least one provider must be enabled
+  - Encryption key must exist if encryption enabled
+  - Valid API key format (starts with `sk-` for OpenAI)
+- Security checks
+  - API key strength validation
+  - Path traversal prevention
+  - File size limit for keyword files
+
+**Error Handling**:
+- Return detailed error messages
+- Highlight invalid fields
+- Suggest corrections
+
+### Security Considerations
+
+**API Key Protection**:
+- Never return full API key in GET responses
+- Mask as `sk-****abcd` (show last 4 chars)
+- Validate API key on save (test connection if possible)
+- Store encrypted in config file (optional)
+
+**Config File Protection**:
+- Set proper file permissions (600 for config.json)
+- Backup config before overwrite
+- Config history (optional): save previous version as `config.json.bak`
+
+**Access Control** (Future):
+- Require authentication for config changes
+- Audit trail for config modifications
+- Role-based permissions (admin only)
+
+### Configuration Examples
+
+**Example 1: Add New Provider**
+
+Request:
+```json
+POST /api/v1/config/providers
+{
+  "name": "openai",
+  "api_base": "https://api.openai.com/v1",
+  "api_key": "sk-proj-abc123...",
+  "default_model": "gpt-4",
+  "requests_per_minute": 60,
+  "enabled": true
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Provider added successfully",
+  "requires_restart": false
+}
+```
+
+**Example 2: Update PII Detection**
+
+Request:
+```json
+PUT /api/v1/config/pii
+{
+  "enabled": true,
+  "action": "alert",
+  "detect_phone_number": true,
+  "detect_id_card": true,
+  "detect_bank_card_number": false,
+  "log_pii": false,
+  "redact_pii": true
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "PII detection config updated",
+  "requires_restart": false
+}
+```
+
+**Example 3: Upload Custom Keywords**
+
+Request:
+```http
+POST /api/v1/config/keywords
+Content-Type: multipart/form-data
+
+file: custom-politics.json
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Keyword file uploaded successfully",
+  "file": "custom-politics.json",
+  "keywords_count": 150
+}
+```
 
 ## Technical Architecture
 
@@ -142,12 +395,43 @@ Add a simple web dashboard for AI Gateway management and monitoring. Provide vis
 **Endpoints**:
 
 ```
+# Status and Stats
 GET  /api/v1/status          # Gateway status and health
 GET  /api/v1/stats           # Summary statistics
+
+# Audit Logs
 GET  /api/v1/audit/logs      # List audit logs with filters
 GET  /api/v1/audit/logs/:id  # Get audit log detail
+
+# PII Detection
 GET  /api/v1/pii/violations  # List PII violations
 GET  /api/v1/pii/stats       # PII statistics
+
+# Content Safety
+GET  /api/v1/content-safety/violations  # List content safety violations
+GET  /api/v1/content-safety/stats       # Content safety statistics
+
+# Alerts
+GET  /api/v1/alerts          # List alerts
+GET  /api/v1/alerts/stats    # Alert statistics
+
+# Configuration Management
+GET  /api/v1/config          # Get full config
+GET  /api/v1/config/providers         # List providers
+POST /api/v1/config/providers         # Add provider
+PUT  /api/v1/config/providers/:name   # Update provider
+DELETE /api/v1/config/providers/:name # Delete provider
+GET  /api/v1/config/audit             # Get audit config
+PUT  /api/v1/config/audit             # Update audit config
+POST /api/v1/config/audit/key         # Generate new encryption key
+GET  /api/v1/config/pii               # Get PII config
+PUT  /api/v1/config/pii               # Update PII config
+GET  /api/v1/config/content-safety    # Get content safety config
+PUT  /api/v1/config/content-safety    # Update content safety config
+GET  /api/v1/config/keywords          # List keyword files
+POST /api/v1/config/keywords          # Upload keyword file
+DELETE /api/v1/config/keywords/:file  # Delete keyword file
+```
 GET  /api/v1/content-safety/violations  # List content safety violations
 GET  /api/v1/content-safety/stats       # Content safety statistics
 GET  /api/v1/alerts          # List alerts
