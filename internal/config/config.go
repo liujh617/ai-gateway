@@ -34,6 +34,7 @@ type Config struct {
 	PIIDetection             PIIDetectionConfig        `json:"pii_detection"`
 	ContentSafety            ContentSafetyConfig       `json:"content_safety"`
 	Alerting                 AlertingConfig            `json:"alerting"`
+	Telemetry                TelemetryConfig           `json:"telemetry"`
 	Realtime                 RealtimeConfig            `json:"realtime"`
 	RateLimit                RateLimitConfig           `json:"rate_limit"`
 	ProviderHealth           ProviderHealthConfig      `json:"provider_health"`
@@ -510,6 +511,24 @@ func Default() *Config {
 				Enabled:       true,
 				Path:          "data/alerts.jsonl",
 				MaxFileBytes:  100 * 1024 * 1024,
+			},
+		},
+		Telemetry: TelemetryConfig{
+			Enabled:        false,
+			ServiceName:    "ai-gateway",
+			ServiceVersion: "1.0.0",
+			Tracing: TracingConfig{
+				Enabled:    false,
+				SampleRate: 0.1,
+				Exporter:   "otlp",
+				Endpoint:   "localhost:4317",
+				Insecure:   false,
+				Headers:     map[string]string{},
+			},
+			Metrics: MetricsConfig{
+				Enabled:    true,
+				Path:       "/metrics",
+				AllowedIPs: []string{},
 			},
 		},
 		Providers: map[string]ProviderConfig{
