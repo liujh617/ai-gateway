@@ -57,6 +57,9 @@ func (a *ContentSafetyAuditor) AuditRequest(ctx context.Context, event *Event) e
 	// Set span attributes with detection results
 	SetContentSafetySpanAttributes(span, result, a.action)
 
+	// Record metrics
+	InstrumentContentSafetyDetection(spanCtx, event.Provider, event.Model, result, a.action)
+
 	if !result.HasViolation {
 		return nil
 	}

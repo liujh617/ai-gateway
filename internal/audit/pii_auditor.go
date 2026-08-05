@@ -48,6 +48,9 @@ func (a *PIIAssessor) AuditRequest(ctx context.Context, event *Event) error {
 	// Set span attributes with detection results
 	SetPIISpanAttributes(span, result, a.action)
 
+	// Record metrics
+	InstrumentPIIDetection(spanCtx, event.Provider, event.Model, result, a.action)
+
 	if !result.HasPII {
 		return nil
 	}

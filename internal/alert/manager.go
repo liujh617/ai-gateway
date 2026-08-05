@@ -128,6 +128,7 @@ func (am *AlertManagerImpl) CreateAlert(ctx context.Context, alert *Alert) error
 			"alert_id", alert.ID,
 			"source", alert.Source,
 		)
+		RecordAlertSuppressed("cooldown")
 		return nil
 	}
 
@@ -136,8 +137,12 @@ func (am *AlertManagerImpl) CreateAlert(ctx context.Context, alert *Alert) error
 		am.logger.Warn("alert rate limit exceeded",
 			"alert_id", alert.ID,
 		)
+		RecordAlertSuppressed("rate_limit")
 		return nil
 	}
+
+	// Record alert created
+	RecordAlertCreated(alert.Source, string(alert.Severity))
 
 	// Queue alert
 	select {
@@ -241,6 +246,9 @@ func (am *AlertManagerImpl) processAlert(alert *Alert) {
 			continue
 		}
 
+		// Record delivery start time
+		deliveryStart := time.Now()
+
 		// Retry logic
 		var err error
 		for i := 0; i <= am.retry.MaxRetries; i++ {
@@ -260,14 +268,19 @@ func (am *AlertManagerImpl) processAlert(alert *Alert) {
 			}
 		}
 
+		// Record delivery duration
+		RecordAlertDeliveryDuration(chName, time.Since(deliveryStart).Seconds())
+
 		if err != nil {
 			lastErr = err
+			RecordAlertFailed(chName, string(alert.Severity), "send_error")
 			am.logger.Error("alert send failed",
 				"alert_id", alert.ID,
 				"channel", chName,
 				"error", err,
 			)
 		} else {
+			RecordAlertSent(chName, string(alert.Severity))
 			am.logger.Info("alert sent",
 				"alert_id", alert.ID,
 				"channel", chName,
