@@ -33,12 +33,20 @@ func (a *PIIAssessor) AuditRequest(ctx context.Context, event *Event) error {
 		return nil
 	}
 
+	// Start PII detection span
+	spanCtx, span := StartPIIDetectionSpan(ctx, event.RequestID)
+	defer span.End()
+
 	// 检测Body中的PII
 	bodyText := string(event.Body)
-	result, err := a.detector.Detect(ctx, bodyText)
+	result, err := a.detector.Detect(spanCtx, bodyText)
 	if err != nil {
+		span.RecordError(err)
 		return fmt.Errorf("PII detection failed: %w", err)
 	}
+
+	// Set span attributes with detection results
+	SetPIISpanAttributes(span, result, a.action)
 
 	if !result.HasPII {
 		return nil

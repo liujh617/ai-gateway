@@ -42,12 +42,20 @@ func (a *ContentSafetyAuditor) AuditRequest(ctx context.Context, event *Event) e
 		return nil
 	}
 
+	// Start content safety detection span
+	spanCtx, span := StartContentSafetyDetectionSpan(ctx, event.RequestID)
+	defer span.End()
+
 	// 检测Body中的内容安全问题
 	bodyText := string(event.Body)
-	result, err := a.detector.Detect(ctx, bodyText)
+	result, err := a.detector.Detect(spanCtx, bodyText)
 	if err != nil {
+		span.RecordError(err)
 		return fmt.Errorf("content safety detection failed: %w", err)
 	}
+
+	// Set span attributes with detection results
+	SetContentSafetySpanAttributes(span, result, a.action)
 
 	if !result.HasViolation {
 		return nil
